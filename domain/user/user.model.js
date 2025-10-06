@@ -13,3 +13,8 @@ const userSchema = new mongoose.Schema({
     default: 'student' 
   }
 }, { timestamps: true });
+
+// Create the User model
+const User = mongoose.model('User', userSchema);
+
+module.exports = User;

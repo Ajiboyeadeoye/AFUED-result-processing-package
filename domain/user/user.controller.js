@@ -1,6 +1,37 @@
 const User = require("./user.model");
-const { hashData } = require("./../../utils/hashData")
+const { hashData, verifyHashedData } = require("../../utils/hashData");
+const createToken = require("../../utils/createToken");
 
+
+const authenticateUser = async (data) => {
+    try {
+        const { email, password } = data;
+
+        // checking if the user already exists
+        const fectchedUser = await User.findOne({ email });
+        if (!fectchedUser) {
+            throw Error("User with the provided email does not exist, try signing up!");
+        };
+
+        const hashedPassword = fectchedUser.password;
+        // compare password
+        const passwordMatch = await verifyHashedData(password, hashedPassword);
+
+        if (!passwordMatch) {
+            throw Error("Incorrect password!")
+        }
+
+        // create user token for login
+        const tokenData = { userId: fectchedUser._id, email };
+        const token = await createToken(tokenData);
+
+        // assign user a token
+        fectchedUser.token = token;
+        return fectchedUser;
+    } catch(error) {
+        throw error;
+    }
+};
 
 const createNewUser = async (data) => {
     try {
@@ -12,6 +43,7 @@ const createNewUser = async (data) => {
         if (existingUser) {
             throw Error("User with the provided email alreay exist, try log in!");
         }
+
 
         // hash password
         const hashedpassword = await hashData(password);
@@ -31,4 +63,4 @@ const createNewUser = async (data) => {
 };
 
 
-module.exports = { createNewUser };
+module.exports = { createNewUser, authenticateUser };
