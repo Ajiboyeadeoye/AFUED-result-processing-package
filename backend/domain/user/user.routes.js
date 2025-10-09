@@ -32,11 +32,7 @@ router.post('/signin', async (req, res) => {
 router.post('/signup', async (req, res) => {
     try {
         let { name, email, password, role } = req.body;
-        name = name.trim();
-        email = email.trim().toLowerCase();
-        password = password.trim();
-        role = role ? role.trim().toLowerCase() : 'student';
-
+        
         if (!name || !email || !password) {
             return res.status(400).json({ message: 'Name, email, and password are required.' });
         } else if (!/^[a-zA-Z\s]+$/.test(name)) {
@@ -48,6 +44,10 @@ router.post('/signup', async (req, res) => {
         } else if (!['student', 'lecturer', 'admin'].includes(role)) {
             return res.status(400).json({ message: 'Role must be either student, lecturer, or admin.' });
         } else {
+            name = name.trim();
+            email = email.trim().toLowerCase();
+            password = password.trim();
+            role = role ? role.trim().toLowerCase() : 'student';
 
             // good credentials, create new user.
             const newUser = await createNewUser({

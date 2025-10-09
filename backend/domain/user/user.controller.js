@@ -18,8 +18,7 @@ const authenticateUser = async (data) => {
         const passwordMatch = await verifyHashedData(password, hashedPassword);
 
         if (!passwordMatch) {
-            throw Error("Incorrect password!")
-        }
+            throw new Error}("Invalid credentials, please try again!");
 
         // create user token for login
         const tokenData = { userId: fectchedUser._id, email };
