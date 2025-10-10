@@ -22,7 +22,8 @@ const authenticateUser = async (data) => {
         };
 
         // create user token for login
-        const tokenData = { userId: fectchedUser._id, email };
+        const tokenData = { userId: fectchedUser._id, email, role: fectchedUser.role };
+        console.log("Role", fectchedUser.role)
         const token = await createToken(tokenData);
 
         // assign user a token
