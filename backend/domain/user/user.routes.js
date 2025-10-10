@@ -1,14 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const { createNewUser, authenticateUser } = require("./user.controller");
+const authenticate  = require("../../middlewares/authenticate");
 
 
 // signin route
-router.post('/signin', async (req, res) => {
+router.post('/signin', async (req, res, authenticate) => {
     try {
         let { email, password } = req.body;
-        email = email.trim().toLowerCase();
-        password = password.trim();
 
         if (!email || !password) {
             return res.status(400).json({ message: 'Email and password are required.' });
@@ -18,12 +17,15 @@ router.post('/signin', async (req, res) => {
             return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
         } else {
             // good credentials, proceed to signin user.
-            const authenticatedUser = await authenticateUser({ email, password});
+            email = email.trim().toLowerCase();
+            password = password.trim();
 
-            res.status(200).json({ message: 'Signin successful!', authenticatedUser });
+            const authenticatedUser = await authenticateUser({ email, password});
+            res.status(200).json({ message: 'Signin successful!', user: authenticatedUser });
         }
     }catch (error) {
-        res.status(400).send(error.message);
+        res.status(400).json({ message: error.message, error: true});
+       
     }
 });
 
@@ -58,7 +60,7 @@ router.post('/signup', async (req, res) => {
             res.status(200).json(newUser);
         }
     } catch (error) {
-        res.status(400).send(error.message)
+        res.status(400).json({ message: error.message, error: true});
     };
 });
 

@@ -18,7 +18,8 @@ const authenticateUser = async (data) => {
         const passwordMatch = await verifyHashedData(password, hashedPassword);
 
         if (!passwordMatch) {
-            throw new Error}("Invalid credentials, please try again!");
+            throw Error ("Invalid password")
+        };
 
         // create user token for login
         const tokenData = { userId: fectchedUser._id, email };
@@ -40,7 +41,7 @@ const createNewUser = async (data) => {
         const existingUser = await User.findOne({ email });
 
         if (existingUser) {
-            throw Error("User with the provided email alreay exist, try log in!");
+            throw Error("User with this email already exist, please login...")
         }
 
 
