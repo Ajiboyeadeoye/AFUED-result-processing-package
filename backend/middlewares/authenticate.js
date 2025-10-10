@@ -28,6 +28,7 @@ const authenticate = (roles = []) => {
 
       // Check that the role is a valid system role
       if (!AUTHORIZED_ROLES.includes(decoded.role)) {
+        console.log(decoded)
         return res.status(403).json({ msg: "Unauthorized role detected" });
       }
 
