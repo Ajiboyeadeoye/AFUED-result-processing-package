@@ -1,14 +1,45 @@
 import Semester from "./semester.model.js";
 import Settings from "../settings/settings.model.js";
+import buildResponse from "../../utils/responseBuilder.js";
 
-// 🟢 MARK START OF A NEW SEMESTER
+/**
+ * Valid semester names (type-safe)
+ */
+const VALID_SEMESTERS = ["First Semester", "Second Semester", "Summer Semester"];
+
+/**
+ * Regex patterns for validation
+ */
+const sessionRegex = /^\d{4}\/\d{4}$/; // e.g., "2024/2025"
+const nameRegex = /^(First|Second|Summer)\sSemester$/; // e.g., "First Semester"
+
 export const startNewSemester = async (req, res) => {
   try {
     const { name, session } = req.body;
     const userId = req.user._id;
 
+    // Validate inputs
+    if (!name || !session) {
+      return res.status(400).json(buildResponse.error("Semester name and session are required."));
+    }
+
+    // Regex validation
+    if (!nameRegex.test(name)) {
+      return res.status(400).json(buildResponse.error("Invalid semester name format." ));
+    }
+    if (!sessionRegex.test(session)) {
+      return res.status(400).json(buildResponse.error("Session must be in YYYY/YYYY format (e.g., 2024/2025)"));
+    }
+
+    // Type-safe validation
+    if (!VALID_SEMESTERS.includes(name)) {
+      return res.status(400).json(buildResponse.error("Invalid semester name. Must be one of: " + VALID_SEMESTERS.join(", ") ));
+    }
+
+    // End any active semesters
     await Semester.updateMany({ isActive: true }, { isActive: false, endDate: new Date() });
 
+    // Create new semester
     const newSemester = await Semester.create({
       name,
       session,
@@ -16,6 +47,7 @@ export const startNewSemester = async (req, res) => {
       createdBy: userId,
     });
 
+    // Update settings
     const settings = await Settings.findOneAndUpdate(
       {},
       {
@@ -36,7 +68,7 @@ export const startNewSemester = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Error starting new semester", error });
+    res.status(500).json(buildResponse.error("Error starting new semester"));
   }
 };
 
@@ -61,7 +93,7 @@ export const toggleRegistration = async (req, res) => {
       settings,
     });
   } catch (error) {
-    res.status(500).json({ message: "Error updating registration status", error });
+    res.status(500).json(buildResponse.error("Error updating registration status"));
   }
 };
 
@@ -81,12 +113,11 @@ export const toggleResultPublication = async (req, res) => {
       await Semester.findByIdAndUpdate(settings.activeSemesterId, { isResultsPublished: status });
     }
 
-    res.status(200).json({
-      message: `Result publication has been ${status ? "opened" : "closed"}.`,
-      settings,
-    });
+    res.status(200).json(buildResponse.success(`Result publication has been ${status ? "opened" : "closed"}.`,
+      settings));
   } catch (error) {
-    res.status(500).json({ message: "Error updating result publication", error });
+    const response = buildResponse.error("Error updating result publication")
+    res.status(500).json(response);
   }
 };
 

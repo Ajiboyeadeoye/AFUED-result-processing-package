@@ -1,8 +1,8 @@
 // utils/responseBuilder.js
 
-function buildResponse({ success = true, message = "", data = {}, code = 200 }) {
+function buildResponse({ status = 'successs', message = "", data = {}, code = 200 }) {
   return {
-    success,
+    status,
     message,
     data,
     code,
@@ -11,9 +11,9 @@ function buildResponse({ success = true, message = "", data = {}, code = 200 }) 
 }
 
 buildResponse.success = (message, data = {}, code = 200) =>
-  buildResponse({ success: true, message, data, code });
+  buildResponse({ status: "success", message, data, code });
 
 buildResponse.error = (message, code = 400, data = {}) =>
-  buildResponse({ success: false, message, data, code });
+  buildResponse({ status: 'error', message, data, code });
 
 export default buildResponse;
