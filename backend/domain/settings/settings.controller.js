@@ -1,7 +1,7 @@
-const Settings = require("../models/Settings");
+import Settings from "./settings.model.js";
 
 // 🟢 Get Current Settings
-exports.getSettings = async (req, res) => {
+export const getSettings = async (req, res) => {
   try {
     const settings = await Settings.findOne().populate("updatedBy", "name email role");
     if (!settings) return res.status(404).json({ message: "Settings not found" });
@@ -12,7 +12,7 @@ exports.getSettings = async (req, res) => {
 };
 
 // 🟠 Update Settings (Superuser only)
-exports.updateSettings = async (req, res) => {
+export const updateSettings = async (req, res) => {
   try {
     const updates = req.body;
     const userId = req.user._id; // from auth middleware
@@ -33,7 +33,7 @@ exports.updateSettings = async (req, res) => {
 };
 
 // 🟣 Reset to Default (Optional)
-exports.resetSettings = async (req, res) => {
+export const resetSettings = async (req, res) => {
   try {
     await Settings.deleteMany({});
     const defaultSettings = await Settings.create({});
