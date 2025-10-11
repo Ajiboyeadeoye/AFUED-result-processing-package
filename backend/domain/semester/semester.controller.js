@@ -1,21 +1,14 @@
-const Semester = require("./semester.model");
-const Settings = require("../settings/settings.model");
+import Semester from "./semester.model.js";
+import Settings from "../settings/settings.model.js";
 
-/**
- * 🟢 MARK START OF A NEW SEMESTER
- * - Ends any active semester
- * - Creates new semester record
- * - Updates global settings
- */
-exports.startNewSemester = async (req, res) => {
+// 🟢 MARK START OF A NEW SEMESTER
+export const startNewSemester = async (req, res) => {
   try {
-    const { name, session } = req.body; // e.g. "First Semester", "2025/2026"
+    const { name, session } = req.body;
     const userId = req.user._id;
 
-    // Step 1: End any currently active semester
     await Semester.updateMany({ isActive: true }, { isActive: false, endDate: new Date() });
 
-    // Step 2: Create a new semester
     const newSemester = await Semester.create({
       name,
       session,
@@ -23,7 +16,6 @@ exports.startNewSemester = async (req, res) => {
       createdBy: userId,
     });
 
-    // Step 3: Update global settings
     const settings = await Settings.findOneAndUpdate(
       {},
       {
@@ -48,12 +40,10 @@ exports.startNewSemester = async (req, res) => {
   }
 };
 
-/**
- * 🟠 OPEN OR CLOSE COURSE REGISTRATION
- */
-exports.toggleRegistration = async (req, res) => {
+// 🟠 OPEN OR CLOSE COURSE REGISTRATION
+export const toggleRegistration = async (req, res) => {
   try {
-    const { status } = req.body; // true = open, false = close
+    const { status } = req.body;
     const userId = req.user._id;
 
     const settings = await Settings.findOneAndUpdate(
@@ -75,10 +65,8 @@ exports.toggleRegistration = async (req, res) => {
   }
 };
 
-/**
- * 🟣 OPEN OR CLOSE RESULT PUBLICATION
- */
-exports.toggleResultPublication = async (req, res) => {
+// 🟣 OPEN OR CLOSE RESULT PUBLICATION
+export const toggleResultPublication = async (req, res) => {
   try {
     const { status } = req.body;
     const userId = req.user._id;
@@ -102,10 +90,8 @@ exports.toggleResultPublication = async (req, res) => {
   }
 };
 
-/**
- * 🔵 GET CURRENT ACTIVE SEMESTER
- */
-exports.getActiveSemester = async (req, res) => {
+// 🔵 GET CURRENT ACTIVE SEMESTER
+export const getActiveSemester = async (req, res) => {
   try {
     const semester = await Semester.findOne({ isActive: true });
     if (!semester) return res.status(404).json({ message: "No active semester found" });

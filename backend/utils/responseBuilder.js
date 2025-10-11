@@ -16,4 +16,4 @@ buildResponse.success = (message, data = {}, code = 200) =>
 buildResponse.error = (message, code = 400, data = {}) =>
   buildResponse({ success: false, message, data, code });
 
-module.exports = buildResponse;
+export default buildResponse;
