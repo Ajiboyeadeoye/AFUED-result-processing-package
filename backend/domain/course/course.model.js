@@ -19,12 +19,9 @@ const courseSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
-  semester: {
-    type: String,
-    enum: ['First', 'Second'],
-    required: true
-  }
-}, { timestamps: true });
+  
+  },
+  { timestamps: true });
 
 const Course = mongoose.model('Course', courseSchema);
 module.exports = Course;
