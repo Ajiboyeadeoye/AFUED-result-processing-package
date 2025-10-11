@@ -1,3 +1,3 @@
-const routes = require("./student.routes");
+import routes from "./student.routes.js";
 
-module.exports = routes;
+export default routes;

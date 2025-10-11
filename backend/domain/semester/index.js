@@ -1,3 +1,3 @@
-const routes = require("./semester.routes");
+import routes from "./semester.routes.js";
 
-module.exports = routes;
+export default routes;

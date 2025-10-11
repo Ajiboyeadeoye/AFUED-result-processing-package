@@ -1,14 +1,12 @@
-const express = require('express');
+import express from "express";
 const router = express.Router();
 
-const userRoutes = require("../domain/user"); // since we have index file in the user domain
-const studentRoutes = require("../domain/student");
-const semesterRoutes = require("../domain/semester")
+import userRoutes from "../domain/user/index.js"; // Ensure .js extension
+import studentRoutes from "../domain/student/index.js";
+import semesterRoutes from "../domain/semester/index.js";
 
 router.use("/user", userRoutes);
 router.use("/student", studentRoutes);
-router.use('/semester', semesterRoutes)
+router.use("/semester", semesterRoutes);
 
-
-
-module.exports = router;
+export default router;

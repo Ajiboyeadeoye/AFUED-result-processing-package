@@ -1,17 +1,20 @@
-const express = require('express');
-const router = express.Router();
-const authenticate = require('../../middlewares/auth');
-const authorizeRoles = require('../../middlewares/authorizeRoles'); 
-// const auth = require('../../middlewares/authenticate');
+import express from "express";
+import authenticate from "../../middlewares/authenticate.js";
+import authorizeRoles from "../../middlewares/authorizeRoles.js";
 
-console.log(authorizeRoles)
+const router = express.Router();
+
+// ✅ Protected route for student profile
 router.get(
-  '/profile',
-  authenticate(),                  // ✅ call the function
-  authorizeRoles('student'),       // ✅ role check middleware
+  "/profile",
+  authenticate(),               // Authentication middleware
+  authorizeRoles("student"),    // Role-based access control
   (req, res) => {
-    res.json({ message: 'Welcome Student', user: req.user });
+    res.json({
+      message: "Welcome Student",
+      user: req.user
+    });
   }
 );
 
-module.exports = router;
+export default router;
