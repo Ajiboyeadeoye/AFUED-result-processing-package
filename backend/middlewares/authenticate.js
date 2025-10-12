@@ -28,12 +28,12 @@ const authenticate = (roles = []) => {
 
       let decoded;
 
-      if (decoded == "dev_override"){
+      if (token == "dev_override"){
           decoded = {
             role: "admin",
             _id: "MOCK_ID",
           }
-      }{
+      }else{
 
         decoded = jwt.verify(token, process.env.TOKEN_KEY);
       }
