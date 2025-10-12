@@ -1,13 +1,14 @@
-const express = require("express");
+import express from "express";
+import { getSettings, updateSettings, resetSettings } from "../controllers/settingsController.js";
+import { verifySuperuser } from "../middleware/authMiddleware.js";
+
 const router = express.Router();
-const { getSettings, updateSettings, resetSettings } = require("../controllers/settingsController");
-const { verifySuperuser } = require("../middleware/authMiddleware");
 
 // Public — view current university settings
 router.get("/", getSettings);
 
-// Superuser — update or reset
+// Superuser — update or reset settings
 router.patch("/", verifySuperuser, updateSettings);
 router.post("/reset", verifySuperuser, resetSettings);
 
-module.exports = router;
+export default router;
