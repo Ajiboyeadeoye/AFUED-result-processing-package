@@ -2,7 +2,6 @@ import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
-// Define the User schema
 const userSchema = new Schema(
   {
     name: { type: String, required: true },
@@ -11,18 +10,32 @@ const userSchema = new Schema(
 
     password: { type: String, required: true },
 
-    token: { type: String },
-
     role: {
       type: String,
-      enum: ["student", "lecturer", "admin"],
-      default: "student",
+      enum: ["Admin", "FacultyOfficer", "HOD", "Lecturer", "Student"],
+      default: "Student",
     },
+
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      default: null,
+    },
+
+    staffId: {
+      type: String,
+      unique: true,
+      sparse: true, // Allows null values
+    },
+
+    matricNo: {
+      type: String,
+      unique: true,
+      sparse: true, // For students
+    }
   },
   { timestamps: true }
 );
 
-// Create the User model
 const User = mongoose.model("User", userSchema);
-
 export default User;
