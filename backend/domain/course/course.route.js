@@ -1,6 +1,6 @@
 import { Router } from "express";
 import buildResponse from "../../utils/responseBuilder.js"; 
-import Joi from "joi";
+
 
 import {
   validateCourse,

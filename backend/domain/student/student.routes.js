@@ -18,3 +18,12 @@ router.get(
 );
 
 export default router;
+
+
+//Admiin functionalities
+
+// creating students: 
+//- in json, excel, csv
+
+
+//
