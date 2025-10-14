@@ -4,20 +4,57 @@ import buildResponse from "../../utils/responseBuilder.js";
 
 export const createFaculty = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, code } = req.body;
+
+    // ✅ Validate inputs
+    if (!name || !code) {
+      return buildResponse(res, 403, "Required fields missing", null, true);
+    }
+
+    // ✅ Normalize code (optional)
+    const formattedCode = code.trim().toUpperCase();
+
+    // ✅ Check if code already exists
+    const existingFaculty = await Faculty.findOne({ code: formattedCode });
+    if (existingFaculty) {
+      return buildResponse(
+        res,
+        409,
+        `Faculty code '${formattedCode}' already exists`,
+        null,
+        true
+      );
+    }
+
+    // ✅ Create new faculty
     const faculty = await Faculty.create({
-      name,
-      createdBy: req.user._id
+      name: name.trim(),
+      code: formattedCode,
+      createdBy: req.user._id,
     });
+
     return buildResponse(res, 201, "Faculty created successfully", faculty);
   } catch (error) {
+    // Handle duplicate key errors from MongoDB
+    if (error.code === 11000 && error.keyValue?.code) {
+      return buildResponse(
+        res,
+        409,
+        `Faculty code '${error.keyValue.code}' already exists`,
+        null,
+        true
+      );
+    }
+
     return buildResponse(res, 500, "Error creating faculty", null, true, error);
   }
 };
 
+
 export const getAllFaculties = async (req, res) => {
   try {
     const faculties = await Faculty.find();
+    console.log("Gotten")
     return buildResponse(res, 200, "Faculties fetched", faculties);
   } catch (error) {
     return buildResponse(res, 500, "Error fetching faculties", null, true, error);

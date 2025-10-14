@@ -11,7 +11,7 @@ import {
   assignLecturerToDepartment,
   removeLecturerFromDepartment
 } from "./department.controller.js";
-import authenticateUser from "../../middlewares/auth.js";
+import authenticateUser from "../../middlewares/authenticate.js";
 import authorizeRoles from "../../middlewares/authorizeRoles.js";
 
 const router = express.Router();

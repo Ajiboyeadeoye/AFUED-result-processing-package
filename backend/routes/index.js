@@ -7,7 +7,7 @@ import semesterRoutes from "../domain/semester/index.js";
 import settingsRoutes from "../domain/settings/index.js"; // from HEAD
 import courseRoutes from "../domain/course/index.js"; // from backend-ajiboye
 import departmentRoutes from "../domain/department/index.js"; // from backend-ajiboye
-import facultyRoutes from "../domain/faculty/facultyroutes.js"; // from backend-ajiboye
+import facultyRoutes from "../domain/faculty/faculty.routes.js"; // from backend-ajiboye
 
 router.use("/user", userRoutes);
 router.use("/student", studentRoutes);

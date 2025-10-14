@@ -1,14 +1,28 @@
 // utils/responseBuilder.js
 
-function buildResponse({ status = 'successs', message = "", data = {}, code = 200 }) {
-  return {
-    status,
+function buildResponse(
+  res,
+  statusCode = 200,
+  message = "",
+  data = null,
+  isError = false,
+  error = null
+) {
+  const response = {
+    status: isError ? "error" : "success",
     message,
     data,
-    code,
     timestamp: new Date().toISOString(),
   };
+
+  // Optionally include raw error for debugging (if needed)
+  if (isError && error) {
+    response.error = error.message || error;
+  }
+
+  return res.status(statusCode).json(response);
 }
+
 
 buildResponse.success = (message, data = {}, code = 200) =>
   buildResponse({ status: "success", message, data, code });
