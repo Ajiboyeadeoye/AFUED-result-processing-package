@@ -8,6 +8,7 @@ export const assignHOD = async (req, res) => {
     const { userId } = req.body; // userId of the lecturer
     const { departmentId } = req.params;
 
+
     // Check department exists
     const department = await Department.findById(departmentId);
     if (!department) {
