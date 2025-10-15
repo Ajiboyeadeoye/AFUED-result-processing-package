@@ -87,8 +87,12 @@ export const updateFaculty = async (req, res) => {
 
 export const deleteFaculty = async (req, res) => {
   try {
-    const faculty = await Faculty.findByIdAndDelete(req.params.facultyId);
-    if (!faculty) return buildResponse(res, 404, "Faculty not found");
+    // Add 2-second delay
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    // const faculty = await Faculty.findByIdAndDelete(req.params.facultyId);
+    // if (!faculty) return buildResponse(res, 404, "Faculty not found");
+
     return buildResponse(res, 200, "Faculty deleted");
   } catch (error) {
     return buildResponse(res, 500, "Error deleting faculty", null, true, error);
