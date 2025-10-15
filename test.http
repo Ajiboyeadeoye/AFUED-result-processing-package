@@ -1,1 +1,7 @@
 http://localhost:5000/afued/result/portal/user/signin
+
+{
+    $or{
+        
+    }
+}

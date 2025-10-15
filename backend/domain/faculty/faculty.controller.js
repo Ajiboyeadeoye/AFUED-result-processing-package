@@ -1,10 +1,20 @@
 import Faculty from "./faculty.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
+import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
+import { universalQueryHandler } from "../../utils/universalQueryHandler.js";
+// import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 
 
 export const createFaculty = async (req, res) => {
   try {
-    const { name, code } = req.body;
+    const { name, code, fields, search_term, filters, page } = req.body;
+
+        // 🧠 1. If request contains advanced filter data
+    if (fields || search_term || filters || page) {
+      const result = await fetchDataHelper( req, res, Faculty,);
+      return buildResponse(res, 200, "Filtered faculties fetched", result);
+    }
+
 
     // ✅ Validate inputs
     if (!name || !code) {
@@ -86,6 +96,11 @@ export const getAllFaculties = async (req, res) => {
   }
 };
 
+
+// export const getAllFaculties = async (req, res) => {
+//   return fetchDataHelper(req, res, Faculty, {
+//   });
+// };
 
 export const getFacultyById = async (req, res) => {
   try {
