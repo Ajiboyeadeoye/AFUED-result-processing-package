@@ -131,3 +131,5 @@ export const fetchDataHelper = async (req, res, Model, options = {}) => {
     });
   }
 };
+
+export default fetchDataHelper;

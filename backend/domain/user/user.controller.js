@@ -53,12 +53,13 @@ const createNewUser = async (data) => {
       password: hashedPassword,
       role
     });
-
+    
     const createdUser = await newUser.save();
     return createdUser;
   } catch (error) {
     throw error;
   }
+  
 };
 
 export { createNewUser, authenticateUser };
