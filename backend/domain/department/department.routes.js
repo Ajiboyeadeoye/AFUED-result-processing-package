@@ -13,6 +13,7 @@ import {
 } from "./department.controller.js";
 import authenticateUser from "../../middlewares/authenticate.js";
 import authorizeRoles from "../../middlewares/authorizeRoles.js";
+import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
 
@@ -26,8 +27,8 @@ router.post(
 
 // Get all departments in a faculty
 router.get(
-  "/:facultyId/departments",
-  authenticateUser,
+  "/",
+  authenticate("admin"),
   getDepartmentsByFaculty
 );
 
