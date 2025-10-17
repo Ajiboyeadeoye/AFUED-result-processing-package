@@ -2,6 +2,7 @@ import Faculty from "./faculty.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 import { universalQueryHandler } from "../../utils/universalQueryHandler.js";
+import mongoose from "mongoose";
 // import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 
 
@@ -114,25 +115,64 @@ export const getFacultyById = async (req, res) => {
 
 export const updateFaculty = async (req, res) => {
   try {
-    const faculty = await Faculty.findByIdAndUpdate(
-      req.params.facultyId,
+    const { name, code } = req.body;
+    const { facultyId } = req.params;
+
+    // 🧱 Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(facultyId)) {
+      return buildResponse(res, 400, "Invalid faculty ID format");
+    }
+
+    // 🔍 Check if faculty exists
+    const existingFaculty = await Faculty.findById(facultyId);
+    if (!existingFaculty)
+      return buildResponse(res, 404, "Faculty not found");
+
+    // 🚫 Check for duplicate name (case-insensitive)
+    const duplicateName = await Faculty.findOne({
+      name: { $regex: new RegExp(`^${name}$`, "i") },
+      _id: { $ne: facultyId },
+    });
+    if (duplicateName)
+      return buildResponse(res, 409, `Faculty name '${name}' already exists`);
+
+    // 🚫 Check for duplicate code (case-insensitive)
+    const duplicateCode = await Faculty.findOne({
+      code: { $regex: new RegExp(`^${code}$`, "i") },
+      _id: { $ne: facultyId },
+    });
+    if (duplicateCode)
+      return buildResponse(res, 409, `Faculty code '${code}' already exists`);
+
+    // ✅ Update the faculty
+    const updatedFaculty = await Faculty.findByIdAndUpdate(
+      facultyId,
       req.body,
       { new: true }
     );
-    if (!faculty) return buildResponse(res, 404, "Faculty not found");
-    return buildResponse(res, 200, "Faculty updated", faculty);
+
+    return buildResponse(res, 200, "Faculty updated successfully", updatedFaculty);
   } catch (error) {
-    return buildResponse(res, 500, "Error updating faculty", null, true, error);
+    console.error("❌ Error updating faculty:", error);
+    return buildResponse(
+      res,
+      500,
+      "An error occurred while updating the faculty",
+      null,
+      true,
+      error.message
+    );
   }
 };
+
 
 export const deleteFaculty = async (req, res) => {
   try {
     // Add 2-second delay
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // const faculty = await Faculty.findByIdAndDelete(req.params.facultyId);
-    // if (!faculty) return buildResponse(res, 404, "Faculty not found");
+    const faculty = await Faculty.findByIdAndDelete(req.params.facultyId);
+    if (!faculty) return buildResponse(res, 404, "Faculty not found");
 
     return buildResponse(res, 200, "Faculty deleted");
   } catch (error) {
