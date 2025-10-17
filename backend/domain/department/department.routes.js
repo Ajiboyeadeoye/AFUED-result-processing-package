@@ -1,87 +1,91 @@
 import express from "express";
-import { assignHOD, removeHOD } from "./department.controller.js";
-
-
 import {
+  assignHOD,
+  removeHOD,
   createDepartment,
   getDepartmentsByFaculty,
   getDepartmentById,
   updateDepartment,
   deleteDepartment,
   assignLecturerToDepartment,
-  removeLecturerFromDepartment
+  removeLecturerFromDepartment,
 } from "./department.controller.js";
-import authenticateUser from "../../middlewares/authenticate.js";
-import authorizeRoles from "../../middlewares/authorizeRoles.js";
+
+import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
 
-// Create department under a faculty
+/**
+ * 🧩 Admin or Faculty Officer creates a department under a faculty
+ */
 router.post(
   "/:facultyId/departments",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate(["admin", "superuser", "hod"]),
   createDepartment
 );
 
-// Get all departments in a faculty
-router.get(
-  "/:facultyId/departments",
-  authenticateUser,
-  getDepartmentsByFaculty
-);
+/**
+ * 📚 Get all departments under a faculty
+ */
+router.get("/:facultyId/departments", authenticate(), getDepartmentsByFaculty);
 
-// Single department routes
-router.get("/:departmentId", authenticateUser, getDepartmentById);
+/**
+ * 🔍 Get a single department by ID
+ */
+router.get("/:departmentId", authenticate(), getDepartmentById);
 
+/**
+ * ✏️ Update a department (Admin only)
+ */
 router.patch(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate(["admin", "superuser"]),
   updateDepartment
 );
 
+/**
+ * 🗑️ Delete a department (soft delete preferred — Admin only)
+ */
 router.delete(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate(["admin", "superuser"]),
   deleteDepartment
 );
 
-
-// ✅ Assign HOD
+/**
+ * 👩‍🏫 Assign HOD to department
+ */
 router.patch(
   "/:departmentId/assign-hod",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate(["admin", "superuser", "facultyofficer"]),
   assignHOD
 );
 
-// ✅ Remove HOD
+/**
+ * 🧾 Remove HOD from department
+ */
 router.patch(
   "/:departmentId/remove-hod",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate(["admin", "superuser", "facultyofficer"]),
   removeHOD
 );
 
-
-
-// ✅ Assign lecturer to department
+/**
+ * 👨‍🏫 Assign lecturer to department
+ */
 router.patch(
   "/:departmentId/assign-lecturer",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate(["admin", "superuser", "facultyofficer", "hod"]),
   assignLecturerToDepartment
 );
 
-// ✅ Remove lecturer from department
+/**
+ * 🚫 Remove lecturer from department
+ */
 router.patch(
   "/remove-lecturer",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate(["admin", "superuser", "facultyofficer", "hod"]),
   removeLecturerFromDepartment
 );
-
 
 export default router;

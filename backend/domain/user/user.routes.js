@@ -40,7 +40,7 @@ router.post("/signup", async (req, res) => {
       return res.status(400).json({ message: "Invalid email format." });
     } else if (password.length < 6) {
       return res.status(400).json({ message: "Password must be at least 6 characters long." });
-    } else if (!["student", "lecturer", "admin"].includes(role)) {
+    } else if (!["student", "lecturer", "admin"].includes(role.toLowerCase())) {
       return res.status(400).json({ message: "Role must be either student, lecturer, or admin." });
     }
 
@@ -48,13 +48,13 @@ router.post("/signup", async (req, res) => {
     email = email.trim().toLowerCase();
     password = password.trim();
     role = role ? role.toLowerCase() : "student";
-
     const newUser = await createNewUser({
       name,
       email,
       password,
       role
     });
+    console.log(role);
 
     return res.status(201).json({ message: "Signup successful!", user: newUser });
   } catch (error) {
