@@ -1,5 +1,5 @@
 import express from "express";
-import { assignHOD, removeHOD } from "./department.controller.js";
+import { assignHOD, getAllDepartment, removeHOD } from "./department.controller.js";
 
 
 import {
@@ -19,9 +19,8 @@ const router = express.Router();
 
 // Create department under a faculty
 router.post(
-  "/:facultyId/departments",
-  authenticateUser,
-  authorizeRoles("admin"),
+  "/",
+  authenticate("admin"),
   createDepartment
 );
 
@@ -29,7 +28,7 @@ router.post(
 router.get(
   "/",
   authenticate("admin"),
-  getDepartmentsByFaculty
+  getAllDepartment
 );
 
 // Single department routes
