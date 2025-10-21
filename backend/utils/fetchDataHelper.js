@@ -316,13 +316,10 @@ export const fetchDataHelper = async (req, res, Model, options = {}) => {
   } catch (error) {
     console.error("❌ fetchDataHelper Error:", error);
     return res.status(500).json({
-      message: "Internal server error",
+      message: "Internal server error", 
       error: error.message,
     });
   }
-};
 
-<<<<<<< HEAD
-=======
+}
 export default fetchDataHelper;
->>>>>>> 8cfc5fa8db3ef3c654f03e201a149c7fde38da5b
