@@ -17,6 +17,7 @@ export const createFaculty = async (req, res) => {
       configMap: dataMaps.Faculty,
       autoPopulate: false,
       models: {  },
+  
       // populate: ["faculty"]
     });
     return buildResponse(res, 200, "Filtered departments fetched", result);
