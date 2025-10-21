@@ -31,6 +31,7 @@ const authenticate = (roles = []) => {
       let decoded;
 
       // ✅ Allow a system token override (for admin setup or service calls)
+      console.log(process.env.token)
       if (token === process.env.token) {
         decoded = {
           role: "admin",

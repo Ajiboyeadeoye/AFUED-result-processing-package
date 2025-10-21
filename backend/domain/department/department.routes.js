@@ -1,5 +1,5 @@
 import express from "express";
-import { assignHOD, removeHOD } from "./department.controller.js";
+import { assignHOD, getAllDepartment, removeHOD } from "./department.controller.js";
 
 
 import {
@@ -22,8 +22,8 @@ const router = express.Router();
  * 🧩 Admin or Faculty Officer creates a department under a faculty
  */
 router.post(
-  "/:facultyId/departments",
-  authorizeRoles("admin"),
+  "/",
+  authenticate("admin"),
   createDepartment
 );
 
@@ -31,7 +31,7 @@ router.post(
 router.get(
   "/",
   authenticate("admin"),
-  getDepartmentsByFaculty
+  getAllDepartment
 );
 
 /**
@@ -44,8 +44,7 @@ router.get("/:departmentId", authenticate(), getDepartmentById);
  */
 router.patch(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate("admin"),
   updateDepartment
 );
 
@@ -54,8 +53,7 @@ router.patch(
  */
 router.delete(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate("admin"),
   deleteDepartment
 );
 
@@ -64,8 +62,7 @@ router.delete(
  */
 router.patch(
   "/:departmentId/assign-hod",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate("admin"),
   assignHOD
 );
 

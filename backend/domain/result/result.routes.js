@@ -12,7 +12,7 @@ import {
 } from "./result.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
-import { fileHandler } from "../../middlewares/filehandler.js";
+import { fileHandler } from "../../middlewares/fileHandler.js";
 import { auditLogger } from "../../middlewares/auditLogger.js";
 
 const router = express.Router();
