@@ -2,19 +2,25 @@ import Lecturer from "./lecturer.model.js";
 import Department from "../department/department.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
+import User from "../user/user.model.js";
 
 /**
  * 🧑‍🏫 Create Lecturer (Admin only)
  */
 export const createLecturer = async (req, res) => {
   try {
-    const { userId, staffId, departmentId, facultyId, specialization, rank } = req.body;
+    const { name, email, password, staffId, departmentId, facultyId, specialization, rank } = req.body;
 
-    const existing = await Lecturer.findOne({ staffId });
-    if (existing) return buildResponse(res, 400, "Lecturer with this staff ID already exists");
+    // Step 1: Check if user already exists
+    const existingUser = await Lecturer.findOne({ staffId });
+    if (existingUser) return buildResponse(res, 400, "User with this staffid already exists");
 
+    // Step 2: Create new User first
+    const user = await User.create({ name, email, password, role: "lecturer" });
+
+    // Step 3: Create the Lecturer using the new user's _id
     const lecturer = await Lecturer.create({
-      userId,
+      userId: user._id,
       staffId,
       departmentId,
       facultyId,
@@ -28,6 +34,7 @@ export const createLecturer = async (req, res) => {
     return buildResponse(res, 500, "Failed to create lecturer", null, true, error);
   }
 };
+
 
 /**
  * 📋 Get All Lecturers (Admin / HOD)
