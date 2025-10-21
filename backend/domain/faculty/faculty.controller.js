@@ -3,6 +3,7 @@ import buildResponse from "../../utils/responseBuilder.js";
 import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 import { universalQueryHandler } from "../../utils/universalQueryHandler.js";
 import mongoose from "mongoose";
+import { dataMaps } from "../../config/dataMap.js";
 // import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 
 
@@ -10,9 +11,15 @@ export const createFaculty = async (req, res) => {
   try {
     const { name, code, fields, search_term, filters, page } = req.body;
 
-        // 🧠 1. If request contains advanced filter data
+    // 🧠 1. If request contains advanced filter data
     if (fields || search_term || filters || page) {
-      const result = await fetchDataHelper( req, res, Faculty,);
+         const result = await fetchDataHelper(req, res, Faculty, {
+      configMap: dataMaps.Faculty,
+      autoPopulate: false,
+      models: {  },
+      // populate: ["faculty"]
+    });
+    return buildResponse(res, 200, "Filtered departments fetched", result);
       return buildResponse(res, 200, "Filtered faculties fetched", result);
     }
 
@@ -63,35 +70,47 @@ export const createFaculty = async (req, res) => {
 
 
 export const getAllFaculties = async (req, res) => {
+  // try {
+  //   // Get pagination params from query
+  //   const { page = 1, limit = 50 } = req.query;
+
+  //   // Convert to numbers and calculate skip
+  //   const skip = (Number(page) - 1) * Number(limit);
+
+  //   // Fetch paginated faculties
+  //   const faculties = await Faculty.find()
+  //     .skip(skip)
+  //     .limit(Number(limit));
+
+  //   // Get total count for pagination info
+  //   const totalCount = await Faculty.countDocuments();
+  //   const totalPages = Math.ceil(totalCount / Number(limit));
+
+  //   console.log("Faculties fetched successfully ✅");
+
+  //   // Send paginated response
+  //   return buildResponse(res, 200, "Faculties fetched", {
+  //     pagination: {
+  //       current_page: Number(page),
+  //       limit: Number(limit),
+  //       total_pages: totalPages,
+  //       total_items: totalCount,
+  //     },
+  //     data: faculties,
+  //   });
+  // }
+
   try {
-    // Get pagination params from query
-    const { page = 1, limit = 50 } = req.query;
-
-    // Convert to numbers and calculate skip
-    const skip = (Number(page) - 1) * Number(limit);
-
-    // Fetch paginated faculties
-    const faculties = await Faculty.find()
-      .skip(skip)
-      .limit(Number(limit));
-
-    // Get total count for pagination info
-    const totalCount = await Faculty.countDocuments();
-    const totalPages = Math.ceil(totalCount / Number(limit));
-
-    console.log("Faculties fetched successfully ✅");
-
-    // Send paginated response
-    return buildResponse(res, 200, "Faculties fetched", {
-      pagination: {
-        current_page: Number(page),
-        limit: Number(limit),
-        total_pages: totalPages,
-        total_items: totalCount,
-      },
-      data: faculties,
+    const result = await fetchDataHelper(req, res, Faculty, {
+      configMap: dataMaps.Faculty,
+      autoPopulate: false,
+      models: {  },
     });
-  } catch (error) {
+    return buildResponse(res, 200, "Filtered departments fetched", result);
+
+  }
+
+  catch (error) {
     console.error("Error fetching faculties ❌", error);
     return buildResponse(res, 500, "Error fetching faculties", null, true, error);
   }

@@ -1,0 +1,6 @@
+{
+    "name" : "this.name",
+    "id" : "this._id",
+    "faculty_name": "Faculty.name",
+    "students_count": "Student.count(this._id)"
+}

@@ -1,4 +1,7 @@
 import express from "express";
+import { assignHOD, removeHOD } from "./department.controller.js";
+
+
 import {
   assignHOD,
   removeHOD,
@@ -20,15 +23,17 @@ const router = express.Router();
  */
 router.post(
   "/:facultyId/departments",
-  authenticate(["admin", "superuser", "hod"]),
+  authenticateUser,
+  authorizeRoles("admin"),
   createDepartment
 );
 
-
-/**
- * 📚 Get all departments under a faculty
- */
-router.get("/:facultyId/departments", authenticate(), getDepartmentsByFaculty);
+// Get all departments in a faculty
+router.get(
+  "/",
+  authenticate("admin"),
+  getDepartmentsByFaculty
+);
 
 /**
  * 🔍 Get a single department by ID
@@ -40,7 +45,8 @@ router.get("/:departmentId", authenticate(), getDepartmentById);
  */
 router.patch(
   "/:departmentId",
-  authenticate(["admin", "superuser"]),
+  authenticateUser,
+  authorizeRoles("admin"),
   updateDepartment
 );
 
@@ -49,7 +55,8 @@ router.patch(
  */
 router.delete(
   "/:departmentId",
-  authenticate(["admin", "superuser"]),
+  authenticateUser,
+  authorizeRoles("admin"),
   deleteDepartment
 );
 
@@ -58,7 +65,8 @@ router.delete(
  */
 router.patch(
   "/:departmentId/assign-hod",
-  authenticate(["admin", "superuser", "facultyofficer"]),
+  authenticateUser,
+  authorizeRoles("Admin", "FacultyOfficer"),
   assignHOD
 );
 
