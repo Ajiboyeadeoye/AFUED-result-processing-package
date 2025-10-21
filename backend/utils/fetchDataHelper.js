@@ -322,7 +322,4 @@ export const fetchDataHelper = async (req, res, Model, options = {}) => {
   }
 };
 
-<<<<<<< HEAD
-=======
 export default fetchDataHelper;
->>>>>>> 8cfc5fa8db3ef3c654f03e201a149c7fde38da5b

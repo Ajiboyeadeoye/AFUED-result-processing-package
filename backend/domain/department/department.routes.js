@@ -3,8 +3,8 @@ import { assignHOD, removeHOD } from "./department.controller.js";
 
 
 import {
-  assignHOD,
-  removeHOD,
+  // assignHOD,
+  // removeHOD,
   createDepartment,
   getDepartmentsByFaculty,
   getDepartmentById,
@@ -23,7 +23,6 @@ const router = express.Router();
  */
 router.post(
   "/:facultyId/departments",
-  authenticateUser,
   authorizeRoles("admin"),
   createDepartment
 );
