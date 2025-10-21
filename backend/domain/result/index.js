@@ -1,4 +1,4 @@
-import routes from './routes.js';
+import routes from './result.routes.js';
 
 
 export default routes;
