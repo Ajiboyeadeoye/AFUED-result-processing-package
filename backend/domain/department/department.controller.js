@@ -2,13 +2,19 @@ import Department from "./department.model.js";
 import User from "../user/user.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
+import { dataMaps } from "../../config/dataMap.js";
+import facultyModel from "../faculty/faculty.model.js";
 
 // ✅ Assign HOD to Department
 
 export const getAllDepartment = async (req, res) => {
-  return await fetchDataHelper(req, res, Department, {
-    autoPopulate: true, // will handle faculty automatically
+  const result = await fetchDataHelper(req, res, Department, {
+    configMap: dataMaps.Department,
+    autoPopulate : true,
+    models: { facultyModel },
+    populate: ["faculty"]
   });
+          return buildResponse(res, 200, "Filtered departments fetched", result);
 };
 
 export const assignHOD = async (req, res) => {
@@ -146,15 +152,20 @@ export const removeLecturerFromDepartment = async (req, res) => {
 // ✅ Create Department
 export const createDepartment = async (req, res) => {
   try {
-    const { name, code, faculty_id: faculty , fields, search_term, filters, page } = req.body;
+    const { name, code,  faculty_id: faculty, fields, search_term, filters, page } = req.body;
     console.log(name, code, faculty, fields, search_term, filters, page)
 
     if (fields || search_term || filters || page) {
-          const result = await fetchDataHelper( req, res, Department,);
-          return buildResponse(res, 200, "Filtered departments fetched", result);
+      const result = await fetchDataHelper(req, res, Department, {
+        configMap: dataMaps.Department,
+        autoPopulate: true,
+        models: { faculty },
+        populate: ["faculty"]
+      });
+      return buildResponse(res, 200, "Filtered departments fetched", result);
     }
-    
-    
+
+
     // Validate input
     if (!name || !code) {
       return buildResponse(res, 400, "Department name and code are required");
@@ -175,7 +186,7 @@ export const createDepartment = async (req, res) => {
 
     return buildResponse(res, 201, "Department created successfully", newDepartment);
   } catch (error) {
-    
+
     console.log(error)
     return buildResponse(res, 500, "Failed to create department", null, true, error);
   }

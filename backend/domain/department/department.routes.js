@@ -36,15 +36,13 @@ router.get("/:departmentId", authenticateUser, getDepartmentById);
 
 router.patch(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate("admin"),
   updateDepartment
 );
 
 router.delete(
   "/:departmentId",
-  authenticateUser,
-  authorizeRoles("admin"),
+  authenticate("admin"),
   deleteDepartment
 );
 
@@ -52,8 +50,7 @@ router.delete(
 // ✅ Assign HOD
 router.patch(
   "/:departmentId/assign-hod",
-  authenticateUser,
-  authorizeRoles("Admin", "FacultyOfficer"),
+  authenticate("admin"),
   assignHOD
 );
 
