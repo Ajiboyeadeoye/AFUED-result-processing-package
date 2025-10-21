@@ -143,7 +143,7 @@ import XLSX from "xlsx";
 const queryBuilder = (payload, options) => {
   const {
     page = 1,
-    limit = 20,
+    limit = 1,
     fields,
     search_term,
     filter = {},
