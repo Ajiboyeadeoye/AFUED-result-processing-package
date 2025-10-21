@@ -1,6 +1,5 @@
 import { Router } from "express";
-import buildResponse from "../../utils/responseBuilder.js"; 
-
+import buildResponse from "../../utils/responseBuilder.js";
 
 import {
   validateCourse,
@@ -10,69 +9,118 @@ import {
   updateCourse,
   deleteCourse,
 } from "./course.controller.js";
+
 import authenticate from "../../middlewares/authenticate.js";
-import authorizeRoles from "../../middlewares/authorizeRoles.js";
 
 const router = Router();
 
-router.get("/",
-  authenticate,
-  authorizeRoles("student", "admin", "lecturer"),
-  async (req, res) => {
-    try {
-      const courses = await getAllCourses();
+/**
+ * 📚 Get all courses (accessible by all authenticated users)
+ */
+router.get("/", authenticate(), async (req, res) => {
+  try {
+    const courses = await getAllCourses();
 
-      if (!courses || courses.length === 0) {
-        return res.status(200).json(buildResponse.success("No courses available", { count: 0, courses: [] }));
-      }
-
-      return res.status(200).json(buildResponse.success("Courses fetched successfully", { count: courses.length, courses }));
-    } catch (err) {
-      return res.status(500).json(buildResponse.error("Failed to fetch courses", 500));
+    if (!courses || courses.length === 0) {
+      return res
+        .status(200)
+        .json(buildResponse(res, 200, "No courses available", { count: 0, courses: [] }));
     }
-  }
-);
 
-    
-router.get("/:id", authenticate, authorizeRoles("student", "admin", "lecturer"), async (req, res) => {
+    return res
+      .status(200)
+      .json(buildResponse(res, 200, "Courses fetched successfully", { count: courses.length, courses }));
+  } catch (err) {
+    console.error("❌ Error fetching courses:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to fetch courses", null, true, err));
+  }
+});
+
+/**
+ * 🔍 Get a single course by ID (authenticated users)
+ */
+router.get("/:id", authenticate(), async (req, res) => {
   try {
     const course = await getCourseById(req.params.id);
-    return res.status(200).json(buildResponse.success("Course fetched successfully", course ));
+    if (!course) {
+      return res.status(404).json(buildResponse(res, 404, "Course not found"));
+    }
+
+    return res
+      .status(200)
+      .json(buildResponse(res, 200, "Course fetched successfully", course));
   } catch (err) {
-    return res.status(500).json(buildResponse.error("Failed to fetch the course", 500));
+    console.error("❌ Error fetching course:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to fetch course", null, true, err));
   }
 });
 
-// Hod-only
-router.post("/", authenticate, authorizeRoles("hod"), async (req, res) => {
+/**
+ * 🧱 Create a new course (HOD-only)
+ */
+router.post("/", authenticate("hod"), async (req, res) => {
   try {
     const { error } = validateCourse(req.body);
-    if (error)
-      return res.status(400).json(buildResponse.error("Course Validation failed", 400));
+    if (error) {
+      return res
+        .status(400)
+        .json(buildResponse(res, 400, "Course validation failed", null, true, error));
+    }
 
     const result = await createCourse({ ...req.body, createdBy: req.user?._id });
-    return res.status(201).json(buildResponse.success("Course created successfully", result ));
+
+    return res
+      .status(201)
+      .json(buildResponse(res, 201, "Course created successfully", result));
   } catch (err) {
-    return res.status(404).json(buildResponse.error("Generic cause", 500));
+    console.error("❌ Error creating course:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to create course", null, true, err));
   }
 });
 
-
-router.patch("/:id", authenticate, authorizeRoles("hod"), async (req, res) => {
+/**
+ * ✏️ Update a course (HOD-only)
+ */
+router.patch("/:id", authenticate("hod"), async (req, res) => {
   try {
     const updated = await updateCourse(req.params.id, req.body);
-    return res.status(200).json(buildResponse.success("Course updated", updated ));
+    if (!updated)
+      return res.status(404).json(buildResponse(res, 404, "Course not found"));
+
+    return res
+      .status(200)
+      .json(buildResponse(res, 200, "Course updated successfully", updated));
   } catch (err) {
-    return res.status(409).json(buildResponse.error("Request conflict", 409));
+    console.error("❌ Error updating course:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to update course", null, true, err));
   }
 });
 
-router.delete("/:id", authenticate, authorizeRoles("hod"), async (req, res, next) => {
+/**
+ * 🗑️ Delete a course (HOD-only)
+ */
+router.delete("/:id", authenticate("hod"), async (req, res) => {
   try {
-    await deleteCourse(req.params.id);
-    return res.status(200).json(buildResponse.success("Course deleted"));
+    const deleted = await deleteCourse(req.params.id);
+    if (!deleted)
+      return res.status(404).json(buildResponse(res, 404, "Course not found"));
+
+    return res
+      .status(200)
+      .json(buildResponse(res, 200, "Course deleted successfully"));
   } catch (err) {
-    return res.status(409).json(buildResponse.error("Request failed", 404));
+    console.error("❌ Error deleting course:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to delete course", null, true, err));
   }
 });
 

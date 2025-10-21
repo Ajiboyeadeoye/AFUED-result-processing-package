@@ -199,17 +199,44 @@ export const createDepartment = async (req, res) => {
 export const getDepartmentsByFaculty = async (req, res) => {
   try {
     const { facultyId } = req.params;
+    const { page = 1, limit = 50 } = req.query;
 
-    const departments = await Department.find({ faculty: facultyId }).populate("hod", "name email");
+    // Convert to numbers and calculate skip
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Fetch departments belonging to the given faculty (paginated)
+    const departments = await Department.find({ faculty: facultyId })
+      .populate("hod", "name email")
+      .skip(skip)
+      .limit(Number(limit));
+
+    // Count total departments for this faculty
+    const totalCount = await Department.countDocuments({ faculty: facultyId });
+    const totalPages = Math.ceil(totalCount / Number(limit));
+
+    // Handle case when no departments found
     if (!departments || departments.length === 0) {
       return buildResponse(res, 404, "No departments found for this faculty");
     }
 
-    return buildResponse(res, 200, "Departments fetched successfully", departments);
+    console.log("Departments fetched successfully ✅");
+
+    // Send paginated response
+    return buildResponse(res, 200, "Departments fetched successfully", {
+      pagination: {
+        current_page: Number(page),
+        limit: Number(limit),
+        total_pages: totalPages,
+        total_items: totalCount,
+      },
+      data: departments,
+    });
   } catch (error) {
+    console.error("Error fetching departments ❌", error);
     return buildResponse(res, 500, "Failed to get departments", null, true, error);
   }
 };
+
 
 // ✅ Get Department by ID
 export const getDepartmentById = async (req, res) => {

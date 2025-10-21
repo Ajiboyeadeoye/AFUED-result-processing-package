@@ -1,29 +1,32 @@
 import express from "express";
+import {
+  getAllStudents,
+  createStudent,
+  getStudentById,
+  updateStudent,
+  deleteStudent,
+  getMyProfile,
+  registerCourses,
+  getMyCourses,
+  viewResults,
+  printTranscript,
+} from "./student.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
-import authorizeRoles from "../../middlewares/authorizeRoles.js";
 
 const router = express.Router();
 
-// ✅ Protected route for student profile
-router.get(
-  "/profile",
-  authenticate(),               // Authentication middleware
-  authorizeRoles("student"),    // Role-based access control
-  (req, res) => {
-    res.json({
-      message: "Welcome Student",
-      user: req.user
-    });
-  }
-);
+// 🧩 ADMIN ROUTES
+router.get("/", authenticate("admin"), getAllStudents);
+router.post("/", authenticate("admin"), createStudent);
+router.get("/:id", authenticate("admin"), getStudentById);
+router.put("/:id", authenticate("admin"), updateStudent);
+router.delete("/:id", authenticate("admin"), deleteStudent);
+
+// 🧩 STUDENT SELF-SERVICE ROUTES
+router.get("/me", authenticate("student"), getMyProfile);
+router.post("/register-courses", authenticate("student"), registerCourses);
+router.get("/my-courses", authenticate("student"), getMyCourses);
+router.get("/results", authenticate("student"), viewResults);
+router.get("/transcript", authenticate("student"), printTranscript);
 
 export default router;
-
-
-//Admiin functionalities
-
-// creating students: 
-//- in json, excel, csv
-
-
-//
