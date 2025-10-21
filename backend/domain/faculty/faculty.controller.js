@@ -21,7 +21,7 @@ export const createFaculty = async (req, res) => {
       // populate: ["faculty"]
     });
     return buildResponse(res, 200, "Filtered departments fetched", result);
-      return buildResponse(res, 200, "Filtered faculties fetched", result);
+    
     }
 
 
