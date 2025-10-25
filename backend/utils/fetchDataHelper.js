@@ -1,149 +1,14 @@
-// import { Parser as Json2CsvParser } from "json2csv";
-// import XLSX from "xlsx";
-
-// /**
-//  * ⚡ Advanced Universal Data Fetch & Export Helper
-//  * ------------------------------------------------
-//  * Supports:
-//  *  - Pagination, Filters, Sorting, Search
-//  *  - Exports as CSV, Excel, or JSON
-//  *  - Exclude fields from export
-//  *
-//  * @param {Object} req - Express request object
-//  * @param {Object} res - Express response object
-//  * @param {Object} Model - Mongoose model
-//  * @param {Object} [options] - Optional configuration
-//  */
-// export const fetchDataHelper = async (req, res, Model, options = {}) => {
-//   try {
-//     const payload = req.method === "GET" ? req.query : req.body;
-
-//     const {
-//       page = 1,
-//       limit = 20,
-//       fields,
-//       search_term,
-//       filter = {},
-//       sort,
-//       extraParams = {}, // ✅ New! 
-//     } = payload;
-
-//     const enablePagination =
-//       options.enablePagination === undefined ? true : options.enablePagination;
-
-//     // 🧱 Base Query
-//     let query = {};
-
-//     // 🧩 Merge filters
-//     if (filter && typeof filter === "object") Object.assign(query, filter);
-//     if (options.additionalFilters)
-//       query = { ...query, ...options.additionalFilters };
-
-//     // 🔍 Search
-//     if (fields && search_term) {
-//       const fieldArray = Array.isArray(fields)
-//         ? fields
-//         : String(fields).split(",");
-//       const regex = { $regex: search_term, $options: "i" };
-//       query.$or = fieldArray.map((field) => ({ [field.trim()]: regex }));
-//     }
-
-//     // ⚙️ Sort
-//     const finalSort = sort || options.sort || { createdAt: -1 };
-
-//     // 🧮 Pagination
-//     const currentPage = parseInt(page);
-//     const itemsPerPage = parseInt(limit);
-//     const skip = (currentPage - 1) * itemsPerPage;
-
-//     let dataQuery = Model.find(query).sort(finalSort);
-
-//     if (enablePagination && !extraParams.asFile) {
-//       dataQuery = dataQuery.skip(skip).limit(itemsPerPage);
-//     }
-
-//     let data = await dataQuery.lean().exec(); // ✅ Use lean() for plain objects
-
-//     // ✂️ Exclude fields from result (for file export)
-//     if (extraParams.excludeFields && Array.isArray(extraParams.excludeFields)) {
-//       data = data.map((item) => {
-//         extraParams.excludeFields.forEach((field) => delete item[field]);
-//         return item;
-//       });
-//     }
-
-//     // 📁 Handle file export mode
-//     if (extraParams.asFile) {
-//       const fileType = extraParams.fileType?.toLowerCase() || "csv";
-//       const filename = `${Model.modelName}_export_${Date.now()}`;
-
-//       if (fileType === "csv") {
-//         const parser = new Json2CsvParser();
-//         const csv = parser.parse(data);
-//         res.header("Content-Type", "text/csv");
-//         res.attachment(`${filename}.csv`);
-//         return res.send(csv);
-//       }
-
-//       if (fileType === "excel" || fileType === "xlsx") {
-//         const worksheet = XLSX.utils.json_to_sheet(data);
-//         const workbook = XLSX.utils.book_new();
-//         XLSX.utils.book_append_sheet(workbook, worksheet, "Data");
-//         const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-//         res.header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-//         res.attachment(`${filename}.xlsx`);
-//         return res.send(buffer);
-//       }
-
-//       if (fileType === "json") {
-//         res.header("Content-Type", "application/json");
-//         res.attachment(`${filename}.json`);
-//         return res.send(JSON.stringify(data, null, 2));
-//       }
-
-//       return res.status(400).json({ message: "Invalid file type" });
-//     }
-
-//     // 📊 Pagination info
-//     let pagination = null;
-//     if (enablePagination && !extraParams.asFile) {
-//       const totalItems = await Model.countDocuments(query);
-//       const totalPages = Math.ceil(totalItems / itemsPerPage);
-//       pagination = {
-//         current_page: currentPage,
-//         limit: itemsPerPage,
-//         total_pages: totalPages,
-//         total_items: totalItems,
-//       };
-//     }
-
-//     // 🎯 Default JSON response
-//     return res.status(200).json({
-//       message: `${Model.modelName}s fetched successfully`,
-//       ...(pagination ? { pagination } : {}),
-//       data,
-//     });
-//   } catch (error) {
-//     console.error("❌ fetchDataHelper Error:", error);
-//     return res.status(500).json({
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
 import mongoose from "mongoose";
 import { Parser as Json2CsvParser } from "json2csv";
 import XLSX from "xlsx";
 
 /* ------------------------------------------------------------
- * 🧠 QUERY BUILDER
+ * 🧠 QUERY BUILDER (with support for custom_fields)
  * ------------------------------------------------------------ */
 const queryBuilder = (payload, options) => {
   const {
     page = 1,
-    limit = 1,
+    limit = 20,
     fields,
     search_term,
     filter = {},
@@ -163,18 +28,38 @@ const queryBuilder = (payload, options) => {
   if (options.additionalFilters)
     query = { ...query, ...options.additionalFilters };
 
-  // 🔍 Search across multiple fields
+  // 🔍 Search across multiple fields (supports custom_fields)
   if (fields && search_term) {
     const fieldArray = Array.isArray(fields)
       ? fields
       : String(fields).split(",");
     const regex = { $regex: search_term, $options: "i" };
-    query.$or = fieldArray.map((field) => ({ [field.trim()]: regex }));
+    const orArray = [];
+
+    for (const field of fieldArray) {
+      const trimmed = field.trim();
+      if (options.custom_fields && options.custom_fields[trimmed]) {
+        const refName = options.custom_fields[trimmed];
+        orArray.push({ [`${refName}.${trimmed}`]: regex });
+      } else {
+        orArray.push({ [trimmed]: regex });
+      }
+    }
+
+    query.$or = orArray;
   }
 
   const finalSort = sort || options.sort || { createdAt: -1 };
 
-  return { query, finalSort, skip, itemsPerPage, enablePagination, extraParams, currentPage };
+  return {
+    query,
+    finalSort,
+    skip,
+    itemsPerPage,
+    enablePagination,
+    extraParams,
+    currentPage,
+  };
 };
 
 /* ------------------------------------------------------------
@@ -185,7 +70,7 @@ const applyTransformations = async (data, configMap) => {
 
   const models = mongoose.models;
   const resolvePath = (obj, path) =>
-    path.split('.').reduce((o, k) => (o ? o[k] : null), obj);
+    path.split(".").reduce((o, k) => (o ? o[k] : null), obj);
 
   return Promise.all(
     data.map(async (doc) => {
@@ -194,8 +79,29 @@ const applyTransformations = async (data, configMap) => {
         if (typeof value === "function") {
           transformed[key] = await value(doc, models);
         } else if (value.startsWith("this.")) {
-          transformed[key] = resolvePath(doc, value.replace("this.", ""));
-        } else if (value.includes(".")) {
+  try {
+    // Handle OR fallback expressions like "this.user?.name || this.userId?.name"
+    if (value.includes("||")) {
+      const paths = value
+        .split("||")
+        .map(v => v.trim().replace(/^this\./, "").replace(/\?/g, ""));
+      
+      for (const p of paths) {
+        const val = resolvePath(doc, p);
+        if (val !== undefined && val !== null) {
+          transformed[key] = val;
+          break;
+        }
+      }
+    } else {
+      // Normal single path
+      transformed[key] = resolvePath(doc, value.replace(/^this\./, "").replace(/\?/g, ""));
+    }
+  } catch {
+    transformed[key] = null;
+  }
+}
+ else if (value.includes(".")) {
           const [ref, refField] = value.split(".");
           transformed[key] = doc[ref]?.[refField] ?? null;
         } else {
@@ -245,50 +151,162 @@ const exportHandler = (res, modelName, data, fileType) => {
 };
 
 /* ------------------------------------------------------------
- * ⚡ MAIN UNIVERSAL FETCH & EXPORT HELPER
+ * ⚡ MAIN UNIVERSAL FETCH & EXPORT HELPER (with custom_fields support)
  * ------------------------------------------------------------ */
 export const fetchDataHelper = async (req, res, Model, options = {}) => {
   try {
     const payload = req.method === "GET" ? req.query : req.body;
-    const { query, finalSort, skip, itemsPerPage, enablePagination, extraParams, currentPage } =
-      queryBuilder(payload, options);
+    const {
+      query,
+      finalSort,
+      skip,
+      itemsPerPage,
+      enablePagination,
+      extraParams,
+      currentPage,
+    } = queryBuilder(payload, options);
 
-    // 🧩 Base Query
-    let dataQuery = Model.find(query).sort(finalSort);
+    // Detect if we’re searching inside referenced custom_fields
+    const hasNestedSearch =
+      options.custom_fields &&
+      Object.keys(options.custom_fields).some((key) =>
+        query.$or?.some?.((cond) =>
+          Object.keys(cond)[0].startsWith(options.custom_fields[key] + ".")
+        )
+      );
 
-    // Custom populates
-    if (options.populate)
-      for (const pop of [].concat(options.populate))
-        dataQuery = dataQuery.populate(pop);
+    let dataQuery;
 
-    // Auto-populate refs
-    if (options.autoPopulate !== false) {
-      const schemaPaths = Model.schema.paths;
-      const populated = new Set(options.populate?.map((p) => p.path || p) || []);
-      for (const key in schemaPaths) {
-        const path = schemaPaths[key];
-        if (path.options?.ref && !populated.has(key))
-          dataQuery = dataQuery.populate({ path: key, select: "name" });
+if (hasNestedSearch) {
+  const pipeline = [];
+
+  // ✅ Base match
+  const baseMatch = { ...query };
+  delete baseMatch.$or;
+  if (Object.keys(baseMatch).length) pipeline.push({ $match: baseMatch });
+
+  // ✅ Lookups for each ref in custom_fields
+  for (const ref of new Set(Object.values(options.custom_fields))) {
+    let refPath = Model.schema.path(ref);
+    let refModel = refPath?.options?.ref;
+    let localField = ref;
+
+    // 🧠 Handle fallback patterns like refId / ref_id
+    if (!refModel) {
+      const altPaths = [`${ref}Id`, `${ref}_id`];
+      for (const alt of altPaths) {
+        const altPath = Model.schema.path(alt);
+        if (altPath?.options?.ref) {
+          refPath = altPath;
+          refModel = altPath.options.ref;
+          localField = alt;
+          break;
+        }
       }
     }
 
-    // Pagination
-    if (enablePagination && !extraParams.asFile)
-      dataQuery = dataQuery.skip(skip).limit(itemsPerPage);
+    // 🪄 NEW: Handle cases where _id is used as the reference (shared IDs)
+    if (!refModel && ref === "_id") {
+      const idPath = Model.schema.path("_id");
+      if (idPath?.options?.ref) {
+        refModel = idPath.options.ref;
+        localField = "_id";
+      }
+    }
+
+    // If still no ref model, skip
+    if (!refModel) continue;
+
+    // ✅ Add lookup
+    pipeline.push({
+      $lookup: {
+        from: refModel.toLowerCase() + "s",
+        localField,
+        foreignField: "_id",
+        as: ref,
+      },
+    });
+
+    pipeline.push({
+      $unwind: { path: `$${ref}`, preserveNullAndEmptyArrays: true },
+    });
+  }
+
+  // ✅ Apply search condition
+  if (query.$or?.length) pipeline.push({ $match: { $or: query.$or } });
+
+  // ✅ Sorting and pagination
+  pipeline.push({ $sort: finalSort });
+  if (enablePagination && !extraParams.asFile) {
+    pipeline.push({ $skip: skip }, { $limit: itemsPerPage });
+  }
+
+  dataQuery = Model.aggregate(pipeline);
+}
+
+ else {
+      // 🧠 Default behavior (untouched)
+      dataQuery = Model.find(query).sort(finalSort);
+
+      // Custom populates
+      if (options.populate)
+        for (const pop of [].concat(options.populate))
+          dataQuery = dataQuery.populate(pop);
+
+      // Auto-populate refs
+      if (options.autoPopulate !== false) {
+        const schemaPaths = Model.schema.paths;
+        const populated = new Set(
+          options.populate?.map((p) => p.path || p) || []
+        );
+        for (const key in schemaPaths) {
+          const path = schemaPaths[key];
+          if (path.options?.ref && !populated.has(key))
+            dataQuery = dataQuery.populate({ path: key, select: "name" });
+        }
+      }
+
+      // Pagination
+      if (enablePagination && !extraParams.asFile)
+        dataQuery = dataQuery.skip(skip).limit(itemsPerPage);
+    }
 
     // Execute query
-    let data = await dataQuery.lean().exec();
+    let data;
 
-    // Transform if configMap exists
-    data = await applyTransformations(data, options.configMap);
-
-    // Exclude unwanted fields
-    if (Array.isArray(extraParams.excludeFields)) {
-      data = data.map((item) => {
-        extraParams.excludeFields.forEach((f) => delete item[f]);
-        return item;
-      });
+    if (typeof dataQuery.lean === "function") {
+      // Normal find() query
+      data = await dataQuery.lean();
+    } else {
+      // Aggregation pipeline result (aggregate() returns an array)
+      data = await dataQuery;
     }
+
+// 🪄 Flatten custom fields first
+if (options.custom_fields && Array.isArray(data) && data.length) {
+  data = data.map((item) => {
+    const newItem = { ...item };
+    for (const [field, parent] of Object.entries(options.custom_fields)) {
+      const value = parent
+        .split('.')
+        .reduce((acc, key) => (acc ? acc[key] : undefined), item);
+      if (value !== undefined) newItem[field] = value;
+    }
+    return newItem;
+  });
+}
+
+// 🧠 Apply transformations (like this.user.name)
+data = await applyTransformations(data, options.configMap);
+
+// 🧹 Finally remove excluded fields (AFTER flattening + transformation)
+if (Array.isArray(extraParams.excludeFields)) {
+  data = data.map((item) => {
+    extraParams.excludeFields.forEach((f) => delete item[f]);
+    return item;
+  });
+}
+
 
     // Export file if requested
     if (extraParams.asFile) {
@@ -316,10 +334,10 @@ export const fetchDataHelper = async (req, res, Model, options = {}) => {
   } catch (error) {
     console.error("❌ fetchDataHelper Error:", error);
     return res.status(500).json({
-      message: "Internal server error", 
+      message: "Internal server error",
       error: error.message,
     });
   }
+};
 
-}
 export default fetchDataHelper;

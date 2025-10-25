@@ -2,10 +2,10 @@ import { Router } from "express";
 import buildResponse from "../../utils/responseBuilder.js";
 
 import {
-  validateCourse,
+  // validateCourse,
   createCourse,
   getAllCourses,
-  getCourseById,
+  // getCourseById,
   updateCourse,
   deleteCourse,
 } from "./course.controller.js";
@@ -62,27 +62,8 @@ router.get("/:id", authenticate(), async (req, res) => {
 /**
  * 🧱 Create a new course (HOD-only)
  */
-router.post("/", authenticate("hod"), async (req, res) => {
-  try {
-    const { error } = validateCourse(req.body);
-    if (error) {
-      return res
-        .status(400)
-        .json(buildResponse(res, 400, "Course validation failed", null, true, error));
-    }
+router.post("/", authenticate(["hod", "admin"]), createCourse);
 
-    const result = await createCourse({ ...req.body, createdBy: req.user?._id });
-
-    return res
-      .status(201)
-      .json(buildResponse(res, 201, "Course created successfully", result));
-  } catch (err) {
-    console.error("❌ Error creating course:", err);
-    return res
-      .status(500)
-      .json(buildResponse(res, 500, "Failed to create course", null, true, err));
-  }
-});
 
 /**
  * ✏️ Update a course (HOD-only)

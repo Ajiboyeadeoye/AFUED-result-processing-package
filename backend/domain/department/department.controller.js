@@ -1,159 +1,312 @@
+import mongoose from "mongoose";
 import Department from "./department.model.js";
 import User from "../user/user.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 import { dataMaps } from "../../config/dataMap.js";
 import facultyModel from "../faculty/faculty.model.js";
+import lecturerModel from "../lecturer/lecturer.model.js";
+import departmentModel from "./department.model.js";
 
-// ✅ Assign HOD to Department
+/**
+ * NOTE:
+ * - department.hod stores a Lecturer._id
+ * - lecturerModel documents link to User via lecturer.userId
+ * - Role strings used here: "lecturer" and "hod" (lowercase). Change if your system uses different casing.
+ */
 
+/* ===== Get All Departments (with fetch helper) ===== */
 export const getAllDepartment = async (req, res) => {
-  const result = await fetchDataHelper(req, res, Department, {
-    configMap: dataMaps.Department,
-    autoPopulate : true,
-    models: { facultyModel },
-    populate: ["faculty"]
-  });
-          return buildResponse(res, 200, "Filtered departments fetched", result);
+  try {
+    const result = await fetchDataHelper(req, res, Department, {
+      configMap: dataMaps.Department,
+      autoPopulate: true,
+      models: { facultyModel,  },
+      populate: ["faculty", "hod"],
+    });
+    return buildResponse(res, 200, "Filtered departments fetched", result);
+  } catch (error) {
+    console.error(error);
+    return buildResponse(res, 500, "Failed to fetch departments", null, true, error);
+  }
 };
 
+/* ===== Assign HOD to Department ===== */
 export const assignHOD = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { userId } = req.body; // userId of the lecturer
+    const { lecturerId } = req.body; // _id of Lecturer doc
     const { departmentId } = req.params;
 
+    if (!mongoose.Types.ObjectId.isValid(lecturerId) || !mongoose.Types.ObjectId.isValid(departmentId)) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, "Invalid IDs provided");
+    }
 
-    // Check department exists
-    const department = await Department.findById(departmentId);
+    const department = await Department.findById(departmentId).session(session);
     if (!department) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 404, "Department not found");
     }
 
-    // Check user exists
-    const lecturer = await User.findById(userId);
+    const lecturer = await lecturerModel.findById(lecturerId).session(session);
     if (!lecturer) {
-      return buildResponse(res, 404, "User not found");
-    }
-
-    // Ensure only a Lecturer can become HOD
-    if (lecturer.role !== "Lecturer") {
-      return buildResponse(res, 400, "Only lecturers can be assigned as HOD");
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "Lecturer not found");
     }
 
     // Ensure lecturer belongs to this department
-    if (!lecturer.department || lecturer.department.toString() !== departmentId) {
+    if (!lecturer.departmentId || lecturer.departmentId.toString() !== departmentId) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 400, "Lecturer must belong to this department before becoming HOD");
     }
 
-    // Check if department already has HOD
-    if (department.hod) {
-      return buildResponse(res, 400, "This department already has an HOD");
+    // If department already has an HOD and it's different, unassign old HOD
+    if (department.hod && department.hod.toString() !== lecturerId) {
+      const oldHOD = await lecturerModel.findById(department.hod).session(session);
+      if (oldHOD) {
+        oldHOD.isHOD = false;
+        await oldHOD.save({ session });
+
+        // update the linked user role if exists
+        if (oldHOD.userId) {
+          const oldUser = await User.findById(oldHOD.userId).session(session);
+          if (oldUser) {
+            oldUser.role = "lecturer";
+            await oldUser.save({ session });
+          }
+        }
+      }
     }
 
-    // ✅ Assign HOD
-    department.hod = userId;
-    await department.save();
+    // Assign the new HOD
+    department.hod = lecturer._id;
+    lecturer.isHOD = true;
 
-    // ✅ Update user role to HOD
-    lecturer.role = "HOD";
-    await lecturer.save();
+    // Update linked user role to hod-
+    if (lecturer.userId) {
+      const linkedUser = await User.findById(lecturer.userId).session(session);
+      if (linkedUser) {
+        linkedUser.role = "hod";
+        linkedUser.department = departmentId; // ensure user.department is consistent
+        await linkedUser.save({ session });
+      }
+    }
 
-    return buildResponse(res, 200, "HOD assigned successfully", department);
+    await department.save({ session });
+    await lecturer.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // populate returned department hod for response
+    const populatedDept = await Department.findById(departmentId)
+      .populate({ path: "hod", select: "staffId userId isHOD departmentId rank" })
+      .populate("faculty", "name")
+      .lean();
+
+    return buildResponse(res, 200, "HOD assigned successfully", populatedDept);
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("assignHOD error:", error);
     return buildResponse(res, 500, "Failed to assign HOD", null, true, error);
   }
 };
 
-// ✅ Remove HOD
+/* ===== Remove HOD ===== */
 export const removeHOD = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { departmentId } = req.params;
 
-    const department = await Department.findById(departmentId);
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, "Invalid departmentId");
+    }
+
+    const department = await Department.findById(departmentId).session(session);
     if (!department) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 404, "Department not found");
     }
 
     if (!department.hod) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 400, "No HOD assigned yet");
     }
 
-    // Find HOD user
-    const hodUser = await User.findById(department.hod);
-    if (hodUser) {
-      hodUser.role = "Lecturer"; // revert back to lecturer
-      await hodUser.save();
+    // department.hod is a Lecturer._id
+    const hodLecturer = await lecturerModel.findById(department.hod).session(session);
+    if (hodLecturer) {
+      hodLecturer.isHOD = false;
+      await hodLecturer.save({ session });
+
+      // update linked user role if exists
+      if (hodLecturer.userId) {
+        const linkedUser = await User.findById(hodLecturer.userId).session(session);
+        if (linkedUser) {
+          linkedUser.role = "lecturer";
+          await linkedUser.save({ session });
+        }
+      }
+    } else {
+      // If hod points to a user id (legacy), try to clear user role - but prefer lecturer flow
+      const maybeUser = await User.findById(department.hod).session(session);
+      if (maybeUser) {
+        maybeUser.role = "lecturer";
+        await maybeUser.save({ session });
+      }
     }
 
     department.hod = null;
-    await department.save();
+    await department.save({ session });
+
+    await session.commitTransaction();
+    session.endSession();
 
     return buildResponse(res, 200, "HOD removed successfully");
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("removeHOD error:", error);
     return buildResponse(res, 500, "Failed to remove HOD", null, true, error);
   }
 };
 
-
-// ✅ Assign Lecturer to Department
+/* ===== Assign Lecturer to Department (User + Lecturer docs) ===== */
 export const assignLecturerToDepartment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { userId } = req.body;
     const { departmentId } = req.params;
 
-    // Check department exists
-    const department = await Department.findById(departmentId);
-    if (!department) return buildResponse(res, 404, "Department not found");
+    if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(departmentId)) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, "Invalid IDs provided");
+    }
 
-    // Check user exists
-    const user = await User.findById(userId);
-    if (!user) return buildResponse(res, 404, "User not found");
+    const department = await Department.findById(departmentId).session(session);
+    if (!department) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "Department not found");
+    }
 
-    // Only lecturers can be assigned
-    if (user.role !== "Lecturer") {
+    const user = await User.findById(userId).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "User not found");
+    }
+
+    // Only users with lecturer role can be assigned
+    // if your role strings differ, adjust accordingly
+    if (!["lecturer", "hod"].includes((user.role || "").toLowerCase())) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 400, "Only lecturers can be assigned to a department");
     }
 
-    // Assign lecturer to department
+    // Update User department
     user.department = departmentId;
-    await user.save();
+    await user.save({ session });
 
-    return buildResponse(res, 200, "Lecturer assigned to department successfully", user);
+    // If there is a separate Lecturer document linking to this user, update it too
+    const lecturer = await lecturerModel.findOne({ userId: user._id }).session(session);
+    if (lecturer) {
+      lecturer.departmentId = departmentId;
+      await lecturer.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return buildResponse(res, 200, "Lecturer assigned to department successfully", { user, lecturer });
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("assignLecturerToDepartment error:", error);
     return buildResponse(res, 500, "Failed to assign lecturer", null, true, error);
   }
 };
 
-// ✅ Remove Lecturer from Department
+/* ===== Remove Lecturer from Department ===== */
 export const removeLecturerFromDepartment = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const { userId } = req.body;
-    const user = await User.findById(userId);
 
-    if (!user) return buildResponse(res, 404, "User not found");
-    if (user.role !== "Lecturer" && user.role !== "HOD") {
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, "Invalid userId");
+    }
+
+    const user = await User.findById(userId).session(session);
+    if (!user) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "User not found");
+    }
+
+    const role = (user.role || "").toLowerCase();
+    if (!["lecturer", "hod"].includes(role)) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 400, "Only lecturers or HODs belong to departments");
     }
 
-    // Prevent removing current HOD this way
-    if (user.role === "HOD") {
+    // Prevent removing current HOD via this endpoint
+    if (role === "hod") {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 400, "Remove as HOD first before removing from department");
     }
 
+    // Clear user department
     user.department = null;
-    await user.save();
+    await user.save({ session });
+
+    // Also clear departmentId on lecturer doc if exists
+    const lecturer = await lecturerModel.findOne({ userId: user._id }).session(session);
+    if (lecturer) {
+      lecturer.departmentId = null;
+      await lecturer.save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
 
     return buildResponse(res, 200, "Lecturer removed from department successfully");
   } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    console.error("removeLecturerFromDepartment error:", error);
     return buildResponse(res, 500, "Failed to remove lecturer from department", null, true, error);
   }
 };
 
-// ✅ Create Department
+/* ===== Create Department ===== */
 export const createDepartment = async (req, res) => {
   try {
-    const { name, code,  faculty_id: faculty, fields, search_term, filters, page } = req.body;
-    console.log(name, code, faculty, fields, search_term, filters, page)
+    const { name, code, faculty_id: faculty, fields, search_term, filters, page } = req.body;
 
     if (fields || search_term || filters || page) {
       const result = await fetchDataHelper(req, res, Department, {
@@ -165,19 +318,17 @@ export const createDepartment = async (req, res) => {
       return buildResponse(res, 200, "Filtered departments fetched", result);
     }
 
-
     // Validate input
     if (!name || !code) {
       return buildResponse(res, 400, "Department name and code are required");
     }
 
-    // Check if department already exists
+    // Check uniqueness
     const existingDept = await Department.findOne({ name });
     if (existingDept) {
       return buildResponse(res, 400, "Department with this name already exists");
     }
 
-    // Create new department
     const newDepartment = await Department.create({
       name,
       code,
@@ -186,42 +337,30 @@ export const createDepartment = async (req, res) => {
 
     return buildResponse(res, 201, "Department created successfully", newDepartment);
   } catch (error) {
-
-    console.log(error)
+    console.error("createDepartment error:", error);
     return buildResponse(res, 500, "Failed to create department", null, true, error);
   }
 };
 
-
-
-
-// ✅ Get Departments by Faculty
+/* ===== Get Departments by Faculty (paginated) ===== */
 export const getDepartmentsByFaculty = async (req, res) => {
   try {
     const { facultyId } = req.params;
     const { page = 1, limit = 50 } = req.query;
-
-    // Convert to numbers and calculate skip
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Fetch departments belonging to the given faculty (paginated)
     const departments = await Department.find({ faculty: facultyId })
-      .populate("hod", "name email")
+      .populate("hod", "staffId userId isHOD")
       .skip(skip)
       .limit(Number(limit));
 
-    // Count total departments for this faculty
     const totalCount = await Department.countDocuments({ faculty: facultyId });
     const totalPages = Math.ceil(totalCount / Number(limit));
 
-    // Handle case when no departments found
     if (!departments || departments.length === 0) {
       return buildResponse(res, 404, "No departments found for this faculty");
     }
 
-    console.log("Departments fetched successfully ✅");
-
-    // Send paginated response
     return buildResponse(res, 200, "Departments fetched successfully", {
       pagination: {
         current_page: Number(page),
@@ -232,43 +371,50 @@ export const getDepartmentsByFaculty = async (req, res) => {
       data: departments,
     });
   } catch (error) {
-    console.error("Error fetching departments ❌", error);
+    console.error("getDepartmentsByFaculty error:", error);
     return buildResponse(res, 500, "Failed to get departments", null, true, error);
   }
 };
 
-
-// ✅ Get Department by ID
+/* ===== Get Department by ID ===== */
 export const getDepartmentById = async (req, res) => {
   try {
     const { departmentId } = req.params;
 
-    const department = await Department.findById(departmentId)
-      .populate("hod", "name email role")
-      .populate("faculty", "name");
 
-    if (!department) {
-      return buildResponse(res, 404, "Department not found");
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      return buildResponse(res, 400, "Invalid departmentId");
     }
 
-    return buildResponse(res, 200, "Department fetched successfully", department);
+        const result = await fetchDataHelper(req, res, departmentModel, {
+          configMap: dataMaps.DepartmentById,
+          autoPopulate: false,
+          models: {  },
+          additionalFilters: { _id: req.params.departmentId },
+        });
+
+    return buildResponse(res, 200, "Department fetched successfully", result);
   } catch (error) {
+    console.error("getDepartmentById error:", error);
     return buildResponse(res, 500, "Failed to get department", null, true, error);
   }
 };
 
-// ✅ Update Department
+/* ===== Update Department ===== */
 export const updateDepartment = async (req, res) => {
   try {
     const { departmentId } = req.params;
     const { name, code, faculty } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      return buildResponse(res, 400, "Invalid departmentId");
+    }
 
     const department = await Department.findById(departmentId);
     if (!department) {
       return buildResponse(res, 404, "Department not found");
     }
 
-    // Update fields
     if (name) department.name = name;
     if (code) department.code = code;
     if (faculty) department.faculty = faculty;
@@ -277,14 +423,19 @@ export const updateDepartment = async (req, res) => {
 
     return buildResponse(res, 200, "Department updated successfully", department);
   } catch (error) {
+    console.error("updateDepartment error:", error);
     return buildResponse(res, 500, "Failed to update department", null, true, error);
   }
 };
 
-// ✅ Delete Department
+/* ===== Delete Department ===== */
 export const deleteDepartment = async (req, res) => {
   try {
     const { departmentId } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
+      return buildResponse(res, 400, "Invalid departmentId");
+    }
 
     const department = await Department.findById(departmentId);
     if (!department) {
@@ -295,6 +446,7 @@ export const deleteDepartment = async (req, res) => {
       return buildResponse(res, 400, "Cannot delete department with an assigned HOD");
     }
 
+    // Check assigned lecturers (User docs referencing this department)
     const lecturers = await User.find({ department: departmentId });
     if (lecturers.length > 0) {
       return buildResponse(res, 400, "Cannot delete department with assigned lecturers");
@@ -304,9 +456,7 @@ export const deleteDepartment = async (req, res) => {
 
     return buildResponse(res, 200, "Department deleted successfully");
   } catch (error) {
+    console.error("deleteDepartment error:", error);
     return buildResponse(res, 500, "Failed to delete department", null, true, error);
   }
 };
-
-
-

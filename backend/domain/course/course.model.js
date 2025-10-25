@@ -28,20 +28,33 @@ const courseSchema = new mongoose.Schema(
       enum: ["First", "Second"],
       required: true,
     },
-    department: {
+    type: {
       type: String,
-      trim: true,
-      default: "General",
+      enum: ["Compulsory", "Elective"],
+      default: "Compulsory",
+    },
+    department: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
+    faculty: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Faculty",
+      default: null,
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
+    status: {
+      type: String,
+      enum: ["Active", "Inactive"],
+      default: "Active",
+    },
   },
   { timestamps: true }
 );
 
-const Course = mongoose.model("Course", courseSchema);
-
-export default Course;
+export default mongoose.model("Course", courseSchema);

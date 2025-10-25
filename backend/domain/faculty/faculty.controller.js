@@ -107,6 +107,7 @@ export const getAllFaculties = async (req, res) => {
       autoPopulate: false,
       models: {  },
     });
+    console.log("Faculties fetched successfully ✅");
     return buildResponse(res, 200, "Filtered departments fetched", result);
 
   }
@@ -125,9 +126,16 @@ export const getAllFaculties = async (req, res) => {
 
 export const getFacultyById = async (req, res) => {
   try {
-    const faculty = await Faculty.findById(req.params.facultyId);
-    if (!faculty) return buildResponse(res, 404, "Faculty not found");
-    return buildResponse(res, 200, "Faculty found", faculty);
+    // const faculty = await Faculty.findById(req.params.facultyId);
+    const result = await fetchDataHelper(req, res, Faculty, {
+      configMap: dataMaps.FacultyById,
+      autoPopulate: false,
+      models: {  },
+      additionalFilters: { _id: req.params.facultyId },
+    });
+    if (!result) return buildResponse(res, 404, "Faculty not found");
+    const faculty = result[0];
+    return buildResponse(res, 200, "Faculty found", ...result);
   } catch (error) {
     return buildResponse(res, 500, "Error fetching faculty", null, true, error);
   }

@@ -5,3 +5,62 @@ http://localhost:5000/afued/result/portal/user/signin
         
     }
 }
+Call {getDepById} = useFaculties to get a data like this 
+[
+    {
+      "_id": "68f6a359fbbe3d269ae0fba3",
+      "name": "Education",
+      "code": "001",
+      "dep_count": 4,
+      "created_at": "2025-10-20T21:02:17.274Z",
+      "updated_at": "2025-10-20T21:02:22.374Z",
+      "created_by": "68e8e5392275b5d8444fea38",
+      "created_by_name": "bolu",
+      "recent_departments": [
+        {
+          "_id": "68f74ee2da91c424f837cbf7",
+          "name": "English",
+          "code": "007",
+          "faculty": "68f6a359fbbe3d269ae0fba3",
+          "hod": "68f8ba4e34d42eaa6b32cb1a",
+          "createdAt": "2025-10-21T09:14:10.156Z",
+          "updatedAt": "2025-10-23T02:58:06.185Z",
+          "__v": 0
+        },
+        {
+          "_id": "68f6a3ebfbbe3d269ae0fbc9",
+          "name": "Curriculum Studies",
+          "code": "003",
+          "faculty": "68f6a359fbbe3d269ae0fba3",
+          "hod": null,
+          "createdAt": "2025-10-20T21:04:43.445Z",
+          "updatedAt": "2025-10-20T21:04:43.445Z",
+          "__v": 0
+        },
+        {
+          "_id": "68f6a3bbfbbe3d269ae0fbc1",
+          "name": "Guidance and Councelling",
+          "code": "002",
+          "faculty": "68f6a359fbbe3d269ae0fba3",
+          "hod": null,
+          "createdAt": "2025-10-20T21:03:55.692Z",
+          "updatedAt": "2025-10-20T21:03:55.692Z",
+          "__v": 0
+        },
+        {
+          "_id": "68f6a389fbbe3d269ae0fbb9",
+          "name": "Educational Foundations",
+          "code": "001",
+          "faculty": "68f6a359fbbe3d269ae0fba3",
+          "hod": null,
+          "createdAt": "2025-10-20T21:03:05.665Z",
+          "updatedAt": "2025-10-20T21:03:05.665Z",
+          "__v": 0
+        }
+      ]
+    }
+  ]
+  Good afternoon sir,
+I really appreciate your effort on the project 🙏. I just wanted to suggest that since we already have the database and models set up, maybe we can make your Django part connect with it — maybe through an API or shared DB.
+Having separate databases might make syncing data later a bit difficult, especially when we start linking student records and other sections together.
+This way, everything stays in sync and runs smoothly.
