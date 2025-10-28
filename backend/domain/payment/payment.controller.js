@@ -1,5 +1,5 @@
 // backend/controllers/paymentController.js
-import stripe from "../../utils/stripeClient.js";
+import stripe from "../../utils/paystackClient.js";
 import Payment from "./payment.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 
