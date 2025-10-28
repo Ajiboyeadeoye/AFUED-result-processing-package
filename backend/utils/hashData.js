@@ -20,3 +20,5 @@ export const hashData = async (data, saltRounds = 10) => {
     throw error;
   }
 };
+
+

@@ -71,6 +71,7 @@ export const dataMaps = {
     department_name: "Department.name",
     faculty_name: "Faculty.name",
   },
+
     Lecturer: {
     _id: "this._id._id",
     rank: "this.rank",
@@ -81,4 +82,15 @@ export const dataMaps = {
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
   },
+
+  Applicant: {
+  id: "this._id",
+  name: "User.name",
+  jamb_reg_number: "this.jambRegNumber",
+  score: "this.score",
+  program_name: "Department.name",
+  faculty_name: "Faculty.name",
+  admission_status: "this.admissionStatus",
+},
+
 };
