@@ -10,6 +10,8 @@ import facultyRoutes from "../domain/faculty/faculty.routes.js"; // from backend
 import studentRoutes from "../domain/student/student.routes.js";
 import resultRoutes from "../domain/result/index.js"; // merged
 import lecturerRoutes from "../domain/lecturer/index.js"; // new addition
+import applicantRoutes from "../domain/applicant/index.js"; // new addition
+import paymentRoutes from "../domain/payment/index.js"; // new addition
 
 
 
@@ -26,7 +28,7 @@ router.use("/faculty", facultyRoutes); // merged
 router.use("/students", studentRoutes); // from backend-ajiboye
 router.use("/results", resultRoutes); // merged
 router.use("/lecturers", lecturerRoutes); // new addition
-
-
+router.use("/applicants", applicantRoutes); // new addition
+router.use("/payments", paymentRoutes); // new addition
 
 export default router;
