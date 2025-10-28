@@ -64,3 +64,37 @@ Call {getDepById} = useFaculties to get a data like this
 I really appreciate your effort on the project 🙏. I just wanted to suggest that since we already have the database and models set up, maybe we can make your Django part connect with it — maybe through an API or shared DB.
 Having separate databases might make syncing data later a bit difficult, especially when we start linking student records and other sections together.
 This way, everything stays in sync and runs smoothly.
+
+
+{
+  "status": "success",
+  "message": "Courses fetched successfully",
+  "data": [
+    {
+      "_id": "68fc6ae189d7fedd5982d4c8",
+      "courseCode": "CSC101",
+      "title": "Introduction to Computer Science",
+      "unit": 3,
+      "level": 100,
+      "semester": "First",
+      "type": "Compulsory",
+      "department": {
+        "_id": "68f6a389fbbe3d269ae0fbb9",
+        "name": "Educational Foundations",
+        "code": "001",
+        "faculty": "68f6a359fbbe3d269ae0fba3",
+        "hod": null,
+        "createdAt": "2025-10-20T21:03:05.665Z",
+        "updatedAt": "2025-10-20T21:03:05.665Z",
+        "__v": 0
+      },
+      "faculty": null,
+      "createdBy": null,
+      "status": "Active",
+      "createdAt": "2025-10-25T06:14:57.241Z",
+      "updatedAt": "2025-10-25T06:14:57.241Z",
+      "__v": 0
+    }
+  ],
+  "timestamp": "2025-10-28T11:01:15.246Z"
+}

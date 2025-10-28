@@ -9,7 +9,7 @@ export const dataMaps = {
     // student_count: async (doc, models) =>
     //   await models.Student.countDocuments({ faculty: doc._id }),
   },
-    FacultyById: {
+  FacultyById: {
     _id: "this._id",
     name: "this.name",
     code: "this.code",
@@ -30,7 +30,7 @@ export const dataMaps = {
 
   },
 
-      DepartmentById: {
+  DepartmentById: {
     _id: "this._id",
     name: "this.name",
     code: "this.code",
@@ -64,6 +64,96 @@ export const dataMaps = {
     //   await models.Student.countDocuments({ department: doc._id }),
   },
 
+
+  Course: {
+    _id: "this._id",
+    name: "this.name",
+    code: "this.code",
+    code: "this.courseCode",
+    faculty_id: "this.faculty._id",
+    faculty_name: "this.faculty.name",
+    unit: "this.unit",
+    level: "this.level",
+    semester: "this.semester",
+    type: "this.type",
+    name: "this.title",
+    hod_name: "this.hod.name",
+    department_id: "this.department._id",
+    department: "this.department.name",
+    // student_count: async (doc, models) =>
+    //   await models.Student.countDocuments({ department: doc._id }),
+  },
+  CourseById: {
+    _id: "this._id",
+    code: "this.courseCode",
+    name: "this.title",
+    faculty_id: "this.faculty?._id",
+    faculty_name: "this.faculty?._name || this.faculty?.name",
+    unit: "this.unit",
+    level: "this.level",
+    semester: "this.semester",
+    type: "this.type",
+    hod_name: "this.hod?.name || null",
+    department_id: "this.department?._id",
+    department: "this.department?._name || this.department?.name",
+    description: "this.description",
+    outline: "this.outline",
+    // Return array of lecturer objects: { _id, name, email }
+    lecturers: async (doc, models) => {
+      // find all course assignments for this course (covers multiple assignments/sessions)
+      const assignments = await models.CourseAssignment.find({ course: doc._id })
+        .populate("lecturers.user", "name email")
+        .lean();
+
+      if (!assignments || assignments.length === 0) return [];
+
+      // flatten lecturers from all assignments and dedupe by user id
+      const map = new Map();
+      assignments.forEach(a => {
+        (a.lecturers || []).forEach(l => {
+          const user = l.user;
+          if (user && user._id) {
+            map.set(String(user._id), {
+              _id: user._id,
+              name: user.name || null,
+              email: user.email || null,
+            });
+          }
+        });
+      });
+
+      return Array.from(map.values());
+    },
+    // Return array of lecturer names
+    assigned_lecturers: async (doc, models) => {
+      const assignments = await models.CourseAssignment.find({ course: doc._id })
+        .populate("lecturers.user", "name")
+        .lean();
+
+      if (!assignments || assignments.length === 0) return [];
+
+      const nameSet = new Set();
+      assignments.forEach(a => {
+        (a.lecturers || []).forEach(l => {
+          const user = l.user;
+          if (user && user.name) nameSet.add(user.name);
+        });
+      });
+
+      return Array.from(nameSet);
+    },
+    created_at: "this.createdAt",
+    updated_at: "this.updatedAt",
+    created_by: "this.createdBy",
+    created_by_name: async (doc, models) => {
+      if (!doc.createdBy) return null;
+      const user = await models.User.findById(doc.createdBy).select("name").lean();
+      return user ? user.name : null;
+    }
+  },
+
+
+
   Student: {
     id: "this._id",
     name: "this.name",
@@ -72,10 +162,10 @@ export const dataMaps = {
     faculty_name: "Faculty.name",
   },
 
-    Lecturer: {
+  Lecturer: {
     _id: "this._id._id",
     rank: "this.rank",
-  name: "this.user?.name || this._id?.name",
+    name: "this.user?.name || this._id?.name",
     staff_id: "this.staffId",
     department_id: "this.departmentId._id",
     department: "this.departmentId.name",
@@ -84,13 +174,13 @@ export const dataMaps = {
   },
 
   Applicant: {
-  id: "this._id",
-  name: "User.name",
-  jamb_reg_number: "this.jambRegNumber",
-  score: "this.score",
-  program_name: "Department.name",
-  faculty_name: "Faculty.name",
-  admission_status: "this.admissionStatus",
-},
+    id: "this._id",
+    name: "User.name",
+    jamb_reg_number: "this.jambRegNumber",
+    score: "this.score",
+    program_name: "Department.name",
+    faculty_name: "Faculty.name",
+    admission_status: "this.admissionStatus",
+  },
 
 };

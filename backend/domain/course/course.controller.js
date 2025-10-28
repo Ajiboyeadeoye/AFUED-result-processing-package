@@ -14,6 +14,10 @@ import User from "../user/user.model.js";
 
 import mongoose from "mongoose";
 import buildResponse from "../../utils/responseBuilder.js";
+import { dataMaps } from "../../config/dataMap.js";
+import departmentModel from "../department/department.model.js";
+import fetchDataHelper from "../../utils/fetchDataHelper.js";
+import courseAssignmentModel from "./courseAssignment.model.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -35,8 +39,7 @@ const calculateTotalUnits = async (courseIds = []) => {
 
 export const createCourse = async (req, res) => {
   try {
-    console.log("Request STATUS:", res.status);
-    const { courseCode, title, unit, level, semester, type, department, faculty } = req.body;
+    const { courseCode, title, unit, level, semester, type, department_id: department, faculty } = req.body;
 
     // Validate department
     const deptExists = await Department.findById(department);
@@ -76,47 +79,56 @@ export const createCourse = async (req, res) => {
 
 export const getAllCourses = async (req, res) => {
   try {
-    const { department, faculty, semester, level, status, search } = req.query;
-    const filter = {};
+    const result = await fetchDataHelper(req, res, Course, {
+      configMap: dataMaps.Course,
+      autoPopulate: true,
+      models: { departmentModel,  },
+      populate: ["department"],
+    });
+    return buildResponse(res, 200, "Filtered Courses fetched", result);
+  } catch (error) {
+    console.error(error);
+    return buildResponse(res, 500, "Failed to fetch courses", null, true, error);
+  }
+};
+export const getCourseById = async (req, res) => {
+  try {
+    // const { id } = req.params;
 
-    if (department) filter.department = department;
-    if (faculty) filter.faculty = faculty;
-    if (semester) filter.semester = semester;
-    if (level) filter.level = level;
-    if (status) filter.status = status;
+            const result = await fetchDataHelper(req, res, Course, {
+              configMap: dataMaps.CourseById,
+              autoPopulate: false,
+              models: { departmentModel, CourseAssignment },
+              additionalFilters: { _id: req.params.id},
+            });
 
-    if (search) {
-      filter.$or = [
-        { courseCode: { $regex: search, $options: "i" } },
-        { title: { $regex: search, $options: "i" } },
-      ];
-    }
-
-    const courses = await Course.find(filter)
-      .populate("department faculty createdBy")
-      .sort({ level: 1, courseCode: 1 });
-
-    res.json(buildResponse(true, "Courses fetched successfully", courses));
+    return res
+      .status(200)
+      .json(buildResponse(res, 200,  "Course fetched successfully", result));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    console.error("Error fetching course:", err);
+    return res
+      .status(500)
+      .json(buildResponse(res, 500, "Failed to fetch course", null, true, err));
   }
 };
 
 export const updateCourse = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(id)
     const updates = req.body;
 
     const course = await Course.findById(id);
     if (!course)
-      return res.status(404).json(buildResponse(false, "Course not found"));
+      return res.status(404).json(buildResponse(res, 404, "Course not found"));
 
     Object.assign(course, updates);
     await course.save();
 
-    res.json(buildResponse(true, "Course updated successfully", course));
+    res.json(buildResponse(res, 200, "Course updated successfully", course));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    res.status(500).json(buildResponse(res, 500, err.message));
   }
 };
 
@@ -125,10 +137,10 @@ export const deleteCourse = async (req, res) => {
     const { id } = req.params;
     const course = await Course.findByIdAndDelete(id);
     if (!course)
-      return res.status(404).json(buildResponse(false, "Course not found"));
-    res.json(buildResponse(true, "Course deleted successfully"));
+      return res.status(404).json(buildResponse(res, 404, "Course not found"));
+    res.json(buildResponse(res, 200, "Course deleted successfully"));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    res.status(500).json(buildResponse(res, 500, err.message));
   }
 };
 

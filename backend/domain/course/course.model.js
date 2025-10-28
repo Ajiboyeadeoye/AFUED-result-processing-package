@@ -25,13 +25,13 @@ const courseSchema = new mongoose.Schema(
     },
     semester: {
       type: String,
-      enum: ["First", "Second"],
+      enum: ["first", "second"],
       required: true,
     },
     type: {
       type: String,
-      enum: ["Compulsory", "Elective"],
-      default: "Compulsory",
+      enum: ["compulsory", "elective", "optional", "general", "required"],
+      default: "compulsory",
     },
     department: {
       type: mongoose.Schema.Types.ObjectId,
@@ -50,8 +50,12 @@ const courseSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["Active", "Inactive"],
-      default: "Active",
+      enum: ["active", "inactive"],
+      default: "active",
+    },
+    description: {
+      type: String,
+      default: "",
     },
   },
   { timestamps: true }
