@@ -329,11 +329,13 @@ export const createDepartment = async (req, res) => {
       return buildResponse(res, 400, "Department with this name already exists");
     }
 
-    const newDepartment = await Department.create({
+    const department = await Department.create({
       name,
       code,
       faculty: faculty || null,
     });
+
+    const newDepartment = await getDepartmentById({ params: { departmentId: department._id } }, res);
 
     return buildResponse(res, 201, "Department created successfully", newDepartment);
   } catch (error) {

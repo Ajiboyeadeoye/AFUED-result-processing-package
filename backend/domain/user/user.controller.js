@@ -1,37 +1,74 @@
 import User from "./user.model.js";
 import { hashData, verifyHashedData } from "../../utils/hashData.js";
 import createToken from "../../utils/createToken.js";
+import Admin from "../admin/admin.model.js";
 
-const authenticateUser = async (data) => {
+// import Admin from "../models/admin.model.js";
+
+const authenticateAdmin = async (data) => {
   try {
-    const { email, password } = data;
+    const { admin_id, email, password } = data;
 
-    // ✅ Check if user exists
-    const fetchedUser = await User.findOne({ email });
-    if (!fetchedUser) {
-      throw new Error("User with the provided email does not exist, try signing up!");
+    if (!password || (!admin_id && !email)) {
+      throw new Error("Please provide Admin ID or Email, and Password");
     }
 
-    // 🔑 Password validation
-    const hashedPassword = fetchedUser.password;
-    const passwordMatch = await verifyHashedData(password, hashedPassword);
+    // 🧠 Step 1: Find admin by ID (default) or email
+    const query = admin_id
+      ? { admin_id: admin_id.trim().toUpperCase() }
+      : { email: email.trim().toLowerCase() };
+
+    const fetchedAdmin = await Admin.findOne(query);
+
+    if (!fetchedAdmin) {
+      throw new Error(
+        admin_id
+          ? "Admin with this ID does not exist!"
+          : "Admin with this email does not exist!"
+      );
+    }
+
+    // 🔒 Step 2: Validate password
+    const passwordMatch = await verifyHashedData(
+      password,
+      fetchedAdmin.password
+    );
 
     if (!passwordMatch) {
       throw new Error("Invalid password");
     }
 
-    // 🎟️ Create user token for login
-    const tokenData = { userId: fetchedUser._id, email, role: fetchedUser.role };
-    console.log("Role:", fetchedUser.role);
+    // 🎟️ Step 3: Create login token
+    const tokenData = {
+      adminId: fetchedAdmin._id,
+      admin_id: fetchedAdmin.admin_id,
+      email: fetchedAdmin.email,
+      role: "admin",
+    };
+
     const token = await createToken(tokenData);
 
-    // 🏷️ Attach token to user
-    fetchedUser.token = token;
-    return fetchedUser;
+    // 🧾 Step 4: Attach token to admin
+    fetchedAdmin.token = token;
+
+    // ✅ Step 5: Return admin info safely
+    return {
+      status: "success",
+      message: "Admin authenticated successfully",
+      admin: {
+        id: fetchedAdmin._id,
+        admin_id: fetchedAdmin.admin_id,
+        email: fetchedAdmin.email,
+        name: fetchedAdmin.name,
+        role: fetchedAdmin.role,
+        token,
+      },
+    };
   } catch (error) {
-    throw error;
+    throw new Error(error.message || "Admin authentication failed");
   }
 };
+
 
 const createNewUser = async (data) => {
   try {
@@ -62,4 +99,4 @@ const createNewUser = async (data) => {
   
 };
 
-export { createNewUser, authenticateUser };
+export { createNewUser, authenticateAdmin };

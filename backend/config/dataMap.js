@@ -59,9 +59,14 @@ export const dataMaps = {
     code: "this.code",
     faculty_id: "this.faculty._id",
     faculty_name: "this.faculty.name",
-    hod_name: "this.hod.name",
-    // student_count: async (doc, models) =>
-    //   await models.Student.countDocuments({ department: doc._id }),
+    hod_name: async (doc, models) => {
+      const lecturer = await models.Lecturer.findById(doc.hod);
+      if (lecturer) {
+        const user = await models.User.findById(lecturer.user);
+        return user ? user.name : null;
+      }
+      return null;
+    },
   },
 
 

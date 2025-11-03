@@ -1,5 +1,5 @@
 import express from "express";
-import { createNewUser, authenticateUser } from "./user.controller.js";
+import { createNewUser,  authenticateAdmin } from "./user.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
@@ -20,7 +20,7 @@ router.post("/signin", async (req, res) => {
     email = email.trim().toLowerCase();
     password = password.trim();
 
-    const authenticatedUser = await authenticateUser({ email, password });
+    const authenticatedUser = await authenticateAdmin({ email, password });
     return res.status(200).json({ message: "Signin successful!", user: authenticatedUser });
   } catch (error) {
     return res.status(400).json({ message: error.message, error: true });
