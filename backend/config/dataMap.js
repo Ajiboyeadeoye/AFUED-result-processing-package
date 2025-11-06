@@ -1,4 +1,3 @@
-// 💾 Data Transformation Configs
 export const dataMaps = {
   Faculty: {
     _id: "this._id",
@@ -34,6 +33,8 @@ export const dataMaps = {
     _id: "this._id",
     name: "this.name",
     code: "this.code",
+    faculty_id: "this.faculty._id",
+    faculty_name: "this.faculty.name",
     created_at: "this.createdAt",
     updated_at: "this.updatedAt",
     created_by: "this.createdBy",
@@ -62,7 +63,8 @@ export const dataMaps = {
     hod_name: async (doc, models) => {
       const lecturer = await models.Lecturer.findById(doc.hod);
       if (lecturer) {
-        const user = await models.User.findById(lecturer.user);
+        console.log("The lecur8e", lecturer);
+        const user = await models.User.findById(lecturer._id);
         return user ? user.name : null;
       }
       return null;
@@ -85,13 +87,16 @@ export const dataMaps = {
     hod_name: "this.hod.name",
     department_id: "this.department._id",
     department: "this.department.name",
+    description: "this.description",
+    outline: "this.outline",
     // student_count: async (doc, models) =>
     //   await models.Student.countDocuments({ department: doc._id }),
   },
   CourseById: {
     _id: "this._id",
-    code: "this.courseCode",
     name: "this.title",
+    code: "this.code",
+    code: "this.courseCode",
     faculty_id: "this.faculty?._id",
     faculty_name: "this.faculty?._name || this.faculty?.name",
     unit: "this.unit",
@@ -176,6 +181,26 @@ export const dataMaps = {
     department: "this.departmentId.name",
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
+  },
+
+  LecturerCourses: {
+    lecturer_id: "this._id._id",
+    name: "this._id.name",
+    staff_id: "this.staffId",
+    courses: async (doc, models) => {
+      const assignments = await models.CourseAssignment.find({ "lecturers.lecturer": doc._id })
+        .populate("course")
+        .lean();
+
+      return assignments.map(a => ({
+        course_id: a.course._id,
+        course_name: a.course.name,
+        course_code: a.course.code,
+        level: a.course.level,
+        semester: a.course.semester,
+        type: a.course.type,
+      }));
+    },
   },
 
   Applicant: {

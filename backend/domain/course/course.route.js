@@ -8,6 +8,7 @@ import {
   getCourseById,
   updateCourse,
   deleteCourse,
+  assignCourse,
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
@@ -28,6 +29,11 @@ router.get("/:id", authenticate(), getCourseById);
  * 🧱 Create a new course (HOD-only)
  */
 router.post("/", authenticate(["hod", "admin"]), createCourse);
+
+/**
+ * 🧱 Create a new course (HOD-only)
+ */
+router.post("/assign", authenticate(["hod", "admin"]), assignCourse);
 
 
 /**

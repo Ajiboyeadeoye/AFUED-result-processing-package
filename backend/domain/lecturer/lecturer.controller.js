@@ -6,10 +6,14 @@ import { fetchDataHelper } from "../../utils/fetchDataHelper.js";
 import User from "../user/user.model.js";
 import { dataMaps } from "../../config/dataMap.js";
 import departmentModel from "../department/department.model.js";
+import { deleteUser } from "../user/user.controller.js";
+import { hashData } from "../../utils/hashData.js";
 
 /**
  * 🧑‍🏫 Create Lecturer (Admin only)
  */
+// import { hashData } from "@/utils/hash"; // 🔒 adjust import path to your hash utility
+
 export const createLecturer = async (req, res) => {
   try {
     const {
@@ -21,7 +25,7 @@ export const createLecturer = async (req, res) => {
       fields,
       search_term,
       filters,
-      page
+      page,
     } = req.body;
 
     // 🧮 If it's a filter/search request
@@ -48,16 +52,21 @@ export const createLecturer = async (req, res) => {
       return buildResponse(res, 400, "User with this email already exists");
     }
 
-    // ✅ 3. Create User
+    // 🔐 3. Generate default password and hash it
+    const defaultPassword = `AFUED@${staffId}`;
+    const hashedPassword = await hashData(defaultPassword);
+
+    // ✅ 4. Create User
     const user = await User.create({
       name,
       email,
-      password: staffId, // Default password same as staff ID
+      password: hashedPassword,
       role: "lecturer",
+      must_change_password: true, // 🔄 optional flag for first login
     });
 
     try {
-      // ✅ 4. Create Lecturer with same _id
+      // ✅ 5. Create Lecturer with same _id
       const lecturer = await Lecturer.create({
         _id: user._id,
         staffId,
@@ -65,10 +74,12 @@ export const createLecturer = async (req, res) => {
         rank,
       });
 
-      return buildResponse(res, 201, "Lecturer created successfully", lecturer);
+      // ✅ 6. Return lecturer info (without password)
+      await getLecturerById({ params: { id: lecturer._id } }, res);
+      // or: return buildResponse(res, 201, "Lecturer created successfully", lecturer);
 
     } catch (lecturerError) {
-      // 🧹 Rollback user creation if lecturer fails
+      // 🧹 Rollback user creation if lecturer creation fails
       await User.findByIdAndDelete(user._id);
       console.error("⚠️ Lecturer creation failed, rolled back user:", lecturerError);
 
@@ -107,14 +118,18 @@ export const getAllLecturers = async (req, res) => {
  */
 export const getLecturerById = async (req, res) => {
   try {
-    const lecturer = await Lecturer.findById(req.params.id)
-      .populate("_id", "name email role")
-      .populate("departmentId", "name code");
+  return fetchDataHelper(req, res, Lecturer, {
+    configMap: dataMaps.Lecturer,
+    autoPopulate: true,
+    models: { departmentModel, User },
+    populate: ["departmentId", "_id"],
+    additionalFilters: { _id: req.params.id },
 
-    if (!lecturer) return buildResponse(res, 404, "Lecturer not found");
-
-    return buildResponse(res, 200, "Lecturer fetched successfully", lecturer);
+  });
+  console.log("Fetched Lecturer:", lecturer);
+    // return buildResponse(res, 200, "Lecturer fetched successfully", lecturer);
   } catch (error) {
+    console.error("❌ getLecturerById Error:", error);  
     return buildResponse(res, 500, "Failed to fetch lecturer", null, true, error);
   }
 };
@@ -145,18 +160,8 @@ export const updateLecturer = async (req, res) => {
  */
 export const deleteLecturer = async (req, res) => {
   try {
-    const { id } = req.params;
-    const lecturer = await Lecturer.findByIdAndUpdate(
-      id,
-      { active: false, deletedAt: new Date() },
-      { new: true }
-    );
-
-    if (!lecturer) return buildResponse(res, 404, "Lecturer not found");
-
-    // Optionally also deactivate linked user
-    await User.findByIdAndUpdate(id, { active: false });
-
+    console.log("Deleting lecturer with ID:", req.params.id);
+    await deleteUser({ id: req.params.id, role: "lecturer" });
     return buildResponse(res, 200, "Lecturer deleted successfully");
   } catch (error) {
     return buildResponse(res, 500, "Failed to delete lecturer", null, true, error);

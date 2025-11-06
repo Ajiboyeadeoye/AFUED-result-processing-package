@@ -312,7 +312,7 @@ export const createDepartment = async (req, res) => {
       const result = await fetchDataHelper(req, res, Department, {
         configMap: dataMaps.Department,
         autoPopulate: true,
-        models: { faculty },
+        models: { facultyModel,  },
         populate: ["faculty"]
       });
       return buildResponse(res, 200, "Filtered departments fetched", result);
@@ -336,6 +336,7 @@ export const createDepartment = async (req, res) => {
     });
 
     const newDepartment = await getDepartmentById({ params: { departmentId: department._id } }, res);
+    console.log("newDepartment:", newDepartment);
 
     return buildResponse(res, 201, "Department created successfully", newDepartment);
   } catch (error) {
@@ -391,7 +392,8 @@ export const getDepartmentById = async (req, res) => {
         const result = await fetchDataHelper(req, res, departmentModel, {
           configMap: dataMaps.DepartmentById,
           autoPopulate: false,
-          models: {  },
+          models: {  facultyModel},
+          populate: ["faculty", "hod"],
           additionalFilters: { _id: req.params.departmentId },
         });
 

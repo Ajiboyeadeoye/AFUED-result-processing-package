@@ -22,12 +22,14 @@ const authenticate = (roles = []) => {
         ? authHeader.split(" ")[1]
         : req.cookies?.access_token;
 
+
       if (!token) {
         return res
           .status(401)
           .json(buildResponse(res, 401, "Access denied: No token provided.", null, true));
       }
 
+      console.log("Verifying token:", token);
       let decoded;
 
       // ✅ Allow a system token override (for admin setup or service calls)

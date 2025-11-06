@@ -1,31 +1,57 @@
 import express from "express";
-import { createNewUser,  authenticateAdmin } from "./user.controller.js";
+import { createNewUser, authenticateAdmin, authenticateLecturer } from "./user.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
 
 // ✅ SIGNIN route
-router.post("/signin", async (req, res) => {
+router.post("/signin/:role", async (req, res) => {
   try {
-    let { email, password } = req.body;
+    const { role } = req.params;
+    let { email, password, matric_no, admin_id, staff_id, lecturer_id } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({ message: "Email and password are required." });
-    } else if (!/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email)) {
+    if (
+      (!email && !matric_no && !admin_id && !staff_id && !lecturer_id) ||
+      !password
+    ) {
+      return res.status(400).json({ message: "Email/ID and password are required." });
+    } else if (!/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email) && email) {
       return res.status(400).json({ message: "Invalid email format." });
     } else if (password.length < 6) {
       return res.status(400).json({ message: "Password must be at least 6 characters long." });
     }
 
-    email = email.trim().toLowerCase();
+    if (email){
+
+      email = email.trim().toLowerCase();
+    }
     password = password.trim();
 
-    const authenticatedUser = await authenticateAdmin({ email, password });
-    return res.status(200).json({ message: "Signin successful!", user: authenticatedUser });
+    let authenticatedUser;
+
+    // Handle different sign-in roles
+    switch (role) {
+      case "admin":
+        console.log("Admin signin attempt");
+        authenticatedUser = await authenticateAdmin({ email, password , admin_id });
+        break;
+      case "student":
+        // authenticatedUser = await authenticateStudent({ email, password });
+        break;
+
+      case "lecturer":
+        authenticatedUser = await authenticateLecturer({ email, password, staff_id });
+        break;
+      default:
+        return res.status(400).json({ message: "Invalid signin role." });
+    }
+
+    return res.status(200).json({ message: `${role} signin successful!`, user: authenticatedUser });
   } catch (error) {
     return res.status(400).json({ message: error.message, error: true });
   }
 });
+
 
 // ✅ SIGNUP route
 router.post("/signup", async (req, res) => {

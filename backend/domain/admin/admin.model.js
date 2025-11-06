@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 
 const AdminSchema = new mongoose.Schema(
   {
+        _id: { 
+          type: mongoose.Schema.Types.ObjectId, 
+          ref: "User", 
+          required: true 
+        },
     admin_id: {
       type: String,
       required: true,
@@ -20,10 +25,6 @@ const AdminSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-    },
-    password: {
-      type: String,
-      required: true,
     },
     role: {
       type: String,

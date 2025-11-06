@@ -5,41 +5,42 @@ import XLSX from "xlsx";
 /* ------------------------------------------------------------
  * 🧠 QUERY BUILDER (with support for custom_fields)
  * ------------------------------------------------------------ */
-const queryBuilder = (payload, options) => {
+const queryBuilder = (payload = {}, options = {}) => {
+  // Destructure payload with defaults
   const {
     page = 1,
     limit = 20,
-    fields,
-    search_term,
+    fields = [],
+    search_term = "",
     filter = {},
-    sort,
+    sort = { createdAt: -1 },
     extraParams = {},
   } = payload;
 
+  // Safe options values
   const enablePagination =
     options.enablePagination === undefined ? true : options.enablePagination;
+  const additionalFilters = options.additionalFilters || {};
+  const customFields = options.custom_fields || {};
+  const defaultSort = options.sort || { createdAt: -1 };
 
-  const currentPage = parseInt(page);
+  const currentPage = parseInt(page) || 1;
   const itemsPerPage = Math.max(parseInt(limit) || 20, 1);
   const skip = (currentPage - 1) * itemsPerPage;
 
-  let query = { ...filter };
+  // Start building query
+  let query = { ...filter, ...additionalFilters };
 
-  if (options.additionalFilters)
-    query = { ...query, ...options.additionalFilters };
-
-  // 🔍 Search across multiple fields (supports custom_fields)
-  if (fields && search_term) {
-    const fieldArray = Array.isArray(fields)
-      ? fields
-      : String(fields).split(",");
+  // 🔍 Search across multiple fields
+  if (fields.length && search_term) {
+    const fieldArray = Array.isArray(fields) ? fields : String(fields).split(",");
     const regex = { $regex: search_term, $options: "i" };
     const orArray = [];
 
     for (const field of fieldArray) {
       const trimmed = field.trim();
-      if (options.custom_fields && options.custom_fields[trimmed]) {
-        const refName = options.custom_fields[trimmed];
+      if (customFields[trimmed]) {
+        const refName = customFields[trimmed];
         orArray.push({ [`${refName}.${trimmed}`]: regex });
       } else {
         orArray.push({ [trimmed]: regex });
@@ -49,7 +50,7 @@ const queryBuilder = (payload, options) => {
     query.$or = orArray;
   }
 
-  const finalSort = sort || options.sort || { createdAt: -1 };
+  const finalSort = sort || defaultSort;
 
   return {
     query,
