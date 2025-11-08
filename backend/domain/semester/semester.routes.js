@@ -4,13 +4,14 @@ import {
   toggleRegistration,
   toggleResultPublication,
   getActiveSemester,
+  deactivateSemester,
 } from "./semester.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
 
 // Start a new semester
-router.post("/start", authenticate("admin"), startNewSemester);
+router.post("/start", authenticate(["admin", 'hod']), startNewSemester);
 
 // Open/close course registration
 router.patch("/registration", authenticate("admin"), toggleRegistration);
@@ -20,5 +21,7 @@ router.patch("/results", authenticate("admin"), toggleResultPublication);
 
 // Get current semester info
 router.get("/active", getActiveSemester);
+router.patch("/deactivate", deactivateSemester);
+
 
 export default router;

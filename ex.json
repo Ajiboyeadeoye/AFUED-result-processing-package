@@ -1,6 +1,11 @@
-{
-    "name" : "this.name",
-    "id" : "this._id",
-    "faculty_name": "Faculty.name",
-    "students_count": "Student.count(this._id)"
-}
+[
+    {
+        "_id": "68f8b9c77b70a65719324b65",
+        "name": "Example Name 1",
+        "assigned_to": "68f74ee2da91c424f837cbf7",
+        "details": "Some details here",
+        "course_code": "CSE101",
+        "assigned_to_name": "Mr. Daniel",
+        "course_type": "Core"
+    }
+]

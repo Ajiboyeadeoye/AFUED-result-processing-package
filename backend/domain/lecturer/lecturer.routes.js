@@ -13,7 +13,7 @@ import authenticate from "../../middlewares/authenticate.js";
 const router = express.Router();
 
 // 🧩 ADMIN ROUTES
-router.post("/", authenticate("admin"), createLecturer);
+router.post("/", authenticate(["admin", "hod"]), createLecturer);
 router.get("/", authenticate(["admin", "hod"]), getAllLecturers);
 router.get("/:id", authenticate(["admin", "hod"]), getLecturerById);
 router.put("/:id", authenticate("admin"), updateLecturer);

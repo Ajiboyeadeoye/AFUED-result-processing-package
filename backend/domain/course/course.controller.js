@@ -18,6 +18,8 @@ import { dataMaps } from "../../config/dataMap.js";
 import departmentModel from "../department/department.model.js";
 import fetchDataHelper from "../../utils/fetchDataHelper.js";
 import courseAssignmentModel from "./courseAssignment.model.js";
+import lecturerModel from "../lecturer/lecturer.model.js";
+import courseModel from "./course.model.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -40,6 +42,16 @@ const calculateTotalUnits = async (courseIds = []) => {
 export const createCourse = async (req, res) => {
   try {
     const { courseCode, title, unit, level, semester, type, department_id: department, faculty, description } = req.body;
+
+    // 🧠 If HOD, restrict to their department
+    if (req.user?.role === "hod") {
+      const department = await departmentModel.findOne({ hod: req.user?._id });
+      // console.log("HOD Department:", department);
+      if (!department) {
+        return buildResponse(res, 404, "Department not found for HOD", null, true);
+      }
+      department = department._id;
+    }
 
     // Validate department
     const deptExists = await Department.findById(department);
@@ -82,18 +94,42 @@ export const createCourse = async (req, res) => {
 
 export const getAllCourses = async (req, res) => {
   try {
-    const result = await fetchDataHelper(req, res, Course, {
+    let result;
+
+    // 🧠 If HOD, restrict to their department
+    if (req.user?.role === "hod") {
+      const department = await departmentModel.findOne({ hod: req.user?._id });
+      console.log("HOD Department:", department);
+      if (!department) {
+        return buildResponse(res, 404, "Department not found for HOD", null, true);
+      }
+
+      result = await fetchDataHelper(req, res, Course, {
+        configMap: dataMaps.Course,
+        autoPopulate: true,
+        models: { departmentModel },
+        additionalFilters: { department: department._id }, // ✅ fixed typo from 'addutionalFilters'
+        populate: ["department"],
+      });
+
+      return buildResponse(res, 200, "Filtered Courses fetched (HOD)", result);
+    }
+
+    // 🧑‍💼 For admin or others → fetch all courses
+    result = await fetchDataHelper(req, res, Course, {
       configMap: dataMaps.Course,
       autoPopulate: true,
-      models: { departmentModel, },
+      models: { departmentModel },
       populate: ["department"],
     });
-    return buildResponse(res, 200, "Filtered Courses fetched", result);
+
+    return buildResponse(res, 200, "All Courses fetched", result);
   } catch (error) {
     console.error(error);
     return buildResponse(res, 500, "Failed to fetch courses", null, true, error);
   }
 };
+
 export const getCourseById = async (req, res) => {
   try {
     // const { id } = req.params;
@@ -155,34 +191,84 @@ export const deleteCourse = async (req, res) => {
 
 export const assignCourse = async (req, res) => {
   try {
-    const { course, lecturers, semester, session, department } = req.body;
+    const { course,  staffId: lecturers, department: frontendDept } = req.body;
 
+    // 🧠 Get current active semester
+    const currentSemester = await Semester.findOne({ isActive: true });
+    if (!currentSemester) {
+      return buildResponse(res, 404, "No active semester found", null, true);
+    }
+
+    const { _id: semester, session } = currentSemester;
+
+    let departmentId = frontendDept;
+
+    // 🧩 If user is HOD, restrict department access
+    let courseData = null;
+    courseData = await Course.findById(course).populate("department");
+    console.log("Course Data for Assignment:", semester);
+    if (req.user?.role === "hod") {
+      const department = await departmentModel.findOne({ hod: req.user?._id });
+      if (!department) {
+        return buildResponse(res, 404, "Department not found for HOD", null, true);
+      }
+
+      departmentId = department._id;
+
+      // 🧱 Validate that the selected course belongs to this department
+      if (!courseData) {
+        return buildResponse(res, 404, "Course not found", null, true);
+      }
+
+      if (courseData.department._id.toString() !== department._id.toString()) {
+        return buildResponse(
+          res,
+          403,
+          "You cannot assign a course outside your department",
+          null,
+          true
+        );
+      }
+    }
+
+    // 🧩 Ensure department exists for admin as well
+    const courseDepartment =courseData ? courseData.department._id : null;  
+    if (!courseDepartment) {
+
+      return buildResponse(res, 400, "Department is required", null, true);
+    }
+
+    // 🔁 Prevent duplicate assignment for same session + semester + department
     const existing = await CourseAssignment.findOne({
       course,
       semester,
       session,
-      department,
+      department: courseDepartment,
     });
-    if (existing)
-      return res
-        .status(400)
-        .json(buildResponse(false, "Course already assigned for this session"));
 
+    if (existing) {
+      return buildResponse(res, 400, "Course already assigned for this session", null, true);
+    }
+
+    // 🪄 Create new assignment
     const newAssign = new CourseAssignment({
       course,
-      lecturers,
+      lecturer: lecturers,
       semester,
       session,
-      department,
+      department: courseDepartment,
       assignedBy: req.user?._id,
     });
 
     await newAssign.save();
-    res.status(201).json(buildResponse(true, "Course assigned successfully", newAssign));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+
+    return buildResponse(res, 201, "Course assigned successfully", newAssign);
+  } catch (error) {
+    console.error("❌ assignCourse error:", error);
+    return buildResponse(res, 500, "Failed to assign course", null, true, error);
   }
 };
+
 
 export const getAssignments = async (req, res) => {
   try {
@@ -334,14 +420,21 @@ export const getFacultyCourses = async (req, res) => {
 
 export const getLecturerCourses = async (req, res) => {
   try {
-    const lecturerId = req.user?._id;
-    const assignments = await CourseAssignment.find({ "lecturers.user": lecturerId })
-      .populate("course semester department")
-      .sort({ createdAt: -1 });
 
-    res.json(buildResponse(true, "Lecturer courses fetched", assignments));
+    const result = await fetchDataHelper(req, res, courseAssignmentModel, {
+      configMap: dataMaps.CourseAssignment,
+      autoPopulate: true,
+      models: { courseModel, lecturerModel },
+    // additionalFilters: { _id: req.user?._id },
+      populate: ["course"],
+
+    });
+    const lecturerId = req.user?._id;
+    const assignments = result
+
+    res.json(buildResponse(res, 200, "Lecturer courses fetched", assignments));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    res.status(500).json(buildResponse(res, 500,  err.message));
   }
 };
 

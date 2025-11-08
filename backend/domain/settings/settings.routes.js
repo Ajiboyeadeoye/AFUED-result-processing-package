@@ -1,17 +1,18 @@
 import express from "express";
-// import authenticate from "../../middlewares/authenticate";
-import { getSettings, resetSettings, updateSettings } from "./settings.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
+import {
+  getSettings,
+  updateSettings,
+  resetSettings,
+} from "./settings.controller.js";
 
 const router = express.Router();
-// const { getSettings, updateSettings, resetSettings } = require("../controllers/settingsController");
-// const { verifySuperuser } = require("../middleware/authMiddleware");
 
-// Public — view current university settings
+// 🟢 Public — anyone can view the current settings
 router.get("/", getSettings);
 
-// Superuser — update or reset
-router.patch("/", authenticate('admin'), updateSettings);
-router.post("/reset", authenticate('admin'), resetSettings);
+// 🔒 Admin — update or reset settings
+router.patch("/", authenticate("admin"), updateSettings);
+router.post("/reset", authenticate("admin"), resetSettings);
 
 export default router;

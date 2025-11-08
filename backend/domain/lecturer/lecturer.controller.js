@@ -26,16 +26,19 @@ export const createLecturer = async (req, res) => {
       search_term,
       filters,
       page,
+      user: userFromMiddleware,
     } = req.body;
 
     // 🧮 If it's a filter/search request
     if (fields || search_term || filters || page) {
+  
       const result = await fetchDataHelper(req, res, Lecturer, {
         configMap: dataMaps.Lecturer,
         autoPopulate: true,
         models: { departmentModel, User },
         populate: ["departmentId", "_id"],
         custom_fields: { name: "_id", email: "_id" },
+        // filter: {departmentId: departmentId || undefined, ...filters},
       });
       return result;
     }

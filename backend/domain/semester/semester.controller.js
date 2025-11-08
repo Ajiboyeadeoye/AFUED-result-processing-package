@@ -61,7 +61,7 @@ export const startNewSemester = async (req, res) => {
       { new: true, upsert: true }
     );
 
-    res.status(201).json({
+    res.status(200).json({
       message: `${name} for ${session} has officially begun.`,
       semester: newSemester,
       settings,
@@ -129,5 +129,39 @@ export const getActiveSemester = async (req, res) => {
     res.status(200).json(semester);
   } catch (error) {
     res.status(500).json({ message: "Error fetching semester", error });
+  }
+};
+/**
+ * 🔴 Deactivate Current Semester
+ */
+export const deactivateSemester = async (req, res) => {
+  try {
+    // Find the currently active semester
+    const activeSemester = await Semester.findOne({ isActive: true });
+    if (!activeSemester) {
+      return buildResponse.error(res,"No active semester to deactivate.")
+    }
+
+    // Deactivate it
+    activeSemester.isActive = false;
+    activeSemester.endDate = new Date();
+    await activeSemester.save();
+
+    // Optionally update settings
+    await Settings.findOneAndUpdate(
+      {},
+      {
+        activeSemesterId: null,
+        currentSemester: null,
+        registrationOpen: false,
+        resultPublicationOpen: false,
+        updatedBy: req.user?._id,
+      }
+    );
+
+    return buildResponse.success(res,"Semester deactivated successfully.", activeSemester)
+  } catch (error) {
+    console.error("❌ deactivateSemester Error:", error);
+    return buildResponse.error(res, "Error deactivating semester", 500, true);
   }
 };

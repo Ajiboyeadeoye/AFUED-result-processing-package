@@ -3,12 +3,7 @@ import mongoose from "mongoose";
 const courseAssignmentSchema = new mongoose.Schema(
   {
     course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
-    lecturers: [
-      {
-        user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-        role: { type: String, default: "Lecturer" },
-      },
-    ],
+    lecturer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }, // Changed to single lecturer
     semester: { type: mongoose.Schema.Types.ObjectId, ref: "Semester", required: true },
     session: { type: String, required: true },
     department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },

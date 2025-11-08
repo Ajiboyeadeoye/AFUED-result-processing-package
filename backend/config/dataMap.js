@@ -1,3 +1,5 @@
+
+
 export const dataMaps = {
   Faculty: {
     _id: "this._id",
@@ -89,8 +91,20 @@ export const dataMaps = {
     department: "this.department.name",
     description: "this.description",
     outline: "this.outline",
-    // student_count: async (doc, models) =>
-    //   await models.Student.countDocuments({ department: doc._id }),
+    lecturer: async (doc, models) => {
+      const assignment = await models.CourseAssignment.findOne({ course: doc._id })
+        .populate("lecturer", "name email")
+        .lean();
+
+      if (!assignment || !assignment.lecturer) return null;
+
+      console.log("The assignment lecturer", assignment.lecturer);
+      return {
+        _id: assignment.lecturer._id,
+        name: assignment.lecturer.name || null,
+        email: assignment.lecturer.email || null,
+      };
+    }
   },
   CourseById: {
     _id: "this._id",
@@ -188,21 +202,48 @@ export const dataMaps = {
     name: "this._id.name",
     staff_id: "this.staffId",
     courses: async (doc, models) => {
-      const assignments = await models.CourseAssignment.find({ "lecturers.lecturer": doc._id })
-        .populate("course")
+      const assignments = await models.CourseAssignment.find({ lecturer: doc._id._id })
+        .populate("course", "title courseCode unit level semester type")
         .lean();
 
       return assignments.map(a => ({
-        course_id: a.course._id,
-        course_name: a.course.name,
-        course_code: a.course.code,
+        _id: a.course._id,
+        title: a.course.title,
+        courseCode: a.course.courseCode,
+        unit: a.course.unit,
         level: a.course.level,
         semester: a.course.semester,
         type: a.course.type,
       }));
-    },
+    }
   },
+  CourseAssignment: {
+    _id: "this._id",
+    // lecturer_name: async (doc, models) => {
+    //   const lecturer = await models.Lecturer.findById(doc.lecturer).populate("_id", "name");
+    //   console.log("The lecturer 🧱", lecturer);
+    //   return lecturer && lecturer.user ? lecturer._id.name : null;
+    // },
+    course_id: "this.course._id",
+    name: "this.course.title",
+    code: "this.course.courseCode",
+    unit: "this.course.unit",
+    level: "this.course.level",
+    semester: "this.semester.name",
+    session: "this.session",
+    department_id: "this.department._id",
+    department: "this.department.name",
+    status: "this.status",
+    students: async (doc, models) => {
+      return await models.CourseRegistration.countDocuments({
+        course: doc.course?._id || doc.course,
+        semester: doc.semester?._id || doc.semester,
+      });
+    },
 
+
+  }
+  ,
   Applicant: {
     id: "this._id",
     name: "User.name",
@@ -211,6 +252,7 @@ export const dataMaps = {
     program_name: "Department.name",
     faculty_name: "Faculty.name",
     admission_status: "this.admissionStatus",
+
   },
 
 };
