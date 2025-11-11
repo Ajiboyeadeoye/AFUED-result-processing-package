@@ -1,5 +1,3 @@
-
-
 export const dataMaps = {
   Faculty: {
     _id: "this._id",
@@ -254,5 +252,36 @@ export const dataMaps = {
     admission_status: "this.admissionStatus",
 
   },
+  Template: {
+    _id: "this._id",
+    name: "this.name",
+    channel: "this.channel",
+    email_template: "this.email_template",
+    whatsapp_template: "this.whatsapp_template",
+    variables: "this.variables",
+    // created_by: async (doc, models) => {
+    //   if (!doc.created_by) return null;
+    //   const user = await models.User.findById(doc.created_by).select("name").lean();
+    //   return user ? user.name : null;
+    // },
+    created_at: "this.createdAt",
+    updated_at: "this.updatedAt",
+  },
 
+  AdminOverview: {
+    activeSemester: async (doc, models) => {
+      // Fetch the active semester from the database
+      const activeSemester = await models.Semester.findOne({ isActive: true }).lean();
+      return activeSemester ? activeSemester.name : "N/A";
+    },
+    totalStudents: async (doc, models) => {
+      return await models.Student.countDocuments();
+    },
+    totalLecturers: async (doc, models) => {
+      return await models.Lecturer.countDocuments();
+    },
+    totalCourses: async (doc, models) => {
+      return await models.Course.countDocuments();
+    }
+  }
 };
