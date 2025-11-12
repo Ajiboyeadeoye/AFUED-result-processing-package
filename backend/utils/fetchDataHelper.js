@@ -25,7 +25,9 @@ const queryBuilder = (payload = {}, options = {}) => {
   const defaultSort = options.sort || { createdAt: -1 };
 
   const currentPage = parseInt(page) || 1;
-  const itemsPerPage = Math.max(parseInt(limit) || 20, 1);
+    const maxLimit = options.maxLimit || 100; // <-- backend enforced max
+  const itemsPerPage = Math.min(Math.max(parseInt(limit) || 20, 1), maxLimit);
+  // const itemsPerPage = Math.max(parseInt(limit) || 20, 1);
   const skip = (currentPage - 1) * itemsPerPage;
 
   // Start building query

@@ -1,13 +1,16 @@
 import express from "express";
-import { createTemplate, deleteTemplate, getNotifications, getTemplates, sendNotification, updateTemplate } from "./notification.controller.js";
+import { createTemplate, deleteTemplate, getNotifications, getTemplates, getTopUnread, getUnreadNotificationCount, sendNotification, updateTemplate } from "./notification.controller.js";
+import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
-
-router.get("/templates", getTemplates)
+router.get("/templates", authenticate(["admin", "hod", "lecturer", "student"]), getTemplates)
 router.post("/templates", createTemplate)
 router.put("/templates/:id", updateTemplate)
 router.delete("/templates/:id", deleteTemplate)
 router.post("/send", sendNotification);
-router.get("/:user_id", getNotifications);
+router.get("/", authenticate(["admin", "hod", "lecturer", "student"]), getNotifications);
+router.get("/unread-count", authenticate(["admin", "hod", "lecturer", "student"]), getUnreadNotificationCount);
+router.get("/top-unread", authenticate(["admin", "hod", "lecturer", "student"]), getTopUnread);
+
 
 export default router;

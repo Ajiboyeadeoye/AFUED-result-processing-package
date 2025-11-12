@@ -1,14 +1,14 @@
 import jwt from "jsonwebtoken";
 import buildResponse from "../utils/responseBuilder.js";
+import { auditLogger } from "../middlewares/auditLogger.js"; // <-- Import the logger
 
 // System-wide authorized roles
 const AUTHORIZED_ROLES = ["superuser", "admin", "hod", "lecturer", "student", "moderator"];
 
 const authenticate = (roles = []) => {
-  // Normalize roles into an array if a single string is passed
   const allowedRoles = Array.isArray(roles) ? roles : roles ? [roles] : [];
 
-  return (req, res, next) => {
+  return async (req, res, next) => {
     try {
       const publicPaths = ["/signin", "/signup", "/forgot-password", "/reset-password"];
       const isPublicRoute = publicPaths.some((path) => req.path.endsWith(path));
@@ -22,18 +22,16 @@ const authenticate = (roles = []) => {
         ? authHeader.split(" ")[1]
         : req.cookies?.access_token;
 
-
       if (!token) {
+        auditLogger("Unauthorized access: No token provided")(req, res, () => {}); // 🔥 Log this event
         return res
           .status(401)
           .json(buildResponse(res, 401, "Access denied: No token provided.", null, true));
       }
 
-      console.log("Verifying token:", token);
       let decoded;
 
       // ✅ Allow a system token override (for admin setup or service calls)
-      console.log(process.env.token)
       if (token === process.env.token) {
         decoded = {
           role: "admin",
@@ -48,21 +46,26 @@ const authenticate = (roles = []) => {
 
       // ✅ Check that the role exists in the authorized roles list
       if (!AUTHORIZED_ROLES.includes(decoded.role)) {
+        auditLogger(`Unauthorized role: ${decoded.role}`)(req, res, () => {}); // 🔥 Log unauthorized role
         return res
           .status(403)
           .json(buildResponse(res, 403, `Unauthorized role: ${decoded.role}`, null, true));
       }
 
-      // ✅ Check route-level role restriction (if provided)
+      // ✅ Check route-level role restriction
       if (allowedRoles.length > 0 && !allowedRoles.includes(decoded.role)) {
+        auditLogger(`Forbidden: ${decoded.role} tried to access restricted route`)(req, res, () => {});
         return res
           .status(403)
           .json(buildResponse(res, 403, "Forbidden: Insufficient privileges.", null, true));
       }
 
+      // ✅ Success: attach audit logger for later stages
+      req.audit = auditLogger(`Authenticated ${decoded.role} access`);
       next();
     } catch (err) {
       console.error("Auth error:", err.message);
+      auditLogger(`Authentication error: ${err.message}`)(req, res, () => {});
       return res
         .status(401)
         .json(buildResponse(res, 401, "Invalid or expired token.", null, true, err));

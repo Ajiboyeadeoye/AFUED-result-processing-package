@@ -3,7 +3,7 @@ import path from "path";
 import mongoose from "mongoose";
 
 /**
- * 🧱 Optional MongoDB schema for persistent logs
+ * 🧱 MongoDB schema for persistent audit logs
  */
 const auditLogSchema = new mongoose.Schema(
   {
@@ -14,8 +14,9 @@ const auditLogSchema = new mongoose.Schema(
     method: String,
     ipAddress: String,
     userAgent: String,
+    status: String,            // success/failure
+    details: Object,           // body, query, params
     timestamp: { type: Date, default: Date.now },
-    details: Object,
   },
   { timestamps: true }
 );
@@ -25,49 +26,53 @@ const AuditLog =
 
 /**
  * 🧾 Audit Logger Middleware
- * --------------------------
- * Automatically logs:
- *   - userId, role, action
- *   - route & method
- *   - timestamp & IP
- * Works globally or per-route.
  */
 export const auditLogger = (actionDescription = "Performed an action") => {
   return async (req, res, next) => {
-    try {
-      const logData = {
-        userId: req.user?._id,
-        role: req.user?.role,
-        action: actionDescription,
-        endpoint: req.originalUrl,
-        method: req.method,
-        ipAddress:
-          req.headers["x-forwarded-for"] || req.connection.remoteAddress,
-        userAgent: req.headers["user-agent"],
-        timestamp: new Date().toISOString(),
-        details: req.body,
-      };
+    const logData = {
+      userId: req.user?._id,
+      role: req.user?.role || "Anonymous",
+      action: actionDescription,
+      endpoint: req.originalUrl,
+      method: req.method,
+      ipAddress: req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+      userAgent: req.headers["user-agent"],
+      details: {
+        body: req.body,
+        query: req.query,
+        params: req.params,
+      },
+      timestamp: new Date(),
+      status: "pending",
+    };
 
-      // ✅ File logging (default)
-      const logDir = "logs";
-      if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
-      const logFile = path.join(logDir, "audit.log");
+    // Log after response is finished to capture status
+    res.on("finish", async () => {
+      try {
+        logData.status = res.statusCode < 400 ? "success" : "failure";
 
-      const logEntry = `[${logData.timestamp}] [${logData.role}] ${
-        logData.userId || "Anonymous"
-      } - ${logData.action} at ${logData.endpoint} (${logData.method})\n`;
+        // ✅ Async file logging
+        const logDir = "logs";
+        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
+        const logFile = path.join(logDir, "audit.log");
+        const logEntry = `[${logData.timestamp.toISOString()}] [${logData.role}] ${
+          logData.userId || "Anonymous"
+        } - ${logData.action} at ${logData.endpoint} (${logData.method}) - ${
+          logData.status
+        }\n`;
+        fs.appendFile(logFile, logEntry, (err) => {
+          if (err) console.error("Audit file log error:", err);
+        });
 
-      fs.appendFileSync(logFile, logEntry);
-
-      // ✅ Optional MongoDB logging
-      if (process.env.ENABLE_DB_LOGGING === "true") {
-        await AuditLog.create(logData);
+        // ✅ Optional MongoDB logging
+        if (process.env.ENABLE_DB_LOGGING === "true") {
+          await AuditLog.create(logData);
+        }
+      } catch (error) {
+        console.error("❌ Audit logger error:", error);
       }
+    });
 
-      next();
-    } catch (error) {
-      console.error("❌ Audit log error:", error);
-      next(); // don't block requests
-    }
+    next();
   };
 };

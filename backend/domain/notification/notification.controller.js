@@ -78,12 +78,12 @@ async function renderTemplate(template, context) {
 export const createTemplate = async (req, res) => {
   try {
     const { title: name, channel, email_content: email_template, whatsapp_content: whatsapp_template, variables } = req.body;
-    
-    if((channel=="both"|| !channel) && (!email_template || !whatsapp_template)){
+
+    if ((channel == "both" || !channel) && (!email_template || !whatsapp_template)) {
       return res.status(400).json({ success: false, message: "Both (email or whatsapp) is required for 'both' channel" });
-    }else if(channel=="email" && !email_template){
+    } else if (channel == "email" && !email_template) {
       return res.status(400).json({ success: false, message: "Email template is required for 'email' channel" });
-    }else if(channel=="whatsapp" && !whatsapp_template){
+    } else if (channel == "whatsapp" && !whatsapp_template) {
       return res.status(400).json({ success: false, message: "WhatsApp template is required for 'whatsapp' channel" });
     }
     if (!name) {
@@ -117,7 +117,7 @@ export const getTemplates = async (req, res) => {
     const result = await fetchDataHelper(req, res, Template, {
       configMap: dataMaps.Template,
       autoPopulate: true,
-      models: {   },
+      models: {},
       populate: [],
     });
     // const templates = await Template.find().sort({ createdAt: -1 });
@@ -226,10 +226,75 @@ export const sendNotification = async (req, res) => {
 /* 📬 GET User Notifications */
 export const getNotifications = async (req, res) => {
   try {
-    const { user_id } = req.params;
-    const notifications = await Notification.find({ recipient_id: user_id }).sort({ created_at: -1 });
+    const user_id = req.user._id;
+    // 2️⃣ Mark all as read
+    await Notification.updateMany(
+      { recipient_id: user_id, is_read: false },
+      { $set: { is_read: true } }
+    );
+
+    // 1️⃣ Fetch all notifications for this user
+    const notifications = await fetchDataHelper(req, res, Notification, {
+      configMap: dataMaps.Notifications,
+      autoPopulate: true,
+      models: {},
+      additionalFilters: { recipient_id: user_id },
+    });
+
+
+    // 3️⃣ Return notifications
     res.status(200).json({ success: true, data: notifications });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: "Error fetching notifications" });
+  }
+};
+/* 📬 GET User Notifications */
+export const getTopUnread = async (req, res) => {
+  try {
+    const user_id = req.user._id;
+    // 2️⃣ Mark all as read
+    await Notification.updateMany(
+      { recipient_id: user_id, is_read: false },
+      { $set: { is_read: true } }
+    );
+
+    // 1️⃣ Fetch all notifications for this user
+    const notifications = await fetchDataHelper(req, res, Notification, {
+      configMap: dataMaps.Notifications,
+      autoPopulate: true,
+      models: {},
+      additionalFilters: { recipient_id: user_id },
+      maxLimit: 3
+    });
+
+
+    // 3️⃣ Return notifications
+    res.status(200).json({ success: true, data: notifications });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching notifications" });
+  }
+};
+
+export const getUnreadNotificationCount = async (req, res) => {
+  try {
+    const user_id = req.user._id;
+
+    console.log(user_id)
+    // Count unread notifications for this user
+    const unreadCount = await Notification.countDocuments({
+      recipient_id: user_id,
+      // is_read: false,
+    });
+
+    console.log("Notification Count fetched")
+    
+    return buildResponse.success(res, "", unreadCount)
+    // Return count
+    // res.status(200).json({ success: true, unreadCount });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: "Error fetching unread notifications count" });
   }
 };
