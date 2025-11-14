@@ -1,6 +1,10 @@
 import User from "../../domain/user/user.model.js";
 import Department from "../../domain/department/department.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
+import departmentModel from "../../domain/department/department.model.js";
+import lecturerModel from "../lecturer/lecturer.model.js";
+import fetchDataHelper from "../../utils/fetchDataHelper.js";
+import { dataMaps } from "../../config/dataMap.js";
 
 // Assign HOD
 export const assignHOD = async (req, res) => {
@@ -91,14 +95,14 @@ export const removeHOD = async (req, res) => {
 
 // Get all HODs
 export const getAllHODs = async (req, res) => {
-  try {
-    const hods = await User.find({ role: "HOD" }).populate("department");
-    return res
-      .status(200)
-      .json(buildResponse.success("HODs retrieved successfully", hods));
-  } catch (error) {
-    return res
-      .status(500)
-      .json(buildResponse.error(`Server error: ${error.message}`, 500));
+  return fetchDataHelper(req, res, lecturerModel, {
+    configMap: dataMaps.Lecturer,
+    autoPopulate: true,
+    // models: { departmentModel, User },
+    // populate: ["departmentId"],
+    custom_fields: { role: "_id", email: '_id', department: "departmentId"},
+  additionalFilters: {
+    "role": "hod"
   }
+  });
 };

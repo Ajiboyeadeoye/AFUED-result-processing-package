@@ -207,7 +207,7 @@ export const sendNotification = async (req, res) => {
         await sendEmail({ to: user.email, subject: template.name, html: emailContent });
 
       if ((template.channel === "whatsapp" || template.channel === "both") && whatsappContent) {
-        const phone = user.phone || "09114313756";
+        const phone = user.phone || "08143185267";
         await sendWhatsAppMessage(phone, whatsappContent);
       }
     }

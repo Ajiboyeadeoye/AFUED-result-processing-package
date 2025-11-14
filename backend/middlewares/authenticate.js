@@ -24,9 +24,7 @@ const authenticate = (roles = []) => {
 
       if (!token) {
         auditLogger("Unauthorized access: No token provided")(req, res, () => {}); // 🔥 Log this event
-        return res
-          .status(401)
-          .json(buildResponse(res, 401, "Access denied: No token provided.", null, true));
+        return buildResponse(res, 401, "Access denied: No token provided.", null, true)
       }
 
       let decoded;
@@ -47,17 +45,13 @@ const authenticate = (roles = []) => {
       // ✅ Check that the role exists in the authorized roles list
       if (!AUTHORIZED_ROLES.includes(decoded.role)) {
         auditLogger(`Unauthorized role: ${decoded.role}`)(req, res, () => {}); // 🔥 Log unauthorized role
-        return res
-          .status(403)
-          .json(buildResponse(res, 403, `Unauthorized role: ${decoded.role}`, null, true));
+        return buildResponse(res, 403, `Unauthorized role: ${decoded.role}`, null, true)
       }
 
       // ✅ Check route-level role restriction
       if (allowedRoles.length > 0 && !allowedRoles.includes(decoded.role)) {
         auditLogger(`Forbidden: ${decoded.role} tried to access restricted route`)(req, res, () => {});
-        return res
-          .status(403)
-          .json(buildResponse(res, 403, "Forbidden: Insufficient privileges.", null, true));
+        return buildResponse(res, 403, "Forbidden: Insufficient privileges.", null, true)
       }
 
       // ✅ Success: attach audit logger for later stages
@@ -66,9 +60,7 @@ const authenticate = (roles = []) => {
     } catch (err) {
       console.error("Auth error:", err.message);
       auditLogger(`Authentication error: ${err.message}`)(req, res, () => {});
-      return res
-        .status(401)
-        .json(buildResponse(res, 401, "Invalid or expired token.", null, true, err));
+      return buildResponse(res, 401, "Invalid or expired token.", null, true, err)
     }
   };
 };

@@ -177,11 +177,13 @@ export const dataMaps = {
 
 
   Student: {
-    id: "this._id",
-    name: "this.name",
-    matric_number: "this.matric_number",
-    department_name: "Department.name",
+    id: "this._id._id",
+    name: "this.user?.name || this._id?.name",
+    matric_no: "this.matricNumber",
+    department: "this.departmentId.name",
+    department_id: "this.departmentId._id",
     faculty_name: "Faculty.name",
+    level: 'this.level'
   },
 
   Lecturer: {
@@ -189,8 +191,8 @@ export const dataMaps = {
     rank: "this.rank",
     name: "this.user?.name || this._id?.name",
     staff_id: "this.staffId",
-    department_id: "this.departmentId._id",
-    department: "this.departmentId.name",
+    department_id: "this.department._id",
+    department: "this.department.name",
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
   },

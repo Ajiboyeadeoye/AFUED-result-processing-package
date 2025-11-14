@@ -5,7 +5,7 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-"dev": "nodemon index.js --ignore auth_info_baileys --ignore logs",
+    "dev": "nodemon index.js --ignore auth_info_baileys --ignore logs",
     "create-admin": "node scripts/devTool.js create-admin"
   },
   "author": "AFUED-Comp Sci.",
@@ -13,6 +13,7 @@
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.7.21",
+    "archiver": "^7.0.1",
     "axios": "^1.12.2",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
@@ -27,6 +28,7 @@
     "multer": "^2.0.2",
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
+    "pdfkit": "^0.17.2",
     "pino": "^10.1.0",
     "stripe": "^19.1.0",
     "xlsx": "^0.18.5"

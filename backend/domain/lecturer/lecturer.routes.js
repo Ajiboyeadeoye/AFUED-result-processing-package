@@ -9,12 +9,14 @@ import {
   removeHOD,
 } from "./lecturer.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
+import { getAllHODs } from "../hod/hod.controller.js";
 
 const router = express.Router();
 
 // 🧩 ADMIN ROUTES
 router.post("/", authenticate(["admin", "hod"]), createLecturer);
 router.get("/", authenticate(["admin", "hod"]), getAllLecturers);
+router.get("/hods", authenticate(["admin", "hod"]), getAllHODs);
 router.get("/:id", authenticate(["admin", "hod"]), getLecturerById);
 router.put("/:id", authenticate("admin"), updateLecturer);
 router.delete("/:id", authenticate("admin"), deleteLecturer);

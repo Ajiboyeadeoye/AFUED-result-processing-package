@@ -54,12 +54,12 @@ router.patch(
 router.delete(
   "/:departmentId",
   authenticate("admin"),
-  deleteDepartment
+  deleteDepartment 
 );
 
 /**
  * 👩‍🏫 Assign HOD to department
- */
+ */ 
 router.patch(
   "/:departmentId/assign-hod",
   authenticate("admin"),

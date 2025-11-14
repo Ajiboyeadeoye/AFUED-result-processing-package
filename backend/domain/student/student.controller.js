@@ -1,6 +1,11 @@
 import Student from "./student.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import  fetchDataHelper  from "../../utils/fetchDataHelper.js";
+import Semester from "../semester/semester.model.js";
+import User from "../user/user.model.js";
+import departmentModel from "../department/department.model.js";
+import { hashData } from "../../utils/hashData.js";
+import { dataMaps } from "../../config/dataMap.js";
 
 
 /**
@@ -140,35 +145,104 @@ export const printTranscript = async (req, res) => {
 
 // 🧾 Get all students (Admin only)
 export const getAllStudents = async (req, res) => {
-  return fetchDataHelper(req, res, Student, {
-    enablePagination: true,
-    sort: { createdAt: -1 },
-  });
+        return await fetchDataHelper(req, res, Student, {
+        configMap: dataMaps.Student,
+        autoPopulate: true,
+        models: { departmentModel, User },
+        populate: ["departmentId", "_id"],
+        custom_fields: { name: "_id", email: "_id" },
+      });
 };
 
 // 🧍 Create a new student (Admin only)
 export const createStudent = async (req, res) => {
   try {
-    const { userId, matricNumber, departmentId, facultyId, level, session } = req.body;
-
-    const existing = await Student.findOne({ matricNumber });
-    if (existing) return buildResponse(res, 400, "Matric number already exists");
-
-    const newStudent = await Student.create({
-      userId,
-      matricNumber,
-      departmentId,
-      facultyId,
+    const {
+      name,
+      email,
+      matric_no: matricNumber,
+      department_id: departmentId,
       level,
-      session,
+      fields,
+      search_term,
+      filters,
+      page,
+      // user: userFromMiddleware,
+    } = req.body;
+
+    // 🧮 If filtering/searching students
+    if (fields || search_term || filters || page) {
+      console.log("📌MMy nm📌")
+      return await fetchDataHelper(req, res, Student, {
+        configMap: dataMaps.Student,
+        autoPopulate: true,
+        models: { departmentModel, User },
+        populate: ["departmentId", "_id"],
+        custom_fields: { name: "_id", email: "_id", department: "departmentId" },
+      });
+    }
+
+    // 🔍 1. Duplicate matric number
+    const existingStudent = await Student.findOne({ matricNumber });
+    if (existingStudent) {
+      return buildResponse(res, 400, "Student with this matric number already exists");
+    }
+
+    // 🔍 2. Duplicate email
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return buildResponse(res, 400, "User with this email already exists");
+    }
+
+    // 🔐 3. Generate default password
+    const defaultPassword = `${matricNumber}`;
+    const hashedPassword = await hashData(defaultPassword);
+
+    // 👤 4. Create User Account
+    const user = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role: "student",
+      must_change_password: true,
     });
 
-    return buildResponse(res, 201, "Student created successfully", newStudent);
+    try {
+      // 📌 5. Get active session
+      const session = await Semester.findOne({ isActive: true });
+
+      // 🎓 Create Student using same user._id
+      const student = await Student.create({
+        _id: user._id,
+        matricNumber,
+        departmentId,
+        level,
+        session: session?._id || null,
+      });
+
+      // Response
+      return buildResponse(res, 201, "Student created successfully", student);
+
+    } catch (studentError) {
+      // 🧹 Rollback user if student fails
+      await User.findByIdAndDelete(user._id);
+      console.error("⚠️ Student creation failed, deleted user:", studentError, departmentId);
+
+      return buildResponse(
+        res,
+        500,
+        "Student creation failed — Session Rollback",
+        null,
+        true,
+        studentError
+      );
+    }
   } catch (error) {
-    console.error("❌ Error creating student:", error);
+    console.error("❌ createStudent Error:", error);
     return buildResponse(res, 500, "Failed to create student", null, true, error);
   }
 };
+
 
 // 📋 Get a single student
 export const getStudentById = async (req, res) => {
