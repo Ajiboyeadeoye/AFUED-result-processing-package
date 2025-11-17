@@ -49,6 +49,20 @@ async function resolveVariable(variable, context) {
           data = 0;
         }
         break;
+      case "timeGreeting":
+        const now = new Date();
+        const hour = now.getHours();
+
+        if (hour >= 5 && hour < 12) {
+          data= "Good morning! ☀️";
+        } else if (hour >= 12 && hour < 17) {
+          data = "Good afternoon! 🌤️";
+        } else if (hour >= 17 && hour < 21) {
+          data = "Good evening! 🌙";
+        } else {
+          data ="Good night! 🌃";
+        }
+        break;
       case "portal_url":
         data = context.settings?.websiteUrl || "";
         break;
@@ -289,7 +303,7 @@ export const getUnreadNotificationCount = async (req, res) => {
     });
 
     console.log("Notification Count fetched")
-    
+
     return buildResponse.success(res, "", unreadCount)
     // Return count
     // res.status(200).json({ success: true, unreadCount });

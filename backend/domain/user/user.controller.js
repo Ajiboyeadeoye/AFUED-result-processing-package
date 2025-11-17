@@ -3,6 +3,7 @@ import { hashData, verifyHashedData } from "../../utils/hashData.js";
 import createToken from "../../utils/createToken.js";
 import Admin from "../admin/admin.model.js";
 import lecturerModel from "../lecturer/lecturer.model.js";
+import studentModel from "../student/student.model.js";
 
 // import Admin from "../models/admin.model.js";
 
@@ -155,6 +156,94 @@ const authenticateLecturer = async (data) => {
 };
 
 
+const authenticateStudent = async (data) => {
+  try {
+    const { matric_no, email, password } = data;
+    console.log("Authenticating student with data:", data);
+
+    if ((!matric_no && !email)) {
+      throw new Error("Please provide Matric Number or Email.");
+    }
+
+    // 🧠 Step 1: Find student by matric number or email
+    const query = matric_no
+      ? { matricNumber: matric_no.trim().toUpperCase() }
+      : { email: email.trim().toLowerCase() };
+
+    const fetchedStudent = await studentModel.findOne(query);
+    if (!fetchedStudent) {
+      throw new Error(
+        matric_no
+          ? "Student with this Matric Number does not exist!"
+          : "Student with this email does not exist!"
+      );
+    }
+
+    // 🧩 Step 2: Find linked user document
+    const fetchedUser = await User.findById(fetchedStudent._id);
+    if (!fetchedUser) {
+      throw new Error("Linked user record not found — possible data mismatch");
+    }
+
+    // 🔒 Step 3: Handle password variations
+    const expectedDefault = `AFUED@${fetchedStudent.matricNumber}`;
+    let authenticated = false;
+
+    if (!fetchedUser.password) {
+      // 🧠 Case 1: No password stored — allow default AFUED@matric_number
+      if (password === expectedDefault) {
+        console.log("✅ Student authenticated with default AFUED@matric_number pattern");
+        authenticated = true;
+      }
+    } else {
+      // 🧩 Case 2: Try matching hashed password
+      const passwordMatch = await verifyHashedData(password, fetchedUser.password);
+      if (passwordMatch) {
+        authenticated = true;
+      } else if (password === fetchedStudent.matricNumber) {
+        // 🧩 Case 3: Password equals raw matric number (legacy case)
+        console.log("✅ Student authenticated with raw matric number password");
+        authenticated = true;
+      }
+    }
+
+    if (!authenticated) {
+      throw new Error("Invalid password");
+    }
+
+    // 🎟️ Step 4: Create login token
+    const tokenData = {
+      _id: fetchedStudent._id,
+      matric_no: fetchedStudent.matricNumber,
+      email: fetchedStudent.email,
+      role: fetchedUser.role || "student",
+    };
+
+    console.log("Creating token with data:", tokenData);
+    const token = await createToken(tokenData);
+
+    // 🧾 Step 5: Attach token (not persisted)
+    fetchedUser.token = token;
+
+    // ✅ Step 6: Return safe info
+    return {
+      id: fetchedStudent._id,
+      matric_no: fetchedStudent.matricNumber,
+      email: fetchedStudent.email,
+      name: fetchedUser.name,
+      role: fetchedUser.role || "student",
+      access_token: token,
+      // Student-specific fields
+      department: fetchedStudent.departmentId,
+      level: fetchedStudent.level,
+      faculty: fetchedStudent.faculty,
+    };
+  } catch (error) {
+    console.error("❌ Student authentication error:", error.message);
+    throw new Error(error.message || "Student authentication failed");
+  }
+};
+
 
 
 
@@ -244,4 +333,4 @@ export const deleteStudent = async (req, res) => {
   return res.status(result.status).json(result);
 };
 
-export { createNewUser, authenticateAdmin, authenticateLecturer };
+export { createNewUser, authenticateAdmin, authenticateLecturer , authenticateStudent};

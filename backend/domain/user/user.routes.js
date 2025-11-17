@@ -1,5 +1,5 @@
 import express from "express";
-import { createNewUser, authenticateAdmin, authenticateLecturer } from "./user.controller.js";
+import { createNewUser, authenticateAdmin, authenticateLecturer, authenticateStudent } from "./user.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = express.Router();
@@ -36,7 +36,7 @@ router.post("/signin/:role", async (req, res) => {
         authenticatedUser = await authenticateAdmin({ email, password , admin_id });
         break;
       case "student":
-        // authenticatedUser = await authenticateStudent({ email, password });
+        authenticatedUser = await authenticateStudent({ email, password, matric_no });
         break;
 
       case "lecturer":

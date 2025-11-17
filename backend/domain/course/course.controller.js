@@ -41,7 +41,19 @@ const calculateTotalUnits = async (courseIds = []) => {
 
 export const createCourse = async (req, res) => {
   try {
-    const { courseCode, title, unit, level, semester, type, department_id: department, faculty, description } = req.body;
+    const { courseCode, title, unit, level, semester, type, department_id: department, faculty, description,fields, search_term, filters, page  } = req.body;
+
+
+     if (fields || search_term || filters || page) {
+      const result = await fetchDataHelper(req, res, Course, {
+        configMap: dataMaps.Course,
+        autoPopulate: true,
+        models: { departmentModel },
+        populate: ["department"],
+      });
+          // return buildResponse(res, 200, "Filtered departments fetched", result);
+        }
+
 
     // 🧠 If HOD, restrict to their department
     if (req.user?.role === "hod") {
@@ -56,14 +68,12 @@ export const createCourse = async (req, res) => {
     // Validate department
     const deptExists = await Department.findById(department);
     if (!deptExists)
-      return res.status(404).json(buildResponse.error(res, "Department not found"));
+      return buildResponse.error(res, "Department not found")
 
     // Prevent duplicate
     const exists = await Course.findOne({ courseCode });
     if (exists)
-      return res
-        .status(400)
-        .json(buildResponse.error(res, "Course with this code already exists"));
+      return buildResponse.error(res, "Course with this code already exists")
 
     let newCourse = new Course({
       courseCode,
@@ -81,12 +91,10 @@ export const createCourse = async (req, res) => {
     await newCourse.save();
     newCourse = await getCourseById({ params: { courseId: newCourse._id } }, res);
 
-    res
-      .status(201)
-      .json(buildResponse.success(res, "Course created successfully", newCourse));
+    return buildResponse.success(res, "Course created successfully", newCourse)
   } catch (err) {
     console.log("Request STATUS:", err);
-    res.status(404).json(buildResponse(res, 404, "Course creation failed", null, true));
+    return buildResponse(res, 404, "Course creation failed", null, true)
 
   }
 
@@ -116,14 +124,14 @@ export const getAllCourses = async (req, res) => {
     }
 
     // 🧑‍💼 For admin or others → fetch all courses
-    result = await fetchDataHelper(req, res, Course, {
+    return result = await fetchDataHelper(req, res, Course, {
       configMap: dataMaps.Course,
       autoPopulate: true,
       models: { departmentModel },
       populate: ["department"],
     });
 
-    return buildResponse(res, 200, "All Courses fetched", result);
+    // return buildResponse(res, 200, "All Courses fetched", result);
   } catch (error) {
     console.error(error);
     return buildResponse(res, 500, "Failed to fetch courses", null, true, error);
