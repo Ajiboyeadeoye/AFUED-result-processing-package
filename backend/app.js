@@ -11,6 +11,7 @@ import path from "path";
 import routes from "./routes/index.js"; // Ensure correct path if routes has index.js
 const allowedOrigins = [
   "https://adeyemi-frontend-cslixwj57-breakthrough-s-projects.vercel.app",
+  "https://adeyemi-frontend.vercel.app",
   "http://localhost:3000"
 ];
 // create express app
