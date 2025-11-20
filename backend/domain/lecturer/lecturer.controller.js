@@ -108,7 +108,7 @@ export const createLecturer = async (req, res) => {
  */
 export const getAllLecturers = async (req, res) => {
   return fetchDataHelper(req, res, Lecturer, {
-    // configMap: dataMaps.Lecturer,
+    configMap: dataMaps.Lecturer,
     autoPopulate: true,
     models: { departmentModel, User },
     populate: ["departmentId", "_id"],

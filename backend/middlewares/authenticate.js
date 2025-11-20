@@ -10,7 +10,8 @@ const authenticate = (roles = []) => {
 
   return async (req, res, next) => {
     try {
-      const publicPaths = ["/signin", "/signup", "/forgot-password", "/reset-password"];
+      console.log('hi')
+      const publicPaths = ["/signin/:role", "/signup", "/forgot-password", "/reset-password"];
       const isPublicRoute = publicPaths.some((path) => req.path.endsWith(path));
 
       // ✅ Allow public routes

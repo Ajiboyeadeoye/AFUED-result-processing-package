@@ -12,6 +12,10 @@ const departmentSchema = new mongoose.Schema({
     },
   faculty: { type: mongoose.Schema.Types.ObjectId, ref: "Faculty", required: true },
   hod: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  // borrowed: {
+  //   _id: ref: "Course",
+  //   type: 
+  // }
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
   
 },

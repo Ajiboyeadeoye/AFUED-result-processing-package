@@ -41,40 +41,51 @@ const calculateTotalUnits = async (courseIds = []) => {
 
 export const createCourse = async (req, res) => {
   try {
-    const { courseCode, title, unit, level, semester, type, department_id: department, faculty, description,fields, search_term, filters, page  } = req.body;
+    let { courseCode, title, unit, level, semester, type, department_id: department, faculty, description, borrowedId, fields, search_term, filters, page, extras } = req.body;
+
+    // 🔍 If this is a list/filter request, handle early
+    if (fields || search_term || filters || page) {
+      return getAllCourses(req, res)
+    }
 
 
-     if (fields || search_term || filters || page) {
-      const result = await fetchDataHelper(req, res, Course, {
-        configMap: dataMaps.Course,
-        autoPopulate: true,
-        models: { departmentModel },
-        populate: ["department"],
-      });
-          // return buildResponse(res, 200, "Filtered departments fetched", result);
-        }
-
-
-    // 🧠 If HOD, restrict to their department
+    // 🛡 HOD restriction: can only create in their department
     if (req.user?.role === "hod") {
-      const department = await departmentModel.findOne({ hod: req.user?._id });
-      // console.log("HOD Department:", department);
-      if (!department) {
-        return buildResponse(res, 404, "Department not found for HOD", null, true);
-      }
-      department = department._id;
+      const hodDept = await departmentModel.findOne({ hod: req.user._id });
+      if (!hodDept) return buildResponse(res, 404, "Department not found for HOD", null, true);
+      department = hodDept._id;
     }
 
     // Validate department
     const deptExists = await Department.findById(department);
-    if (!deptExists)
-      return buildResponse.error(res, "Department not found")
+    if (!deptExists) return buildResponse.error(res, "Department not found");
 
-    // Prevent duplicate
-    const exists = await Course.findOne({ courseCode });
-    if (exists)
-      return buildResponse.error(res, "Course with this code already exists")
+    // Handle borrowed course
+    if (borrowedId) {
+      // Check original course exists
+      const original = await Course.findById(borrowedId);
+      if (!original) return buildResponse.error(res, "Original course not found");
 
+      type = "borrowed"; // force type
+      courseCode = null;
+      title = null;
+      unit = null;
+      level = null;
+      semester = null;
+      faculty = null;
+      description = null;
+    } else {
+      // Only validate original courses
+      if (!courseCode || !title || !unit || !level || !semester) {
+        return buildResponse.error(res, "All fields are required for original courses");
+      }
+
+      // Normal course: prevent duplicates by code
+      const exists = await Course.findOne({ courseCode });
+      if (exists) return buildResponse.error(res, "Course with this code already exists");
+    }
+
+    // Create course
     let newCourse = new Course({
       courseCode,
       title,
@@ -85,19 +96,21 @@ export const createCourse = async (req, res) => {
       department,
       faculty,
       description,
+      borrowedId: borrowedId || null,
       createdBy: req.user?._id || null,
     });
 
     await newCourse.save();
+
+    // Populate for response
     newCourse = await getCourseById({ params: { courseId: newCourse._id } }, res);
 
-    return buildResponse.success(res, "Course created successfully", newCourse)
+    return buildResponse.success(res, "Course created successfully", newCourse);
+
   } catch (err) {
     console.log("Request STATUS:", err);
-    return buildResponse(res, 404, "Course creation failed", null, true)
-
+    return buildResponse(res, 404, "Course creation failed", null, true);
   }
-
 };
 
 export const getAllCourses = async (req, res) => {
@@ -105,31 +118,27 @@ export const getAllCourses = async (req, res) => {
     let result;
 
     // 🧠 If HOD, restrict to their department
-    if (req.user?.role === "hod") {
-      const department = await departmentModel.findOne({ hod: req.user?._id });
-      console.log("HOD Department:", department);
-      if (!department) {
-        return buildResponse(res, 404, "Department not found for HOD", null, true);
-      }
+const isHod = req.user?.role === "hod";
+const department = isHod ? await departmentModel.findOne({ hod: req.user?._id }) : null;
 
-      result = await fetchDataHelper(req, res, Course, {
-        configMap: dataMaps.Course,
-        autoPopulate: true,
-        models: { departmentModel },
-        additionalFilters: { department: department._id }, // ✅ fixed typo from 'addutionalFilters'
-        populate: ["department"],
-      });
+if (isHod && !department) {
+  return buildResponse(res, 404, "Department not found for HOD", null, true);
+}
 
-      return buildResponse(res, 200, "Filtered Courses fetched (HOD)", result);
-    }
+const fetchConfig = {
+  configMap: dataMaps.Course,
+  autoPopulate: true,
+  models: { departmentModel },
+  populate: ["department"],
+  ...(isHod && {
+    additionalFilters: { department: department._id },
+  }),
+  custom_feilds: { borrowed: "borrowedId" },
+  populate: ["department", "borrowedId"],
+};
 
-    // 🧑‍💼 For admin or others → fetch all courses
-    return result = await fetchDataHelper(req, res, Course, {
-      configMap: dataMaps.Course,
-      autoPopulate: true,
-      models: { departmentModel },
-      populate: ["department"],
-    });
+result = await fetchDataHelper(req, res, Course, fetchConfig);
+
 
     // return buildResponse(res, 200, "All Courses fetched", result);
   } catch (error) {
@@ -137,6 +146,8 @@ export const getAllCourses = async (req, res) => {
     return buildResponse(res, 500, "Failed to fetch courses", null, true, error);
   }
 };
+
+
 
 export const getCourseById = async (req, res) => {
   try {
@@ -199,9 +210,9 @@ export const deleteCourse = async (req, res) => {
 
 export const assignCourse = async (req, res) => {
   try {
-    const { course,  staffId: lecturers, department: frontendDept } = req.body;
+    const { course, staffId: lecturers, department: frontendDept } = req.body;
 
-    // 🧠 Get current active semester
+    // 🧠 Get current semester
     const currentSemester = await Semester.findOne({ isActive: true });
     if (!currentSemester) {
       return buildResponse(res, 404, "No active semester found", null, true);
@@ -209,26 +220,29 @@ export const assignCourse = async (req, res) => {
 
     const { _id: semester, session } = currentSemester;
 
-    let departmentId = frontendDept;
+    // 🧩 Fetch course data
+    const courseData = await Course.findById(course);
+    if (!courseData) {
+      return buildResponse(res, 404, "Course not found", null, true);
+    }
 
-    // 🧩 If user is HOD, restrict department access
-    let courseData = null;
-    courseData = await Course.findById(course).populate("department");
-    console.log("Course Data for Assignment:", semester);
+    let departmentId = frontendDept; // DEFAULT → the department making assignment
+
+    // 🧩 If this is a normal course, override department with owning dept
+    if (!courseData.borrowedId) {
+      departmentId = courseData.department;
+    }
+
+    // 🧱 If HOD, restrict to their department
     if (req.user?.role === "hod") {
       const department = await departmentModel.findOne({ hod: req.user?._id });
+
       if (!department) {
         return buildResponse(res, 404, "Department not found for HOD", null, true);
       }
 
-      departmentId = department._id;
-
-      // 🧱 Validate that the selected course belongs to this department
-      if (!courseData) {
-        return buildResponse(res, 404, "Course not found", null, true);
-      }
-
-      if (courseData.department._id.toString() !== department._id.toString()) {
+      // HOD must be allowed only inside their own department
+      if (department._id.toString() !== departmentId.toString()) {
         return buildResponse(
           res,
           403,
@@ -237,21 +251,16 @@ export const assignCourse = async (req, res) => {
           true
         );
       }
+
+      departmentId = department._id; // force to their actual dept
     }
 
-    // 🧩 Ensure department exists for admin as well
-    const courseDepartment =courseData ? courseData.department._id : null;  
-    if (!courseDepartment) {
-
-      return buildResponse(res, 400, "Department is required", null, true);
-    }
-
-    // 🔁 Prevent duplicate assignment for same session + semester + department
+    // 🔁 Prevent duplicate assignment per dept + semester + session
     const existing = await CourseAssignment.findOne({
       course,
       semester,
       session,
-      department: courseDepartment,
+      department: departmentId,
     });
 
     if (existing) {
@@ -264,18 +273,20 @@ export const assignCourse = async (req, res) => {
       lecturer: lecturers,
       semester,
       session,
-      department: courseDepartment,
+      department: departmentId,
       assignedBy: req.user?._id,
     });
 
     await newAssign.save();
 
     return buildResponse(res, 201, "Course assigned successfully", newAssign);
+
   } catch (error) {
     console.error("❌ assignCourse error:", error);
     return buildResponse(res, 500, "Failed to assign course", null, true, error);
   }
 };
+
 
 
 export const getAssignments = async (req, res) => {
@@ -433,7 +444,7 @@ export const getLecturerCourses = async (req, res) => {
       configMap: dataMaps.CourseAssignment,
       autoPopulate: true,
       models: { courseModel, lecturerModel },
-    // additionalFilters: { _id: req.user?._id },
+      // additionalFilters: { _id: req.user?._id },
       populate: ["course"],
 
     });
@@ -442,7 +453,7 @@ export const getLecturerCourses = async (req, res) => {
 
     res.json(buildResponse(res, 200, "Lecturer courses fetched", assignments));
   } catch (err) {
-    res.status(500).json(buildResponse(res, 500,  err.message));
+    res.status(500).json(buildResponse(res, 500, err.message));
   }
 };
 

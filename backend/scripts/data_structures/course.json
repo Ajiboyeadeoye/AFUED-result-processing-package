@@ -1,0 +1,177 @@
+
+  [  {
+      "courseCode": "CSC 101",
+      "title": "Introduction to Computing Sciences",
+      "unit": 3,
+      "type": "Core",
+      "level": 100,
+      "semester": 1,
+      "lecture_hours": 30,
+      "practical_hours": 45
+    },
+    {
+      "courseCode": "CSC 103",
+      "title": "Computer Application Packages I",
+      "unit": 1,
+      "type": "Core",
+      "level": 100,
+      "semester": 1,
+      "lecture_hours": 0,
+      "practical_hours": 135
+    },
+    {
+      "courseCode": "CSC 102",
+      "title": "Problem Solving",
+      "unit": 3,
+      "type": "Core",
+      "level": 100,
+      "semester": 2,
+      "lecture_hours": 30,
+      "practical_hours": 45
+    },
+    {
+      "courseCode": "CSC 104",
+      "title": "Basic Concepts of Programming",
+      "unit": 3,
+      "type": "Core",
+      "level": 100,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 106",
+      "title": "Computer Application Packages II",
+      "unit": 1,
+      "type": "Core",
+      "level": 100,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 201",
+      "title": "Computer Programming I",
+      "unit": 3,
+      "type": "Core",
+      "level": 200,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 203",
+      "title": "Discrete Structures",
+      "unit": 2,
+      "type": "Core",
+      "level": 200,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 207",
+      "title": "Introduction to Web Technologies",
+      "unit": 2,
+      "type": "Core",
+      "level": 200,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 211",
+      "title": "Digital Logic Design",
+      "unit": 2,
+      "type": "Core",
+      "level": 200,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 213",
+      "title": "Introduction to Software Engineering",
+      "unit": 2,
+      "type": "Core",
+      "level": 200,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 202",
+      "title": "Computer Programming II",
+      "unit": 3,
+      "type": "Core",
+      "level": 200,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 214",
+      "title": "Human-Computer Interaction",
+      "unit": 2,
+      "type": "Core",
+      "level": 200,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 301",
+      "title": "Data Structures",
+      "unit": 3,
+      "type": "Core",
+      "level": 300,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 303",
+      "title": "Introduction to Cyber Security and Strategy",
+      "unit": 2,
+      "type": "Core",
+      "level": 300,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 305",
+      "title": "Data Communication System & Network",
+      "unit": 3,
+      "type": "Core",
+      "level": 300,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 309",
+      "title": "Artificial Intelligence",
+      "unit": 2,
+      "type": "Core",
+      "level": 300,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 304",
+      "title": "Data Management I",
+      "unit": 3,
+      "type": "Core",
+      "level": 300,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 308",
+      "title": "Operating Systems II",
+      "unit": 3,
+      "type": "Core",
+      "level": 300,
+      "semester": 2
+    },
+    {
+      "courseCode": "CSC 401",
+      "title": "Algorithms and Complexity Analysis",
+      "unit": 2,
+      "type": "Core",
+      "level": 400,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 497",
+      "title": "Final Year Project I",
+      "unit": 3,
+      "type": "Core",
+      "level": 400,
+      "semester": 1
+    },
+    {
+      "courseCode": "CSC 498",
+      "title": "Final Year Project II",
+      "unit": 3,
+      "type": "Core",
+      "level": 400,
+      "semester": 2
+    }
+  ]
+

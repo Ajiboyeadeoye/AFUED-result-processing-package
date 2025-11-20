@@ -74,21 +74,32 @@ export const dataMaps = {
 
   Course: {
     _id: "this._id",
-    name: "this.name",
-    code: "this.code",
-    code: "this.courseCode",
+    code: "this.code || this.borrowedId.code",
+    code: "this.courseCode || this.borrowedId.courseCode",
     faculty_id: "this.faculty._id",
     faculty_name: "this.faculty.name",
-    unit: "this.unit",
-    level: "this.level",
-    semester: "this.semester",
+    unit: "this.unit || this.borrowedId.unit",
+    level: "this.level || this.borrowedId.level",
+    semester: "this.semester || this.borrowedId.semester",
     type: "this.type",
-    name: "this.title",
+    name: "this.title || this.borrowedId.title",
     hod_name: "this.hod.name",
     department_id: "this.department._id",
     department: "this.department.name",
-    description: "this.description",
+    description: "this.description || this.borrowedId.description",
     outline: "this.outline",
+    borrowed_department: async (doc, models) =>{
+      if (doc.borrowedId !=null) {
+        const dep = await models.Department.findOne({_id: doc.borrowedId.department})
+        // populate("")
+        // console.log(dep, doc.borrowedId)
+        if(dep) return dep.name
+        
+      }
+    },
+    borrowed: (doc) =>{
+      if (doc.borrowedId !=null) return true
+    },
     lecturer: async (doc, models) => {
       const assignment = await models.CourseAssignment.findOne({ course: doc._id })
         .populate("lecturer", "name email")
@@ -102,7 +113,10 @@ export const dataMaps = {
         name: assignment.lecturer.name || null,
         email: assignment.lecturer.email || null,
       };
-    }
+
+    },
+    createdAt: "this.createdAt",
+    updatedAt: "this.updatedAt"
   },
   CourseById: {
     _id: "this._id",
@@ -292,5 +306,18 @@ export const dataMaps = {
       type: "this.type",
       is_read: "this.is_read",
       created_at: "this.created_at"
+  },
+  Announcement: {
+    _id: "this._id",
+    title: "this.title",
+    description: "this.description",
+    content: "this.content",
+    category: "this.category",
+    priority: "this.priority",
+    image: "this.image",
+    date: "this.date",
+    expiresAt: "this.expiresAt",
+    isActive: "this.isActive"
+
   }
 };

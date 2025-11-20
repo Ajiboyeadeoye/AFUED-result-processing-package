@@ -448,8 +448,8 @@ function setupCLIInterface() {
 }
 
 // ------------------- Initialize -------------------
-connectToWhatsApp();
-setupCLIInterface();
+// connectToWhatsApp();
+// setupCLIInterface();
 
 // Handle graceful shutdown
 process.on('SIGINT', () => {
