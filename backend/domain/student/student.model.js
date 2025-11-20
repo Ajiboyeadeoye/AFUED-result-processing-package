@@ -27,7 +27,7 @@ const studentSchema = new mongoose.Schema(
     },
     session: {
       type: String,
-      required: true, // e.g. "2024/2025"
+      // required: true, // e.g. "2024/2025"
     },
     courses: [
       {

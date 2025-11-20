@@ -3,7 +3,7 @@ import courseModel from "../domain/course/course.model.js";
 // import Course from "./models/Course.js"; // adjust path if needed
 
 // TODO: Replace with real ObjectIds from your DB
-const departmentId = "68f9fff1f6606ce32d8de13e";
+const departmentId = "691f4192a014e055bf4811a0";
 const facultyId = null;  
 const userId = null;
 
@@ -198,7 +198,9 @@ async function seed() {
 const { MONGODB_URI, MONGODB_URI2 } = process.env;
 
     // const {MO}
-    await mongoose.connect("mongodb://localhost:27017/afued_db");
+    // await mongoose.connect("mongodb://localhost:27017/afued_db");
+    await mongoose.connect("mongodb+srv://aloyebolu5_db_user:cqnNUCFSWJEAkP6M@cluster0.xvrubps.mongodb.net/?appName=Cluster0");
+
     console.log("Connected to DB");
 
     const courses = prepareData(rawCourses);
@@ -216,10 +218,10 @@ const { MONGODB_URI, MONGODB_URI2 } = process.env;
 async function deleteCoursesBeforeYesterday() {
   try {
     // await mongoose.connect("mongodb://127.0.0.1:27017/YOUR_DB_NAME");
-    await mongoose.connect("mongodb://localhost:27017/afued_db");
+    await mongoose.connect("mongodb+srv://aloyebolu5_db_user:cqnNUCFSWJEAkP6M@cluster0.xvrubps.mongodb.net/?appName=Cluster0");
 
     const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
+    yesterday.setDate(yesterday.getDate() - 0);
 
     const result = await courseModel.deleteMany({
       createdAt: { $lt: yesterday }
@@ -233,6 +235,5 @@ async function deleteCoursesBeforeYesterday() {
   }
 }
 
-deleteCoursesBeforeYesterday();
-
-// seed();
+// deleteCoursesBeforeYesterday();
+seed();
