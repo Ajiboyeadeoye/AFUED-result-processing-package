@@ -9,11 +9,14 @@ import fileUpload from "express-fileupload";
 import path from "path";
 
 import routes from "./routes/index.js"; // Ensure correct path if routes has index.js
-
+const allowedOrigins = [
+  "https://adeyemi-frontend-cslixwj57-breakthrough-s-projects.vercel.app",
+  "http://localhost:3000"
+];
 // create express app
 const app = express();
 
-app.use(cors({ origin: "*" }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
