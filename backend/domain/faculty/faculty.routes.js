@@ -4,7 +4,10 @@ import {
   getAllFaculties,
   getFacultyById,
   updateFaculty,
-  deleteFaculty
+  deleteFaculty,
+  assignDean,
+  removeDean,
+  getMyFaculty
 } from "./faculty.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
@@ -18,7 +21,9 @@ router.post(
 
 router.get("/", authenticate('admin'), getAllFaculties);
 
-router.get("/:facultyId", authenticate('admin'), getFacultyById);
+router.get("/my-faculty", authenticate(['dean']), getMyFaculty);
+router.get("/:facultyId", authenticate(['admin', 'dean']), getFacultyById);
+
 
 router.patch(
   "/:facultyId",
@@ -30,6 +35,24 @@ router.delete(
   "/:facultyId",
   authenticate('admin'),
   deleteFaculty
+);
+
+/**
+ * 👩‍🏫 Assign HOD to department
+ */ 
+router.patch(
+  "/:facultyId/assign-dean",
+  authenticate("admin"),
+  assignDean
+);
+
+/**
+ * 🧾 Remove HOD from department
+ */
+router.patch(
+  "/:facultyId/remove-dean",
+  authenticate(["admin"]),
+  removeDean
 );
 
 export default router;

@@ -10,6 +10,7 @@ const facultySchema = new mongoose.Schema({
       trim: true,
       uppercase: true, // optional: helps keep codes consistent (like "SCI", "ENG")
     },
+    dean: { type: mongoose.Schema.Types.ObjectId, ref: "Lecturer", default: null },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
 }, { timestamps: true });
 

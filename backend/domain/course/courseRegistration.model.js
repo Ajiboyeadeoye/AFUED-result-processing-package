@@ -13,7 +13,9 @@ const courseRegistrationSchema = new mongoose.Schema(
       enum: ["Pending", "Approved", "Rejected"],
       default: "Pending",
     },
+    attamptNumber: {type: Number, dafault: 1},
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    carryOverId: {type: mongoose.Schema.Types.ObjectId, ref: "carrOverSchema", default: null}  // This would be linked to a carryover document in case they are carrying the coursse over
   },
   { timestamps: true }
 );

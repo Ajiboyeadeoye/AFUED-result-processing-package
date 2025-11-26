@@ -131,7 +131,7 @@ const authenticateLecturer = async (data) => {
       _id: fetchedLecturer._id,
       staff_id: fetchedLecturer.staff_id,
       email: fetchedLecturer.email,
-      role: fetchedUser.role || "lecturerw",
+      role: fetchedUser.role || "lecturer",
     };
 
     console.log("Creating token with data:", tokenData);

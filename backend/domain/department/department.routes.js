@@ -1,5 +1,5 @@
 import express from "express";
-import { assignHOD, getAllDepartment, removeHOD } from "./department.controller.js";
+import { assignHOD, getAllDepartment, getDepartmentStats, removeHOD } from "./department.controller.js";
 
 
 import {
@@ -34,6 +34,12 @@ router.get(
   getAllDepartment
 );
 
+router.get(
+  "/stats",
+  authenticate(["admin", "dean"]),
+  getDepartmentStats
+);
+
 /**
  * 🔍 Get a single department by ID
  */
@@ -62,7 +68,7 @@ router.delete(
  */ 
 router.patch(
   "/:departmentId/assign-hod",
-  authenticate("admin"),
+  authenticate(["admin", "dean"]),
   assignHOD
 );
 
@@ -71,26 +77,26 @@ router.patch(
  */
 router.patch(
   "/:departmentId/remove-hod",
-  authenticate(["admin", "superuser", "facultyofficer"]),
+  authenticate(["admin", "superuser", "dean"]),
   removeHOD
 );
 
-/**
- * 👨‍🏫 Assign lecturer to department
- */
-router.patch(
-  "/:departmentId/assign-lecturer",
-  authenticate(["admin", "superuser", "facultyofficer", "hod"]),
-  assignLecturerToDepartment
-);
+// /**
+//  * 👨‍🏫 Assign lecturer to department
+//  */
+// router.patch(
+//   "/:departmentId/assign-lecturer",
+//   authenticate(["admin", "dean", "hod"]),
+//   assignLecturerToDepartment
+// );
 
-/**
- * 🚫 Remove lecturer from department
- */
-router.patch(
-  "/remove-lecturer",
-  authenticate(["admin", "superuser", "facultyofficer", "hod"]),
-  removeLecturerFromDepartment
-);
+// /**
+//  * 🚫 Remove lecturer from department
+//  */
+// router.patch(
+//   "/remove-lecturer",
+//   authenticate(["admin", "dean", "hod"]),
+//   removeLecturerFromDepartment
+// );
 
 export default router;

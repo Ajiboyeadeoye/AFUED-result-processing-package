@@ -1,94 +1,36 @@
-// import mongoose from "mongoose";
-
-// const semesterSchema = new mongoose.Schema(
-//   {
-//     name: {
-//       type: String,
-//       enum: ["First Semester", "Second Semester"],
-//       required: true,
-//     },
-//     session: {
-//       type: String,
-//       required: true,
-//       match: /^\d{4}\/\d{4}$/, // Example: 2025/2026
-//     },
-//     startDate: { type: Date, default: Date.now },
-//     endDate: { type: Date },
-//     isActive: { type: Boolean, default: false },
-//     isRegistrationOpen: { type: Boolean, default: false },
-//     isResultsPublished: { type: Boolean, default: false },
-//     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-//   },
-//   { timestamps: true }
-// );
-
-// // ✅ Ensure only one active semester exists at a time
-// semesterSchema.index(
-//   { isActive: 1 },
-//   { unique: true, partialFilterExpression: { isActive: true } }
-// );
-
-// const Semester = mongoose.model("Semester", semesterSchema);
-
-// export default Semester;
 import mongoose from "mongoose";
 
-const semesterSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      enum: ["First Semester", "Second Semester"],
-      required: true,
-    },
+const levelSettingsSchema = new mongoose.Schema({
+  level: { type: Number, required: true }, // 100, 200, 300, 400
+  minUnits: { type: Number, default: 12 },
+  maxUnits: { type: Number, default: 24 },
+  minCourses: { type: Number, default: 4 },
+  maxCourses: { type: Number, default: 6 },
+});
 
-    // Example: "2025/2026"
-    session: {
-      type: String,
-      required: true,
-      match: /^\d{4}\/\d{4}$/,
-    },
-
-    // Link to department (important for multi-department schools)
-    department: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Department",
-      required: true,
-    },
-
-    // Link to academic level (100, 200, 300, 400...)
-    level: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Level",
-      required: true,
-    },
-
-    startDate: { type: Date, default: Date.now },
-    endDate: { type: Date },
-
-    isActive: { type: Boolean, default: false },
-    isRegistrationOpen: { type: Boolean, default: false },
-    isResultsPublished: { type: Boolean, default: false },
-
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }
+const semesterSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    enum: ["first", "second", "summer"],
+    required: true,
   },
-  { timestamps: true }
-);
+  session: {
+    type: String,
+    required: true,
+    match: /^\d{4}\/\d{4}$/,
+  },
+  department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },
+  levelSettings: [levelSettingsSchema], // per level min/max units & courses
+  startDate: { type: Date, default: Date.now },
+  endDate: { type: Date },
+  isActive: { type: Boolean, default: false },
+  isRegistrationOpen: { type: Boolean, default: false },
+  isResultsPublished: { type: Boolean, default: false },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // usually super admin
+}, { timestamps: true });
 
-// -----------------------------------------------
-// 🔒 Ensure only ONE active semester per department
-// -----------------------------------------------
-semesterSchema.index(
-  { department: 1, isActive: 1 },
-  { unique: true, partialFilterExpression: { isActive: true } }
-);
-
-// -----------------------------------------------
-// 🔥 Useful Performance Indexes
-// -----------------------------------------------
-semesterSchema.index({ session: 1 });
-semesterSchema.index({ level: 1 });
-semesterSchema.index({ department: 1, session: 1 });
+// Only one active semester per department
+semesterSchema.index({ department: 1, isActive: 1 }, { unique: true, partialFilterExpression: { isActive: true } });
 
 const Semester = mongoose.model("Semester", semesterSchema);
-
 export default Semester;

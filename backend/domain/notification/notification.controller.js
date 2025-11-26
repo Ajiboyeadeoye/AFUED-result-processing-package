@@ -284,7 +284,7 @@ export const getTopUnread = async (req, res) => {
 
 
     // 3️⃣ Return notifications
-    res.status(200).json({ success: true, data: notifications });
+    // res.status(200).json({ success: true, data: notifications });
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Error fetching notifications" });

@@ -7,9 +7,10 @@ import {
   deleteLecturer,
   assignHOD,
   removeHOD,
+  getAllDeans,
+  getAllHODs,
 } from "./lecturer.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
-import { getAllHODs } from "../hod/hod.controller.js";
 
 const router = express.Router();
 
@@ -17,12 +18,13 @@ const router = express.Router();
 router.post("/", authenticate(["admin", "hod"]), createLecturer);
 router.get("/", authenticate(["admin", "hod"]), getAllLecturers);
 router.get("/hods", authenticate(["admin", "hod"]), getAllHODs);
+router.get("/deans", authenticate(["admin"]), getAllDeans);
 router.get("/:id", authenticate(["admin", "hod"]), getLecturerById);
 router.put("/:id", authenticate("admin"), updateLecturer);
 router.delete("/:id", authenticate("admin"), deleteLecturer);
 
-// 🧩 HOD ASSIGNMENT ROUTES (Admin / Faculty Officer)
-router.patch("/:departmentId/assign-hod/:lecturerId", authenticate("admin"), assignHOD);
-router.patch("/:departmentId/remove-hod/:lecturerId", authenticate("admin"), removeHOD);
+// // 🧩 HOD ASSIGNMENT ROUTES (Admin / Faculty Officer)
+// router.patch("/:departmentId/assign-hod/:lecturerId", authenticate("admin"), assignHOD);
+// router.patch("/:departmentId/remove-hod/:lecturerId", authenticate("admin"), removeHOD);
 
 export default router;

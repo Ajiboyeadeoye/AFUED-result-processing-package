@@ -8,6 +8,7 @@ import { dataMaps } from "../../config/dataMap.js";
 import departmentModel from "../department/department.model.js";
 import { deleteUser } from "../user/user.controller.js";
 import { hashData } from "../../utils/hashData.js";
+import lecturerModel from "./lecturer.model.js";
 
 /**
  * 🧑‍🏫 Create Lecturer (Admin only)
@@ -31,7 +32,7 @@ export const createLecturer = async (req, res) => {
 
     // 🧮 If it's a filter/search request
     if (fields || search_term || filters || page) {
-  
+
       const result = await fetchDataHelper(req, res, Lecturer, {
         configMap: dataMaps.Lecturer,
         autoPopulate: true,
@@ -121,18 +122,18 @@ export const getAllLecturers = async (req, res) => {
  */
 export const getLecturerById = async (req, res) => {
   try {
-  return fetchDataHelper(req, res, Lecturer, {
-    configMap: dataMaps.Lecturer,
-    autoPopulate: true,
-    models: { departmentModel, User },
-    populate: ["departmentId", "_id"],
-    additionalFilters: { _id: req.params.id },
+    return fetchDataHelper(req, res, Lecturer, {
+      configMap: dataMaps.Lecturer,
+      autoPopulate: true,
+      models: { departmentModel, User },
+      populate: ["departmentId", "_id"],
+      additionalFilters: { _id: req.params.id },
 
-  });
-  console.log("Fetched Lecturer:", lecturer);
+    });
+    console.log("Fetched Lecturer:", lecturer);
     // return buildResponse(res, 200, "Lecturer fetched successfully", lecturer);
   } catch (error) {
-    console.error("❌ getLecturerById Error:", error);  
+    console.error("❌ getLecturerById Error:", error);
     return buildResponse(res, 500, "Failed to fetch lecturer", null, true, error);
   }
 };
@@ -241,4 +242,28 @@ export const removeHOD = async (req, res) => {
     console.error("❌ removeHOD Error:", error);
     return buildResponse(res, 500, "Failed to remove HOD", null, true, error);
   }
+};
+export const getAllDeans = async (req, res) => {
+  return fetchDataHelper(req, res, lecturerModel, {
+    configMap: dataMaps.Lecturer,
+    autoPopulate: true,
+    // models: { departmentModel, User },
+    // populate: ["departmentId"],
+    custom_fields: {  email: '_id', department: "departmentId" },
+    additionalFilters: {
+      isDean: true
+    }
+  });
+};
+export const getAllHODs = async (req, res) => {
+  return fetchDataHelper(req, res, lecturerModel, {
+    configMap: dataMaps.Lecturer,
+    autoPopulate: true,
+    // models: { departmentModel, User },
+    // populate: ["departmentId"],
+    custom_fields: {  email: '_id', department: "departmentId" },
+    additionalFilters: {
+      isHOD: true
+    }
+  });
 };

@@ -570,7 +570,7 @@ const fetchData = async (payload, Model, options = {}) => {
 
     dataQuery = Model.aggregate(pipeline);
     logWithTime(`✅ Pipeline built with ${pipeline.length} stages`, pipelineBuildTime);
-    console.log('📊 Pipeline stages:', pipeline.map(stage => Object.keys(stage)[0]));
+    if(ENABLE_PERFORMANCE_LOG) console.log('📊 Pipeline stages:', pipeline.map(stage => Object.keys(stage)[0]));
     
   } else {
     const queryBuildStart = logWithTime(`🔧 Building find query`);
@@ -620,7 +620,7 @@ const fetchData = async (payload, Model, options = {}) => {
     const queryTime = logWithTime(`✅ Database query completed`, queryStart);
     
     // Log query performance
-    console.log(`📊 Query returned ${data?.length || 0} records in ${queryTime}ms`);
+    if(ENABLE_PERFORMANCE_LOG) console.log(`📊 Query returned ${data?.length || 0} records in ${queryTime}ms`);
     
   } catch (error) {
     logWithTime(`❌ Database query failed`, queryStart);
@@ -678,13 +678,16 @@ const fetchData = async (payload, Model, options = {}) => {
   const totalTime = logWithTime(`🎉 fetchData completed for ${Model.modelName}`, overallStart);
   
   // Performance summary
-  console.log(`\n📈 PERFORMANCE SUMMARY for ${Model.modelName}:`);
-  console.log(`   Total time: ${totalTime}ms`);
-  console.log(`   Records returned: ${data?.length || 0}`);
-  console.log(`   Pagination enabled: ${enablePagination}`);
-  console.log(`   Used aggregation: ${runPipeline}`);
-  console.log(`   Current page: ${currentPage}`);
-  console.log(`   Page size: ${itemsPerPage}\n`);
+  if(ENABLE_PERFORMANCE_LOG){
+
+    console.log(`\n📈 PERFORMANCE SUMMARY for ${Model.modelName}:`);
+    console.log(`   Total time: ${totalTime}ms`);
+    console.log(`   Records returned: ${data?.length || 0}`);
+    console.log(`   Pagination enabled: ${enablePagination}`);
+    console.log(`   Used aggregation: ${runPipeline}`);
+    console.log(`   Current page: ${currentPage}`);
+    console.log(`   Page size: ${itemsPerPage}\n`);
+  }
 
   return {
     data,

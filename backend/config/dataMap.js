@@ -7,6 +7,38 @@ export const dataMaps = {
       await models.Department.countDocuments({ faculty: doc._id }),
     // student_count: async (doc, models) =>
     //   await models.Student.countDocuments({ faculty: doc._id }),
+    dean_name: async (doc, models) => {
+      const lecturer = await models.Lecturer.findById(doc.dean);
+      if (lecturer) {
+        const user = await models.User.findById(lecturer._id);
+        return user ? user.name : null;
+      }
+      return null;
+    },
+    dean_id: "this.dean",
+    created_at: "this.createdAt",
+    updated_at: "this.updatedAt",
+    created_by: "this.createdBy",
+    created_by_name: async (doc, models) => {
+      const user = await models.User.findById(doc.createdBy);
+      return user ? user.name : null;
+    },
+    departments: async (doc, models) => {
+      const departments = await models.Department.find({ faculty: doc._id }).lean();
+      for (const dept of departments) {
+        if (dept.hod) {
+          const user = await models.User.findById(dept.hod);
+          dept.hod_name = user ? user.name : null;
+        } else {
+          dept.hod_name = null;
+        }
+      }
+      return departments;
+    },
+    total_lecturers: async (doc, models) =>
+      await models.Lecturer.countDocuments({ departmentId: { $in: await models.Department.find({ faculty: doc._id }).distinct("_id") } }),  
+    total_students: async (doc, models) =>
+      await models.Student.countDocuments({ departmentId: { $in: await models.Department.find({ faculty: doc._id }).distinct("_id") } }),
   },
   FacultyById: {
     _id: "this._id",
@@ -63,7 +95,7 @@ export const dataMaps = {
     hod_name: async (doc, models) => {
       const lecturer = await models.Lecturer.findById(doc.hod);
       if (lecturer) {
-        console.log("The lecur8e", lecturer);
+        // console.log("The lecur8e", lecturer);
         const user = await models.User.findById(lecturer._id);
         return user ? user.name : null;
       }
@@ -71,6 +103,32 @@ export const dataMaps = {
     },
   },
 
+  DepartmentStats: {
+    _id: "this._id",
+    name: "this.name",
+    code: "this.code",
+    faculty_id: "this.faculty._id",
+    faculty_name: "this.faculty.name",
+    hod_name: async (doc, models) => {
+      const lecturer = await models.Lecturer.findById(doc.hod);
+      if (lecturer) {
+        // console.log("The lecur8e", lecturer);
+        const user = await models.User.findById(lecturer._id);
+        return user ? user.name : null;
+      }
+      return null;
+    },
+    total_courses: async (doc, models) =>
+      await models.Course.countDocuments({ department: doc._id }),
+    total_lecturers: async (doc, models) =>
+      await models.Lecturer.countDocuments({ departmentId: doc._id }),
+    total_students: async (doc, models) =>
+      await models.Student.countDocuments({ departmentId: doc._id }),
+    active_semester: async (doc, models) => {
+      const activeSemester = await models.Semester.findOne({ isActive: true, departmentId: doc._id }).lean();
+      return activeSemester ? activeSemester.name : "N/A";
+    }
+  },
 
   Course: {
     _id: "this._id",
@@ -88,17 +146,17 @@ export const dataMaps = {
     department: "this.department.name",
     description: "this.description || this.borrowedId.description",
     outline: "this.outline",
-    borrowed_department: async (doc, models) =>{
-      if (doc.borrowedId !=null) {
-        const dep = await models.Department.findOne({_id: doc.borrowedId.department})
+    borrowed_department: async (doc, models) => {
+      if (doc.borrowedId != null) {
+        const dep = await models.Department.findOne({ _id: doc.borrowedId.department })
         // populate("")
         // console.log(dep, doc.borrowedId)
-        if(dep) return dep.name
-        
+        if (dep) return dep.name
+
       }
     },
-    borrowed: (doc) =>{
-      if (doc.borrowedId !=null) return true
+    borrowed: (doc) => {
+      if (doc.borrowedId != null) return true
     },
     lecturer: async (doc, models) => {
       const assignment = await models.CourseAssignment.findOne({ course: doc._id })
@@ -209,6 +267,9 @@ export const dataMaps = {
     department: "this.department.name",
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
+    n: (doc, models)=>{
+      console.log(doc)
+    }
   },
 
   LecturerCourses: {
@@ -301,11 +362,11 @@ export const dataMaps = {
     }
   },
   Notifications: {
-      title: "this.title",
-      message: "this.message",
-      type: "this.type",
-      is_read: "this.is_read",
-      created_at: "this.created_at"
+    title: "this.title",
+    message: "this.message",
+    type: "this.type",
+    is_read: "this.is_read",
+    created_at: "this.created_at"
   },
   Announcement: {
     _id: "this._id",

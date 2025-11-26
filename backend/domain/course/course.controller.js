@@ -118,26 +118,26 @@ export const getAllCourses = async (req, res) => {
     let result;
 
     // 🧠 If HOD, restrict to their department
-const isHod = req.user?.role === "hod";
-const department = isHod ? await departmentModel.findOne({ hod: req.user?._id }) : null;
+    const isHod = req.user?.role === "hod";
+    const department = isHod ? await departmentModel.findOne({ hod: req.user?._id }) : null;
 
-if (isHod && !department) {
-  return buildResponse(res, 404, "Department not found for HOD", null, true);
-}
+    if (isHod && !department) {
+      return buildResponse(res, 404, "Department not found for HOD", null, true);
+    }
 
-const fetchConfig = {
-  configMap: dataMaps.Course,
-  autoPopulate: true,
-  models: { departmentModel },
-  populate: ["department"],
-  ...(isHod && {
-    additionalFilters: { department: department._id },
-  }),
-  custom_feilds: { borrowed: "borrowedId" },
-  populate: ["department", "borrowedId"],
-};
+    const fetchConfig = {
+      configMap: dataMaps.Course,
+      autoPopulate: true,
+      models: { departmentModel },
+      populate: ["department"],
+      ...(isHod && {
+        additionalFilters: { department: department._id },
+      }),
+      custom_feilds: { borrowed: "borrowedId" },
+      populate: ["department", "borrowedId"],
+    };
 
-result = await fetchDataHelper(req, res, Course, fetchConfig);
+    result = await fetchDataHelper(req, res, Course, fetchConfig);
 
 
     // return buildResponse(res, 200, "All Courses fetched", result);
@@ -210,15 +210,7 @@ export const deleteCourse = async (req, res) => {
 
 export const assignCourse = async (req, res) => {
   try {
-    const { course, staffId: lecturers, department: frontendDept } = req.body;
-
-    // 🧠 Get current semester
-    const currentSemester = await Semester.findOne({ isActive: true });
-    if (!currentSemester) {
-      return buildResponse(res, 404, "No active semester found", null, true);
-    }
-
-    const { _id: semester, session } = currentSemester;
+    const { course, staffId: lecturer, department: borrowingDept } = req.body;
 
     // 🧩 Fetch course data
     const courseData = await Course.findById(course);
@@ -226,60 +218,79 @@ export const assignCourse = async (req, res) => {
       return buildResponse(res, 404, "Course not found", null, true);
     }
 
-    let departmentId = frontendDept; // DEFAULT → the department making assignment
+    // 🔍 Determine if this is a borrowed course
+    let originalCourse = courseData;
+    let isBorrowed = false;
 
-    // 🧩 If this is a normal course, override department with owning dept
-    if (!courseData.borrowedId) {
-      departmentId = courseData.department;
+    if (courseData.borrowedId) {
+      isBorrowed = true;
+      originalCourse = await Course.findById(courseData.borrowedId);
+      if (!originalCourse) {
+        return buildResponse(res, 404, "Original course not found", null, true);
+      }
     }
 
-    // 🧱 If HOD, restrict to their department
-    if (req.user?.role === "hod") {
-      const department = await departmentModel.findOne({ hod: req.user?._id });
+    // 🧱 Determine which department the assignment should be linked to
+    // Borrowed → borrowingDept, Normal → course's department
+    let assignmentDeptId = isBorrowed ? borrowingDept : courseData.department;
 
-      if (!department) {
+    if (!assignmentDeptId) {
+      return buildResponse(res, 400, "Department is required for assignment", null, true);
+    }
+
+    // 🏛 HOD restriction: only HOD of original department can assign
+    if (req.user?.role === "hod") {
+      const hodDept = await departmentModel.findOne({ hod: req.user._id });
+      if (!hodDept) {
         return buildResponse(res, 404, "Department not found for HOD", null, true);
       }
 
-      // HOD must be allowed only inside their own department
-      if (department._id.toString() !== departmentId.toString()) {
+      if (originalCourse.department.toString() !== hodDept._id.toString()) {
         return buildResponse(
           res,
           403,
-          "You cannot assign a course outside your department",
+          isBorrowed
+            ? "Only HOD of the original department can assign borrowed courses"
+            : "You cannot assign a course outside your department",
           null,
           true
         );
       }
-
-      departmentId = department._id; // force to their actual dept
     }
 
-    // 🔁 Prevent duplicate assignment per dept + semester + session
+    // 🧠 Fetch active semester for the assignment department
+    const currentSemester = await Semester.findOne({ department: assignmentDeptId, isActive: true });
+    if (!currentSemester) {
+      return buildResponse(res, 404, "No active semester found for this department", null, true);
+    }
+
+    const { _id: semester, session } = currentSemester;
+
+    // 🔁 Prevent duplicate assignment per course + semester + session + department
     const existing = await CourseAssignment.findOne({
       course,
       semester,
       session,
-      department: departmentId,
+      department: assignmentDeptId,
     });
 
     if (existing) {
       return buildResponse(res, 400, "Course already assigned for this session", null, true);
     }
 
-    // 🪄 Create new assignment
-    const newAssign = new CourseAssignment({
+    // 🪄 Create the assignment
+    const newAssignment = new CourseAssignment({
       course,
-      lecturer: lecturers,
+      lecturer,
       semester,
       session,
-      department: departmentId,
+      department: assignmentDeptId,
       assignedBy: req.user?._id,
     });
 
-    await newAssign.save();
+    await newAssignment.save();
 
-    return buildResponse(res, 201, "Course assigned successfully", newAssign);
+    return buildResponse(res, 201, "Course assigned successfully", newAssignment);
 
   } catch (error) {
     console.error("❌ assignCourse error:", error);
@@ -331,29 +342,123 @@ export const updateAssignmentStatus = async (req, res) => {
 
 export const registerCourses = async (req, res) => {
   try {
-    const { student, courses, semester, session, level } = req.body;
+    const { student, courses: selectedCourseIds, level, department } = req.body;
 
-    const exists = await CourseRegistration.findOne({ student, semester, session });
-    if (exists)
-      return res
-        .status(400)
-        .json(buildResponse(false, "Already registered for this semester"));
+    // 1️⃣ Determine active semester for this student
+    let semesterQuery = { isActive: true };
+    if (req.user?.role === "admin") {
+      if (!department) return buildResponse(res, 400, "Department is required", null, true);
+      semesterQuery.department = department;
+    } else if (req.user?.role === "hod") {
+      const dept = await departmentModel.findOne({ hod: req.user._id });
+      if (!dept) return buildResponse(res, 404, "Department not found for HOD", null, true);
+      semesterQuery.department = dept._id;
+    }
 
-    const totalUnits = await calculateTotalUnits(courses);
+    const currentSemester = await Semester.findOne(semesterQuery).lean();
+    if (!currentSemester) return buildResponse(res, 404, "No active semester found", null, true);
+
+    const { _id: semesterId, session, levelSettings } = currentSemester;
+
+    // 2️⃣ Check if student already registered
+    const existingReg = await CourseRegistration.findOne({ student, semester: semesterId, session });
+    if (existingReg) return buildResponse(res, 400, "Student already registered for this semester");
+
+    // 3️⃣ Get level-specific semester settings
+    const settings = levelSettings.find(l => l.level === level);
+    if (!settings) return buildResponse(res, 400, `Semester settings not found for level ${level}`);
+
+    const { minUnits, maxUnits, minCourses, maxCourses } = settings;
+
+    // 4️⃣ Fetch course details
+    const courses = await Course.find({ _id: { $in: selectedCourseIds } }).lean();
+
+    if (courses.length !== selectedCourseIds.length) {
+      return buildResponse(res, 400, "Some selected courses do not exist");
+    }
+
+    // 5️⃣ Validate total units
+    const totalUnits = courses.reduce((sum, c) => sum + c.unit, 0);
+    if (totalUnits < minUnits || totalUnits > maxUnits) {
+      return buildResponse(res, 400, `Total units must be between ${minUnits} and ${maxUnits}`);
+    }
+
+    // 6️⃣ Validate number of courses
+    if (courses.length < minCourses || courses.length > maxCourses) {
+      return buildResponse(res, 400, `Number of courses must be between ${minCourses} and ${maxCourses}`);
+    }
+
+    // 7️⃣ Check mandatory core courses for this level (from assignment)
+    const coreAssignments = await CourseAssignment.find({
+      semester: semesterId,
+      session,
+      department: semesterQuery.department,
+      course: { $in: await Course.find({ level, type: "core" }).distinct("_id") }
+    });
+
+    const coreCourseIds = coreAssignments.map(a => a.course.toString());
+    const selectedCourseStrIds = selectedCourseIds.map(id => id.toString());
+    const missingCoreCourses = coreCourseIds.filter(c => !selectedCourseStrIds.includes(c));
+
+    if (missingCoreCourses.length > 0) {
+      return buildResponse(res, 400, "All core courses for this level must be registered", missingCoreCourses);
+    }
+
+    // 8️⃣ Check prerequisites
+    for (const course of courses) {
+      if (!course.prerequisites || course.prerequisites.length === 0) continue;
+
+      const passedCourses = await CourseRegistration.find({
+        student,
+        courses: { $in: course.prerequisites },
+        status: "Approved"
+      }).distinct("courses");
+
+      const failedPrereqs = course.prerequisites.filter(p => !passedCourses.includes(p.toString()));
+      if (failedPrereqs.length > 0) {
+        return buildResponse(res, 400, `Prerequisites not met for ${course.title}`, failedPrereqs);
+      }
+    }
+
+    // 9️⃣ Check carryovers (must include previous failed courses)
+    const failedCarryovers = await CarryoverCourse.find({
+      student,
+      cleared: false
+    }).lean();
+
+    for (const carry of failedCarryovers) {
+      if (!selectedCourseStrIds.includes(carry.course.toString())) {
+        return buildResponse(res, 400, `Carryover course ${carry.course} must be registered`);
+      }
+    }
+
+    // 1️⃣0️⃣ Create registration with attemptNumber
+    const attemptNumbers = await CourseRegistration.find({
+      student,
+      "courses": { $in: selectedCourseIds }
+    }).sort({ createdAt: -1 });
+
+    let attemptNumber = 1;
+    if (attemptNumbers.length > 0) {
+      attemptNumber = attemptNumbers.length + 1;
+    }
 
     const newReg = new CourseRegistration({
       student,
-      courses,
-      semester,
+      courses: selectedCourseIds,
+      semester: semesterId,
       session,
       level,
       totalUnits,
+      attamptNumber: attemptNumber
     });
 
     await newReg.save();
-    res.status(201).json(buildResponse(true, "Courses registered successfully", newReg));
+
+    res.status(201).json(buildResponse(res, 201, "Courses registered successfully", newReg));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    console.error(err);
+    res.status(500).json(buildResponse(res, 500, "Course registration failed", null, true, err));
   }
 };
 

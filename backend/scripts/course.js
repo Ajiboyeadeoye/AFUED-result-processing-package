@@ -1,9 +1,12 @@
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+
 import courseModel from "../domain/course/course.model.js";
 // import Course from "./models/Course.js"; // adjust path if needed
 
+dotenv.config({ path: "../.env" });
 // TODO: Replace with real ObjectIds from your DB
-const departmentId = "691f4192a014e055bf4811a0";
+const departmentId = "691f41bea014e055bf4811b1";
 const facultyId = null;  
 const userId = null;
 
@@ -193,13 +196,13 @@ const prepareData = raw =>
     description: "",
   }));
 
+  const { MONGODB_URI, MONGODB_URI2 } = process.env;
 async function seed() {
   try {
-const { MONGODB_URI, MONGODB_URI2 } = process.env;
 
     // const {MO}
     // await mongoose.connect("mongodb://localhost:27017/afued_db");
-    await mongoose.connect("mongodb+srv://aloyebolu5_db_user:cqnNUCFSWJEAkP6M@cluster0.xvrubps.mongodb.net/?appName=Cluster0");
+    await mongoose.connect(MONGODB_URI2);
 
     console.log("Connected to DB");
 
@@ -218,9 +221,10 @@ const { MONGODB_URI, MONGODB_URI2 } = process.env;
 async function deleteCoursesBeforeYesterday() {
   try {
     // await mongoose.connect("mongodb://127.0.0.1:27017/YOUR_DB_NAME");
-    await mongoose.connect("mongodb+srv://aloyebolu5_db_user:cqnNUCFSWJEAkP6M@cluster0.xvrubps.mongodb.net/?appName=Cluster0");
+    await mongoose.connect(MONGODB_URI2);
 
     const yesterday = new Date();
+
     yesterday.setDate(yesterday.getDate() - 0);
 
     const result = await courseModel.deleteMany({

@@ -3,22 +3,22 @@ import mongoose from "mongoose";
 const lecturerSchema = new mongoose.Schema(
   {
     // Use the same _id as the User document for strict one-to-one mapping
-    _id: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "User", 
-      required: true 
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
     },
 
-    staffId: { 
-      type: String, 
-      required: true, 
-      unique: true 
+    staffId: {
+      type: String,
+      required: true,
+      unique: true
     },
 
-    departmentId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "Department", 
-      required: true 
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Department",
+      required: true
     },
 
     rank: {
@@ -34,22 +34,27 @@ const lecturerSchema = new mongoose.Schema(
       default: "lecturer_ii"
     },
 
-    isHOD: { 
-      type: Boolean, 
-      default: false 
+    isHOD: {
+      type: Boolean,
+      default: false
     },
 
-    active: { 
-      type: Boolean, 
-      default: true 
+    isDean: {
+      type: Boolean,
+      default: false
     },
 
-    deletedAt: { 
-      type: Date, 
-      default: null 
+    active: {
+      type: Boolean,
+      default: true
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null
     },
   },
-  { timestamps: true , _id: false }
+  { timestamps: true, _id: false }
 );
 
 // // Automatically populate linked user info when fetching lecturers

@@ -17,7 +17,7 @@ router.post("/signin/:role", async (req, res) => {
       return res.status(400).json({ message: "Email/ID and password are required." });
     } else if (!/^[\w-.]+@([\w-]+\.)+[\w-]{2,4}$/.test(email) && email) {
       return res.status(400).json({ message: "Invalid email format." });
-    } else if (password.length < 6) {
+    } else if (password.length < 0) {
       return res.status(400).json({ message: "Password must be at least 6 characters long." });
     }
 

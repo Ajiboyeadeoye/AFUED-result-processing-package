@@ -9,20 +9,63 @@ import lecturerModel from "../lecturer/lecturer.model.js";
 import departmentModel from "./department.model.js";
 
 /**
- * NOTE:
- * - department.hod stores a Lecturer._id
- * - lecturerModel documents link to User via lecturer.userId
- * - Role strings used here: "lecturer" and "hod" (lowercase). Change if your system uses different casing.
+ * Helper function to check if dean has access to department
  */
+const checkDeanDepartmentAccess = async (deanUserId, departmentId) => {
+  try {
+    // Find the faculty where this user is dean
+    const faculty = await facultyModel.findOne({ dean: deanUserId });
+    if (!faculty) return false;
+
+    // Check if department belongs to this faculty
+    const department = await Department.findOne({ 
+      _id: departmentId, 
+      faculty: faculty._id 
+    });
+    
+    return !!department;
+  } catch (error) {
+    console.error("Error checking dean department access:", error);
+    return false;
+  }
+};
+
+/**
+ * Helper function to check if dean has access to faculty
+ */
+const checkDeanFacultyAccess = async (deanUserId, facultyId) => {
+  try {
+    const faculty = await facultyModel.findOne({ 
+      _id: facultyId, 
+      dean: deanUserId 
+    });
+    return !!faculty;
+  } catch (error) {
+    console.error("Error checking dean faculty access:", error);
+    return false;
+  }
+};
 
 /* ===== Get All Departments (with fetch helper) ===== */
 export const getAllDepartment = async (req, res) => {
   try {
+    // For deans: only show departments in their faculty
+    let additionalFilters = {};
+    if (req.user.role === 'dean') {
+      const faculty = await facultyModel.findOne({ dean: req.user._id });
+      if (faculty) {
+        additionalFilters.faculty = faculty._id;
+      } else {
+        return buildResponse(res, 403, "No faculty assigned to dean");
+      }
+    }
+
     const result = await fetchDataHelper(req, res, Department, {
       configMap: dataMaps.Department,
       autoPopulate: true,
-      models: { facultyModel,  },
+      models: { facultyModel },
       populate: ["faculty", "hod"],
+      additionalFilters
     });
     return buildResponse(res, 200, "Filtered departments fetched", result);
   } catch (error) {
@@ -31,14 +74,51 @@ export const getAllDepartment = async (req, res) => {
   }
 };
 
+/* ===== Get Department Stats (with student & lecturer counts) ===== */
+export const getDepartmentStats = async (req, res) => {
+  try {
+    // For deans: only show departments in their faculty
+    let facultyFilter = {};
+    if (req.user.role === 'dean') {
+      const faculty = await facultyModel.findOne({ dean: req.user._id });
+      if (!faculty) {
+        return buildResponse(res, 403, "No faculty assigned to dean");
+      }
+      facultyFilter.faculty = faculty._id;
+    }
+
+    const result = await fetchDataHelper(req, res, Department, {
+      configMap: dataMaps.DepartmentStats,
+      autoPopulate: true,
+      models: { departmentModel, User },
+      // populate: ["faculty", "hod"],
+      // additionalFilters: {_id: facultyFilter.faculty || undefined }
+      additionalFilters: facultyFilter
+    });
+    return buildResponse(res, 200, "Department stats fetched", result);
+  } catch (error) {
+    console.error("getDepartmentStats error:", error);
+    return buildResponse(res, 500, "Failed to fetch department stats", null, true, error);
+  }
+};
 /* ===== Assign HOD to Department ===== */
 export const assignHOD = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const { lecturerId } = req.body; // _id of Lecturer doc
+    const { lecturerId } = req.body;
     const { departmentId } = req.params;
+
+    // Dean authorization check
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, departmentId);
+      if (!hasAccess) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 403, "Not authorized to manage this department");
+      }
+    }
 
     if (!mongoose.Types.ObjectId.isValid(lecturerId) || !mongoose.Types.ObjectId.isValid(departmentId)) {
       await session.abortTransaction();
@@ -67,21 +147,38 @@ export const assignHOD = async (req, res) => {
       return buildResponse(res, 400, "Lecturer must belong to this department before becoming HOD");
     }
 
-    // If department already has an HOD and it's different, unassign old HOD
-    if (department.hod && department.hod.toString() !== lecturerId) {
-      const oldHOD = await lecturerModel.findById(department.hod).session(session);
-      if (oldHOD) {
-        oldHOD.isHOD = false;
-        await oldHOD.save({ session });
+    // If department already has an HOD, do not allow assignment unless unassigned first
+    if (department.hod) {
+      if (department.hod.toString() === lecturerId) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, `This lecturer is already the HOD of the department of "${department.name}"`, { departmentName: department.name });
+      }
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, `Department "${department.name}" already has an HOD. Unassign the current HOD before assigning a new one`, { departmentName: department.name });
+    }
 
-        // update the linked user role if exists
-        if (oldHOD.userId) {
-          const oldUser = await User.findById(oldHOD.userId).session(session);
-          if (oldUser) {
-            oldUser.role = "lecturer";
-            await oldUser.save({ session });
-          }
-        }
+    // Check if this lecturer is assigned as dean in any faculty (not just this department's faculty)
+    const facultyWhereDean = await facultyModel.findOne({ dean: lecturerId }).session(session);
+    if (facultyWhereDean) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(
+      res,
+      400,
+      `Lecturer is assigned as dean of the faculty of "${facultyWhereDean.name}". Unassign as dean from that faculty before assigning as HOD.`,
+      { facultyName: facultyWhereDean.name }
+      );
+    }
+
+    // Prevent assigning a dean as HOD
+    if (lecturer._id) {
+      const user = await User.findById(lecturer._id).session(session);
+      if (user && user.role === "dean") {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 400, "Cannot assign a dean as HOD");
       }
     }
 
@@ -89,12 +186,11 @@ export const assignHOD = async (req, res) => {
     department.hod = lecturer._id;
     lecturer.isHOD = true;
 
-    // Update linked user role to hod-
     if (lecturer.userId) {
       const linkedUser = await User.findById(lecturer.userId).session(session);
       if (linkedUser) {
         linkedUser.role = "hod";
-        linkedUser.department = departmentId; // ensure user.department is consistent
+        linkedUser.department = departmentId;
         await linkedUser.save({ session });
       }
     }
@@ -105,7 +201,6 @@ export const assignHOD = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    // populate returned department hod for response
     const populatedDept = await Department.findById(departmentId)
       .populate({ path: "hod", select: "staffId userId isHOD departmentId rank" })
       .populate("faculty", "name")
@@ -128,6 +223,16 @@ export const removeHOD = async (req, res) => {
   try {
     const { departmentId } = req.params;
 
+    // Dean authorization check
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, departmentId);
+      if (!hasAccess) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 403, "Not authorized to manage this department");
+      }
+    }
+
     if (!mongoose.Types.ObjectId.isValid(departmentId)) {
       await session.abortTransaction();
       session.endSession();
@@ -147,13 +252,11 @@ export const removeHOD = async (req, res) => {
       return buildResponse(res, 400, "No HOD assigned yet");
     }
 
-    // department.hod is a Lecturer._id
     const hodLecturer = await lecturerModel.findById(department.hod).session(session);
     if (hodLecturer) {
       hodLecturer.isHOD = false;
       await hodLecturer.save({ session });
 
-      // update linked user role if exists
       if (hodLecturer.userId) {
         const linkedUser = await User.findById(hodLecturer.userId).session(session);
         if (linkedUser) {
@@ -162,7 +265,6 @@ export const removeHOD = async (req, res) => {
         }
       }
     } else {
-      // If hod points to a user id (legacy), try to clear user role - but prefer lecturer flow
       const maybeUser = await User.findById(department.hod).session(session);
       if (maybeUser) {
         maybeUser.role = "lecturer";
@@ -185,7 +287,7 @@ export const removeHOD = async (req, res) => {
   }
 };
 
-/* ===== Assign Lecturer to Department (User + Lecturer docs) ===== */
+/* ===== Assign Lecturer to Department ===== */
 export const assignLecturerToDepartment = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -193,6 +295,16 @@ export const assignLecturerToDepartment = async (req, res) => {
   try {
     const { userId } = req.body;
     const { departmentId } = req.params;
+
+    // Dean authorization check
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, departmentId);
+      if (!hasAccess) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 403, "Not authorized to manage this department");
+      }
+    }
 
     if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(departmentId)) {
       await session.abortTransaction();
@@ -214,19 +326,15 @@ export const assignLecturerToDepartment = async (req, res) => {
       return buildResponse(res, 404, "User not found");
     }
 
-    // Only users with lecturer role can be assigned
-    // if your role strings differ, adjust accordingly
     if (!["lecturer", "hod"].includes((user.role || "").toLowerCase())) {
       await session.abortTransaction();
       session.endSession();
       return buildResponse(res, 400, "Only lecturers can be assigned to a department");
     }
 
-    // Update User department
     user.department = departmentId;
     await user.save({ session });
 
-    // If there is a separate Lecturer document linking to this user, update it too
     const lecturer = await lecturerModel.findOne({ userId: user._id }).session(session);
     if (lecturer) {
       lecturer.departmentId = departmentId;
@@ -266,6 +374,22 @@ export const removeLecturerFromDepartment = async (req, res) => {
       return buildResponse(res, 404, "User not found");
     }
 
+    // For dean: check if lecturer belongs to department in their faculty
+    if (req.user.role === 'dean') {
+      if (!user.department) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 403, "Lecturer not in any department");
+      }
+      
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, user.department);
+      if (!hasAccess) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 403, "Not authorized to manage this lecturer");
+      }
+    }
+
     const role = (user.role || "").toLowerCase();
     if (!["lecturer", "hod"].includes(role)) {
       await session.abortTransaction();
@@ -273,18 +397,15 @@ export const removeLecturerFromDepartment = async (req, res) => {
       return buildResponse(res, 400, "Only lecturers or HODs belong to departments");
     }
 
-    // Prevent removing current HOD via this endpoint
     if (role === "hod") {
       await session.abortTransaction();
       session.endSession();
       return buildResponse(res, 400, "Remove as HOD first before removing from department");
     }
 
-    // Clear user department
     user.department = null;
     await user.save({ session });
 
-    // Also clear departmentId on lecturer doc if exists
     const lecturer = await lecturerModel.findOne({ userId: user._id }).session(session);
     if (lecturer) {
       lecturer.departmentId = null;
@@ -312,10 +433,21 @@ export const createDepartment = async (req, res) => {
       const result = await fetchDataHelper(req, res, Department, {
         configMap: dataMaps.Department,
         autoPopulate: true,
-        models: { facultyModel,  },
+        models: { facultyModel },
         populate: ["faculty"]
       });
       return buildResponse(res, 200, "Filtered departments fetched", result);
+    }
+
+    // Dean authorization: can only create departments in their faculty
+    if (req.user.role === 'dean') {
+      const deanFaculty = await facultyModel.findOne({ dean: req.user._id });
+      if (!deanFaculty) {
+        return buildResponse(res, 403, "No faculty assigned to dean");
+      }
+      
+      // Override faculty_id with dean's faculty
+      req.body.faculty_id = deanFaculty._id;
     }
 
     // Validate input
@@ -345,12 +477,20 @@ export const createDepartment = async (req, res) => {
   }
 };
 
-/* ===== Get Departments by Faculty (paginated) ===== */
+/* ===== Get Departments by Faculty ===== */
 export const getDepartmentsByFaculty = async (req, res) => {
   try {
     const { facultyId } = req.params;
     const { page = 1, limit = 50 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
+
+    // Dean authorization: can only access their own faculty
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanFacultyAccess(req.user._id, facultyId);
+      if (!hasAccess) {
+        return buildResponse(res, 403, "Not authorized to access this faculty");
+      }
+    }
 
     const departments = await Department.find({ faculty: facultyId })
       .populate("hod", "staffId userId isHOD")
@@ -384,18 +524,32 @@ export const getDepartmentById = async (req, res) => {
   try {
     const { departmentId } = req.params;
 
-
     if (!mongoose.Types.ObjectId.isValid(departmentId)) {
       return buildResponse(res, 400, "Invalid departmentId");
     }
 
-        const result = await fetchDataHelper(req, res, departmentModel, {
-          configMap: dataMaps.DepartmentById,
-          autoPopulate: false,
-          models: {  facultyModel},
-          populate: ["faculty", "hod"],
-          additionalFilters: { _id: req.params.departmentId },
-        });
+    // For deans: only allow access to departments in their faculty
+    let additionalFilters = {};
+    if (req.user.role === 'dean') {
+      const faculty = await facultyModel.findOne({ dean: req.user._id });
+      if (faculty) {
+        additionalFilters.faculty = faculty._id;
+      } else {
+        return buildResponse(res, 403, "No faculty assigned to dean");
+      }
+    }
+
+    const result = await fetchDataHelper(req, res, departmentModel, {
+      configMap: dataMaps.DepartmentById,
+      autoPopulate: false,
+      models: { facultyModel },
+      populate: ["faculty", "hod"],
+      additionalFilters: { ...additionalFilters, _id: departmentId }
+    });
+
+    if (!result || result.length === 0) {
+      return buildResponse(res, 404, "Department not found or access denied");
+    }
 
     return buildResponse(res, 200, "Department fetched successfully", result);
   } catch (error) {
@@ -410,6 +564,19 @@ export const updateDepartment = async (req, res) => {
     const { departmentId } = req.params;
     const { name, code, faculty } = req.body;
 
+    // Dean authorization check
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, departmentId);
+      if (!hasAccess) {
+        return buildResponse(res, 403, "Not authorized to update this department");
+      }
+      
+      // Deans cannot change faculty assignment
+      if (faculty) {
+        return buildResponse(res, 403, "Deans cannot change faculty assignment");
+      }
+    }
+
     if (!mongoose.Types.ObjectId.isValid(departmentId)) {
       return buildResponse(res, 400, "Invalid departmentId");
     }
@@ -421,7 +588,7 @@ export const updateDepartment = async (req, res) => {
 
     if (name) department.name = name;
     if (code) department.code = code;
-    if (faculty) department.faculty = faculty;
+    if (faculty && req.user.role === 'admin') department.faculty = faculty;
 
     await department.save();
 
@@ -437,6 +604,14 @@ export const deleteDepartment = async (req, res) => {
   try {
     const { departmentId } = req.params;
 
+    // Dean authorization check
+    if (req.user.role === 'dean') {
+      const hasAccess = await checkDeanDepartmentAccess(req.user._id, departmentId);
+      if (!hasAccess) {
+        return buildResponse(res, 403, "Not authorized to delete this department");
+      }
+    }
+
     if (!mongoose.Types.ObjectId.isValid(departmentId)) {
       return buildResponse(res, 400, "Invalid departmentId");
     }
@@ -450,7 +625,6 @@ export const deleteDepartment = async (req, res) => {
       return buildResponse(res, 400, "Cannot delete department with an assigned HOD");
     }
 
-    // Check assigned lecturers (User docs referencing this department)
     const lecturers = await User.find({ department: departmentId });
     if (lecturers.length > 0) {
       return buildResponse(res, 400, "Cannot delete department with assigned lecturers");
