@@ -186,8 +186,8 @@ export const assignHOD = async (req, res) => {
     department.hod = lecturer._id;
     lecturer.isHOD = true;
 
-    if (lecturer.userId) {
-      const linkedUser = await User.findById(lecturer.userId).session(session);
+    if (lecturer._id) {
+      const linkedUser = await User.findById(lecturer._id).session(session);
       if (linkedUser) {
         linkedUser.role = "hod";
         linkedUser.department = departmentId;
@@ -257,8 +257,8 @@ export const removeHOD = async (req, res) => {
       hodLecturer.isHOD = false;
       await hodLecturer.save({ session });
 
-      if (hodLecturer.userId) {
-        const linkedUser = await User.findById(hodLecturer.userId).session(session);
+      if (hodLecturer._id) {
+        const linkedUser = await User.findById(hodLecturer._id).session(session);
         if (linkedUser) {
           linkedUser.role = "lecturer";
           await linkedUser.save({ session });

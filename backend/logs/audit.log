@@ -41,3 +41,11 @@
 [2025-11-25T18:10:03.541Z] [dean] 68f9edd7f6606ce32d8de004 - Forbidden: dean tried to access restricted route at /afued/result/portal/department (GET) - failure
 [2025-11-25T18:11:43.622Z] [dean] 68f9edd7f6606ce32d8de004 - Forbidden: dean tried to access restricted route at /afued/result/portal/department (GET) - failure
 [2025-11-25T18:11:43.719Z] [dean] 68f9edd7f6606ce32d8de004 - Forbidden: dean tried to access restricted route at /afued/result/portal/department (GET) - failure
+[2025-11-26T10:52:18.969Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-11-26T10:52:18.982Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-11-26T10:52:19.020Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-11-26T10:52:19.030Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-11-26T10:54:26.942Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-11-26T10:54:26.956Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-11-26T10:54:26.964Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-11-26T10:54:26.971Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
