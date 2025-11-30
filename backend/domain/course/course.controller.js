@@ -20,6 +20,7 @@ import fetchDataHelper from "../../utils/fetchDataHelper.js";
 import courseAssignmentModel from "./courseAssignment.model.js";
 import lecturerModel from "../lecturer/lecturer.model.js";
 import courseModel from "./course.model.js";
+import studentModel from "../student/student.model.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -226,6 +227,7 @@ export const assignCourse = async (req, res) => {
       isBorrowed = true;
       originalCourse = await Course.findById(courseData.borrowedId);
       if (!originalCourse) {
+        console.log(28932873293)
         return buildResponse(res, 404, "Original course not found", null, true);
       }
     }
@@ -261,6 +263,7 @@ export const assignCourse = async (req, res) => {
     // 🧠 Fetch active semester for the assignment department
     const currentSemester = await Semester.findOne({ department: assignmentDeptId, isActive: true });
     if (!currentSemester) {
+      console.log("No active semseter")
       return buildResponse(res, 404, "No active semester found for this department", null, true);
     }
 
@@ -666,6 +669,49 @@ export const bulkRegisterCourses = async (req, res) => {
     res.status(500).json(buildResponse(false, err.message));
   }
 };
+
+export const getRegisterableCourses = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const studentDepartment = await studentModel.findById(studentId).lean()
+
+    const semester = await Semester.findOne({ department: String(studentDepartment.departmentId), isActive: true }).lean()
+    // console.log(studentId, semesterId, studentDepartment._id)
+    if (!studentId || !semester) {
+      return buildResponse.error(res, "studentId and semesterId are required")
+    }
+
+    // Fetch student details
+    const student = await studentModel.findById(studentId).lean();
+    if (!student) {
+      return buildResponse.error(res, "Student not found")
+    }
+
+    // Fetch semester details
+    // const semester = await Semester.findById(semesterId).lean();
+    if (!semester) {
+      return buildResponse.error(res, "Semester not found")
+    }
+
+    // Fetch assigned courses for student's department and level
+    let assignments = await Course.find({
+      department: student.departmentId,
+      semester: semester.name,
+      level: student.level,
+    }).lean().populate("department")
+assignments = assignments.map(course => ({
+  ...course,
+  department: String(course.department?.name || "")
+}));
+
+const registerableCourses = assignments;
+console.log(registerableCourses)
+return buildResponse.success(res, "Registerable courses fetched", registerableCourses)
+  } catch (err) {
+    console.log(err)
+    return buildResponse.error(res, err.message)
+  }
+}
 
 // =========================================================
 // 🧹 CLEANUP & SAFETY UTILITIES

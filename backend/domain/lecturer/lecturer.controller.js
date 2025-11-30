@@ -79,8 +79,8 @@ export const createLecturer = async (req, res) => {
       });
 
       // ✅ 6. Return lecturer info (without password)
-      await getLecturerById({ params: { id: lecturer._id } }, res);
-      // or: return buildResponse(res, 201, "Lecturer created successfully", lecturer);
+      // const lectawait getLecturerById({ params: { id: lecturer._id } }, res);
+      return buildResponse(res, 201, "Lecturer created successfully", lecturer);
 
     } catch (lecturerError) {
       // 🧹 Rollback user creation if lecturer creation fails

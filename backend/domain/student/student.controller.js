@@ -6,6 +6,7 @@ import User from "../user/user.model.js";
 import departmentModel from "../department/department.model.js";
 import { hashData } from "../../utils/hashData.js";
 import { dataMaps } from "../../config/dataMap.js";
+import studentModel from "./student.model.js";
 
 
 /**
@@ -15,15 +16,16 @@ import { dataMaps } from "../../config/dataMap.js";
  */
 export const getMyProfile = async (req, res) => {
   try {
-    const student = await Student.findOne({ userId: req.user.id })
-      .populate("userId", "name email role")
-      .populate("departmentId", "name code")
-      .populate("facultyId", "name code")
-      .populate("courses", "title code unit");
+    // const s
+        return fetchDataHelper(req, res, studentModel, {
+          configMap: dataMaps.Student,
+          autoPopulate: true,
+          models: { departmentModel, User, Semester },
+          populate: ["departmentId", "_id"],
+          additionalFilters: { _id: req.user._id },
+    
+        });
 
-    if (!student) return buildResponse(res, 404, "Student profile not found");
-
-    return buildResponse(res, 200, "Student profile fetched successfully", student);
   } catch (error) {
     console.error("❌ getMyProfile Error:", error);
     return buildResponse(res, 500, "Error fetching student profile", null, true, error);
@@ -257,6 +259,23 @@ export const getStudentById = async (req, res) => {
     return buildResponse(res, 200, "Student fetched successfully", student);
   } catch (error) {
     return buildResponse(res, 500, "Failed to fetch student", null, true, error);
+  }
+};
+
+export const myProfile = async (req, res) => {
+  try {
+    const student = await Student.findOne({ userId: req.user._id })
+      .populate("userId", "name email role")
+      .populate("departmentId", "name code")
+      .populate("facultyId", "name code")
+      .populate("courses", "title code unit");
+
+    if (!student) return buildResponse(res, 404, "Student profile not found");
+
+    return buildResponse(res, 200, "Student profile fetched successfully", student);
+  } catch (error) {
+    console.error("❌ myProfile Error:", error);
+    return buildResponse(res, 500, "Error fetching student profile", null, true, error);
   }
 };
 

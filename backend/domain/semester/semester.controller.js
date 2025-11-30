@@ -2,82 +2,142 @@ import Semester from "./semester.model.js";
 import Settings from "../settings/settings.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import mongoose from "mongoose";
+import { AcademicSemester } from "./semester.academicModel.js";
+import departmentModel from "../department/department.model.js";
+import { response } from "express";
+import studentModel from "../student/student.model.js";
 
 /**
  * Type-safe
  */
-const VALID_SEMESTERS = ["First Semester", "Second Semester", "Summer Semester"];
+const VALID_SEMESTERS = ["first", "second", "summer"];
 const sessionRegex = /^\d{4}\/\d{4}$/;
 const nameRegex = /^(First|Second|Summer)\sSemester$/;
 
 // 🔹 Start new semester (admin only)
 export const startNewSemester = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
-    const { name, session, departmentId, levelSettings } = req.body;
+    const { name, session: sessionYear, levelSettings } = req.body;
     const userId = req.user._id;
 
-    // Only admin can start new semester
-    if (req.user.role !== 'admin') {
+    // Admin only
+    if (req.user.role !== "admin") {
+      await session.abortTransaction();
       return buildResponse(res, 403, "Only admin can start new semester", null, true);
     }
 
-    if (!name || !session || !departmentId) {
-      return buildResponse(res, 400, "Name, session and department ID are required", null, true);
+    if (!name || !sessionYear) {
+      await session.abortTransaction();
+      return buildResponse(res, 400, "Name and session are required", null, true);
     }
 
-    if (!nameRegex.test(name) || !VALID_SEMESTERS.includes(name)) {
+    if (!VALID_SEMESTERS.includes(name)) {
+      await session.abortTransaction();
       return buildResponse(res, 400, "Invalid semester name", null, true);
     }
 
-    if (!sessionRegex.test(session)) {
+    if (!sessionRegex.test(sessionYear)) {
+      await session.abortTransaction();
       return buildResponse(res, 400, "Invalid session format. Use YYYY/YYYY", null, true);
     }
 
-    // Validate department ID
-    if (!mongoose.Types.ObjectId.isValid(departmentId)) {
-      return buildResponse(res, 400, "Invalid department ID", null, true);
-    }
+    // Default settings per level
+    const defaultLevelSettings = levelSettings || [
+      { level: 100, minUnits: 12, maxUnits: 24 },
+      { level: 200, minUnits: 12, maxUnits: 24 },
+      { level: 300, minUnits: 12, maxUnits: 24 },
+      { level: 400, minUnits: 12, maxUnits: 24 }
+    ];
 
-    // Deactivate any active semester in the department
-    await Semester.updateMany(
-      { department: departmentId, isActive: true }, 
-      { isActive: false, endDate: new Date() }
+    // --------- END OLD ACADEMIC SEMESTERS -----------
+    await AcademicSemester.updateMany(
+      { isActive: true },
+      { isActive: false, endDate: new Date() },
+      { session }
     );
 
-    // Create semester
-    const newSemester = await Semester.create({
-      name,
-      session,
-      department: departmentId,
-      levelSettings: levelSettings || [
-        { level: 100, minUnits: 12, maxUnits: 24 },
-        { level: 200, minUnits: 12, maxUnits: 24 },
-        { level: 300, minUnits: 12, maxUnits: 24 },
-        { level: 400, minUnits: 12, maxUnits: 24 }
-      ],
-      isActive: true,
-      isRegistrationOpen: false,
-      isResultsPublished: false,
-      createdBy: userId,
+    // --------- CREATE NEW ACADEMIC SEMESTER ----------
+    const academicSemester = await AcademicSemester.create(
+      [{
+        name,
+        session: sessionYear,
+        startDate: new Date(),
+        isActive: true
+      }],
+      { session }
+    );
+
+    const academicSemesterDoc = academicSemester[0];
+
+    // --------- FETCH ALL DEPARTMENTS ------------------
+    const departments = await departmentModel.find({}, null, { session });
+    if (departments.length === 0) {
+      await session.abortTransaction();
+      return buildResponse(res, 400, "No departments found", null, true);
+    }
+
+    // --------- END ACTIVE DEPARTMENT SEMESTERS --------
+    await Semester.updateMany(
+      { isActive: true },
+      { isActive: false, endDate: new Date() },
+      { session }
+    );
+
+    // --------- CREATE PER-DEPARTMENT SEMESTERS --------
+    const departmentSemesters = await Promise.all(
+      departments.map((dept) =>
+        Semester.create(
+          [{
+            academicSemester: academicSemesterDoc._id,
+            name,
+            session: sessionYear,
+            department: dept._id,
+            levelSettings: defaultLevelSettings,
+            isActive: true,
+            isRegistrationOpen: false,
+            isResultsPublished: false,
+            createdBy: userId
+          }],
+          { session }
+        )
+      )
+    );
+
+    // Flatten the array
+    const departmentSemesterDocs = departmentSemesters.map(s => s[0]);
+
+    // --------- UPDATE SETTINGS ------------------------
+    const settings = await Settings.findOneAndUpdate(
+      {},
+      {
+        currentSession: sessionYear,
+        currentSemester: name,
+        activeAcademicSemesterId: academicSemesterDoc._id,
+        registrationOpen: false,
+        resultPublicationOpen: false,
+        updatedBy: userId,
+      },
+      { new: true, upsert: true, session }
+    );
+
+    // Commit all operations
+    await session.commitTransaction();
+    session.endSession();
+
+    return buildResponse(res, 200, "New semester started successfully", {
+      academicSemester: academicSemesterDoc,
+      departmentSemesters: departmentSemesterDocs,
+      settings,
     });
 
-    // Update global settings
-    const settings = await Settings.findOneAndUpdate({}, {
-      currentSession: session,
-      currentSemester: name,
-      activeSemesterId: newSemester._id,
-      registrationOpen: false,
-      resultPublicationOpen: false,
-      updatedBy: userId,
-    }, { new: true, upsert: true });
-
-    return buildResponse(res, 200, "Semester started successfully", {
-      semester: newSemester,
-      settings
-    });
   } catch (error) {
-    console.error("Error starting semester:", error);
-    return buildResponse(res, 500, "Error starting semester", null, true, error);
+    console.error("Error starting new semester:", error);
+    await session.abortTransaction();
+    session.endSession();
+    return buildResponse(res, 500, "Failed to start new semester", null, true, error);
   }
 };
 
@@ -346,5 +406,84 @@ export const getSemestersByDepartment = async (req, res) => {
   } catch (error) {
     console.error("Error fetching semesters:", error);
     return buildResponse(res, 500, "Error fetching semesters", null, true, error);
+  }
+};
+
+export const getStudentSemesterSettings = async (req, res) => {
+  try {
+    const studentId = req.user._id;
+
+    // 1. Get student information
+    const student = await studentModel.findById(studentId)
+      .populate('departmentId')
+      .select('level department');
+
+    if (!student) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Student not found" 
+      });
+    }
+
+    if (!student.departmentId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Student does not have a department assigned" 
+      });
+    }
+
+    // 2. Find active semester for the student's department
+    const activeSemester = await Semester.findOne({
+      department: student.departmentId._id,
+      isActive: true
+    });
+
+    if (!activeSemester) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "No active semester found for this department" 
+      });
+    }
+
+    // 3. Find level settings for the student's level
+    const levelSetting = activeSemester.levelSettings.find(
+      setting => String(setting.level) === String(student.level)
+    );
+
+    if (!levelSetting) {
+      console.log(activeSemester)
+      return res.status(404).json({ 
+        success: false, 
+        message: `No level settings found for level ${student.level}` 
+      });
+    }
+
+    // 4. Return the level settings
+    return res.status(200).json({
+      success: true,
+      data: {
+        level: levelSetting.level,
+        minUnits: levelSetting.minUnits,
+        maxUnits: levelSetting.maxUnits,
+        minCourses: levelSetting.minCourses,
+        maxCourses: levelSetting.maxCourses,
+        semester: {
+          name: activeSemester.name,
+          session: activeSemester.session,
+        },
+        isRegistrationOpen: activeSemester.isRegistrationOpen,
+        registratioinDeadline: activeSemester.registrationDeadline,
+        lateRegistrationDate: activeSemester.lateRegistrationDate,
+        // department: student.departmentId.name // if populated
+      }
+    });
+
+  } catch (error) {
+    console.error("Error getting student semester settings:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: "Internal server error",
+      error: error.message 
+    });
   }
 };

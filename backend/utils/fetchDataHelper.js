@@ -32,7 +32,7 @@ const queryBuilder = (payload = {}, options = {}) => {
   // [Previous queryBuilder code remains exactly the same]
   const {
     page = 1,
-    limit = 5,
+    limit = 10,
     fields = [],
     search_term = "",
     filter = {},

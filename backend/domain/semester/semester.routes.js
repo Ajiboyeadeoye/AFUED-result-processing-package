@@ -6,6 +6,7 @@ import {
   getActiveSemester,
   deactivateSemester,
   getSemestersByDepartment,
+  getStudentSemesterSettings,
 } from "./semester.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
@@ -18,7 +19,8 @@ router.post("/start", authenticate(["admin", 'hod']), startNewSemester);
 
 router.get("/all/:departmentId", authenticate(["admin", 'hod', "dean"]), getSemestersByDepartment);
 
-
+// Get student semester settings
+router.get("/student/settings", authenticate("student"), getStudentSemesterSettings);
 // Open/close course registration
 router.patch("/registration", authenticate("admin"), toggleRegistration);
 
@@ -26,7 +28,7 @@ router.patch("/registration", authenticate("admin"), toggleRegistration);
 router.patch("/results", authenticate("admin"), toggleResultPublication);
 
 // Get current semester info
-router.get("/active", getActiveSemester);
+router.get("/active", authenticate(["admin", "hod", "dean"]), getActiveSemester);
 router.patch("/deactivate", deactivateSemester);
 
 

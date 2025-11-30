@@ -19,6 +19,11 @@ const semesterSchema = new mongoose.Schema({
     required: true,
     match: /^\d{4}\/\d{4}$/,
   },
+  academicSemester: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "AcademicSemester",
+  required: true,
+},
   department: { type: mongoose.Schema.Types.ObjectId, ref: "Department", required: true },
   levelSettings: [levelSettingsSchema], // per level min/max units & courses
   startDate: { type: Date, default: Date.now },
@@ -27,6 +32,8 @@ const semesterSchema = new mongoose.Schema({
   isRegistrationOpen: { type: Boolean, default: false },
   isResultsPublished: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // usually super admin
+  registrationDeadline: { type: Date},
+  lateRegistrationDate: {type: Date}
 }, { timestamps: true });
 
 // Only one active semester per department

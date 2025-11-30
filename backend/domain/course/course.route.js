@@ -2,7 +2,6 @@ import { Router } from "express";
 import buildResponse from "../../utils/responseBuilder.js";
 
 import {
-  // validateCourse,
   createCourse,
   getAllCourses,
   getCourseById,
@@ -10,43 +9,50 @@ import {
   deleteCourse,
   assignCourse,
   getLecturerCourses,
+  getRegisterableCourses,
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = Router();
 
-router.get("/lecturer", authenticate(['hod', 'admin', "lecturer"]), getLecturerCourses);
 /**
- * 📚 Get all courses (accessible by all authenticated users)
+ * 📚 Get lecturer's courses
+ */
+router.get("/lecturer", authenticate(['hod', 'admin', "lecturer"]), getLecturerCourses);
+
+/* 
+  *Get available courses for student registration
+  */
+router.get("/available", authenticate(['student']), getRegisterableCourses);
+/**
+ * 📚 Get all courses (HOD/Admin only)
  */
 router.get("/", authenticate(["hod", "admin"]), getAllCourses);
 
 /**
  * 🔍 Get a single course by ID (authenticated users)
  */
-router.get("/:id", authenticate(), getCourseById);
+router.get("/:id", authenticate(["student"]), getCourseById);
 
 /**
- * 🧱 Create a new course (HOD-only)
+ * 🧱 Create a new course (HOD/Admin only)
  */
 router.post("/", authenticate(["hod", "admin"]), createCourse);
 
 /**
- * 🧱 Assign a course to a lecturer for a session  (HOD/ADMIN-only)
+ * 👨‍🏫 Assign course to lecturer (HOD/Admin only)
  */
-router.post("/:id/assign", authenticate(["hod", "admin"]), assignCourse);
-
+router.post("/:id/assign", authenticate(["hod", "admin"]),  assignCourse);
 
 /**
- * ✏️ Update a course (HOD-only)
+ * ✏️ Update a course (HOD/Admin only)
  */
-router.patch("/:id", authenticate(["hod", "admin"]), updateCourse);
+router.patch("/:id", authenticate(["hod", "admin"]),  updateCourse);
 
 /**
- * 🗑️ Delete a course (HOD-only)
+ * 🗑️ Delete a course (HOD/Admin only)
  */
 router.delete("/:id", authenticate(["hod", "admin"]), deleteCourse);
-
 
 export default router;

@@ -250,12 +250,18 @@ export const dataMaps = {
 
   Student: {
     id: "this._id._id",
-    name: "this.user?.name || this._id?.name",
+    name: "this._id.name || this._id?.name",
     matric_no: "this.matricNumber",
     department: "this.departmentId.name",
     department_id: "this.departmentId._id",
     faculty_name: "Faculty.name",
-    level: 'this.level'
+    level: 'this.level',
+    semester: async (doc, models) => {
+      const activeSemester = await models.Semester.findOne({ isActive: true, department: String(doc.departmentId._id) }).lean();
+      console.log("The active semester", activeSemester, String(doc.departmentId._id) );
+      return activeSemester ? activeSemester.name : "N/A";
+    },
+    email: "this._id.email"
   },
 
   Lecturer: {
@@ -263,8 +269,8 @@ export const dataMaps = {
     rank: "this.rank",
     name: "this.user?.name || this._id?.name",
     staff_id: "this.staffId",
-    department_id: "this.department._id",
-    department: "this.department.name",
+    department_id: "this.departmentId._id",
+    department: "this.departmentId.name",
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
     n: (doc, models)=>{
@@ -380,5 +386,18 @@ export const dataMaps = {
     expiresAt: "this.expiresAt",
     isActive: "this.isActive"
 
-  }
+  },
+  // CourseRegistration: {
+  //   buffer_courses: async (doc, models) => {
+  //     const buffer = await models.carryOverSchema.findMany({ student: doc.student });
+  //     return buffer;
+  //   },
+  //   semseter_courses: async (doc, models) => {
+  //     const student = await models.Student.findById(doc._id);
+  //     const courses = await models.Courses.findMany({ semester: doc.name, level: doc.level });
+  //     return courses;
+  //   },
+  //   level_settings: async (doc, models) => {
+  //     const settings = doc.levelSettings
+  // }
 };

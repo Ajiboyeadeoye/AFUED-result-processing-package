@@ -32,12 +32,17 @@ const authenticate = (roles = []) => {
 
       // ✅ Allow a system token override (for admin setup or service calls)
       if (token === process.env.token) {
-        decoded = {
-          role: "admin",
-          _id: process.env.admin_id,
-        };
+        // decoded = {
+        //   role: "admin",
+        //   _id: process.env.admin_id,
+        // };
+                decoded = {
+          role: "student",
+          _id: "69289f97c3c2904e51b75654"
+        }
       } else {
         decoded = jwt.verify(token, process.env.TOKEN_KEY);
+
       }
 
       // ✅ Attach user payload to request
