@@ -19,6 +19,8 @@ router.post("/", authenticate(["admin", "hod"]), createLecturer);
 router.get("/", authenticate(["admin", "hod"]), getAllLecturers);
 router.get("/hods", authenticate(["admin", "hod"]), getAllHODs);
 router.get("/deans", authenticate(["admin"]), getAllDeans);
+router.patch("/:id", authenticate(["admin", "hod"]), updateLecturer);
+
 router.get("/:id", authenticate(["admin", "hod"]), getLecturerById);
 router.put("/:id", authenticate("admin"), updateLecturer);
 router.delete("/:id", authenticate("admin"), deleteLecturer);

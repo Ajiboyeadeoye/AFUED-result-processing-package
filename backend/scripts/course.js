@@ -29,13 +29,27 @@ const departmentCourses = {
       "first": [
         { courseCode: "BIO 101", title: "General Biology I", unit: 2, type: "Core" },
         { courseCode: "BIO 105", title: "Laboratory Management", unit: 2, type: "Core" },
-        { courseCode: "BIO 107", title: "General Biology Practical I", unit: 1, type: "Core" }
+        { courseCode: "BIO 107", title: "General Biology Practical I", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 111" },
+        { borrowedCourseCode: "MTH 101" },
+        { borrowedCourseCode: "CSC 101" },
+        { borrowedCourseCode: "CHM 101" },
+        { borrowedCourseCode: "CHM 107" },
+        { borrowedCourseCode: "PHY 101" },
+        { borrowedCourseCode: "PHY 107" },
+        { borrowedCourseCode: "EDU 101" }
       ],
       "second": [
         { courseCode: "BIO 102", title: "General Biology II", unit: 1, type: "Core" },
         { courseCode: "BIO 104", title: "Applied Biology", unit: 2, type: "Core" },
         { courseCode: "BIO 108", title: "General Biology Practical II", unit: 1, type: "Core" },
-        { courseCode: "BIO 112", title: "Basic Principles of Biology", unit: 2, type: "Core" }
+        { courseCode: "BIO 112", title: "Basic Principles of Biology", unit: 2, type: "Core" },
+        { borrowedCourseCode: "GST 112" },
+        { borrowedCourseCode: "MTH 102" },
+        { borrowedCourseCode: "CHM 102" },
+        { borrowedCourseCode: "CHM 108" },
+        { borrowedCourseCode: "PHY 102" },
+        { borrowedCourseCode: "PHY 108" }
       ]
     },
     "200": {
@@ -43,17 +57,23 @@ const departmentCourses = {
         { courseCode: "BIO 201", title: "Genetics I", unit: 2, type: "Core" },
         { courseCode: "BIO 203", title: "General Physiology", unit: 2, type: "Core" },
         { courseCode: "BIO 205", title: "Introductory Developmental/Cell Biology", unit: 2, type: "Core" },
-        { courseCode: "MCB 221", title: "General Microbiology", unit: 2, type: "Core" },
-        { courseCode: "BCH 201", title: "General Biochemistry", unit: 2, type: "Core" },
-        { courseCode: "BOT 203", title: "Seed Plant", unit: 2, type: "Core" }
+        { borrowedCourseCode: "ENT 211" },
+        { borrowedCourseCode: "MCB 221" },
+        { borrowedCourseCode: "BCH 201" },
+        { borrowedCourseCode: "BOT 203" },
+        { borrowedCourseCode: "EDU 201" },
+        { borrowedCourseCode: "EDF 201" }
       ],
       "second": [
         { courseCode: "BIO 202", title: "Introductory Ecology", unit: 2, type: "Core" },
         { courseCode: "BIO 204", title: "Biological Techniques", unit: 2, type: "Core" },
         { courseCode: "BIO 206", title: "Hydrobiology", unit: 2, type: "Core" },
         { courseCode: "BIO 208", title: "Biostatistics", unit: 2, type: "Core" },
-        { courseCode: "BOT 202", title: "Seedless Plant", unit: 2, type: "Core" },
-        { courseCode: "SED 202", title: "Biology Method I", unit: 2, type: "Core" }
+        { borrowedCourseCode: "GST 212" },
+        { borrowedCourseCode: "BOT 202" },
+        { borrowedCourseCode: "SED 202" },
+        { borrowedCourseCode: "GCE 206" },
+        { borrowedCourseCode: "EDT 202" }
       ]
     },
     "300": {
@@ -61,14 +81,22 @@ const departmentCourses = {
         { courseCode: "BIO 301", title: "Genetics II", unit: 2, type: "Core" },
         { courseCode: "BIO 303", title: "Biogeography and Soil Biology", unit: 2, type: "Core" },
         { courseCode: "BIO 307", title: "Field Course I", unit: 1, type: "Core" },
-        { courseCode: "BOT 303", title: "Plant Physiology", unit: 3, type: "Core" },
-        { courseCode: "ZOO 301", title: "Vertebrate Zoology", unit: 2, type: "Core" }
+        { borrowedCourseCode: "BOT 303" },
+        { borrowedCourseCode: "ZOO 301" },
+        { borrowedCourseCode: "EDU 301" },
+        { borrowedCourseCode: "GCE 315" },
+        { borrowedCourseCode: "CAI 301" }
       ],
       "second": [
         { courseCode: "BIO 302", title: "Population Biology and Evolution", unit: 2, type: "Core" },
         { courseCode: "BIO 304", title: "Nigerian Flora and Fauna", unit: 2, type: "Core" },
         { courseCode: "BIO 306", title: "Systematic Biology", unit: 2, type: "Core" },
-        { courseCode: "SED 302", title: "General Biology Method II", unit: 2, type: "Core" }
+        { borrowedCourseCode: "GST 312" },
+        { borrowedCourseCode: "ENT 312" },
+        { borrowedCourseCode: "SED 302" },
+        { borrowedCourseCode: "EDU 302" },
+        { borrowedCourseCode: "GCE 310" },
+        { borrowedCourseCode: "CAI 300-332" }
       ]
     },
     "400": {
@@ -76,9 +104,11 @@ const departmentCourses = {
         { courseCode: "BIO 403", title: "Wildlife Conservation and Management", unit: 2, type: "Core" },
         { courseCode: "BIO 407", title: "Field Course II", unit: 1, type: "Core" },
         { courseCode: "BIO 413", title: "Bioinformatics", unit: 2, type: "Core" },
-        { courseCode: "BOT 407", title: "Plant Reproduction", unit: 3, type: "Core" },
-        { courseCode: "ZOO 411", title: "Entomology", unit: 2, type: "Core" },
-        { courseCode: "ZOO 421", title: "Introductory Parasitology", unit: 2, type: "Core" }
+        { borrowedCourseCode: "BOT 407" },
+        { borrowedCourseCode: "ZOO 411" },
+        { borrowedCourseCode: "ZOO 421" },
+        { borrowedCourseCode: "EDU 401" },
+        { borrowedCourseCode: "EDF 413" }
       ],
       "second": [
         { courseCode: "BIO 402", title: "Principles of Plant and Animal Breeding", unit: 2, type: "Core" },
@@ -86,7 +116,10 @@ const departmentCourses = {
         { courseCode: "BIO 406", title: "Principles of Pest Management", unit: 2, type: "Core" },
         { courseCode: "BIO 408", title: "Applied Biotechnology", unit: 2, type: "Core" },
         { courseCode: "BIO 410", title: "Bio-Entrepreneurship", unit: 2, type: "Core" },
-        { courseCode: "BIO 414", title: "Molecular Biology", unit: 2, type: "Core" }
+        { courseCode: "BIO 414", title: "Molecular Biology", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 400" },
+        { borrowedCourseCode: "SED 402" },
+        { borrowedCourseCode: "EDM 420" }
       ]
     }
   },
@@ -94,14 +127,28 @@ const departmentCourses = {
   "CHEMISTRY": {
     "100": {
       "first": [
-        { courseCode: "CHM 101", title: "General Chemistry I (Inorganic)", unit: 2, type: "Core" },
-        { courseCode: "CHM 107", title: "General Chemistry Practical I", unit: 1, type: "Core" }
+        { courseCode: "CHM 101", title: "General Chemistry I", unit: 2, type: "Core" },
+        { courseCode: "CHM 107", title: "General Chemistry Practical I", unit: 1, type: "Core" },
+        { borrowedCourseCode: "BIO 101" },
+        { borrowedCourseCode: "BIO 107" },
+        { borrowedCourseCode: "MTH 101" },
+        { borrowedCourseCode: "PHY 101" },
+        { borrowedCourseCode: "PHY 107" },
+        { borrowedCourseCode: "CSC 101" },
+        { borrowedCourseCode: "EDU 101" },
+        { borrowedCourseCode: "GST 111" }
       ],
       "second": [
-        { courseCode: "CHM 102", title: "General Chemistry II (Organic)", unit: 2, type: "Core" },
+        { courseCode: "CHM 102", title: "General Chemistry II", unit: 2, type: "Core" },
         { courseCode: "CHM 104", title: "Chemistry Laboratory Techniques and Safety", unit: 2, type: "Core" },
         { courseCode: "CHM 106", title: "Application of Mathematics to Chemistry", unit: 2, type: "Core" },
-        { courseCode: "CHM 108", title: "General Chemistry Practical II", unit: 1, type: "Core" }
+        { courseCode: "CHM 108", title: "General Chemistry Practical II", unit: 1, type: "Core" },
+        { borrowedCourseCode: "BIO 102" },
+        { borrowedCourseCode: "BIO 108" },
+        { borrowedCourseCode: "PHY 102" },
+        { borrowedCourseCode: "PHY 108" },
+        { borrowedCourseCode: "MTH 102" },
+        { borrowedCourseCode: "GST 112" }
       ]
     },
     "200": {
@@ -109,14 +156,23 @@ const departmentCourses = {
         { courseCode: "CHM 204", title: "Liquid State and Colloids", unit: 2, type: "Core" },
         { courseCode: "CHM 207", title: "General Chemistry Practical III", unit: 1, type: "Core" },
         { courseCode: "CHM 211", title: "Organic Chemistry I", unit: 2, type: "Core" },
-        { courseCode: "CHM 213", title: "Analytical Chemistry I", unit: 2, type: "Core" }
+        { courseCode: "CHM 213", title: "Analytical Chemistry I", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 201" },
+        { borrowedCourseCode: "ENT 211" },
+        { borrowedCourseCode: "EDF 201" },
+        { borrowedCourseCode: "MTH 201" }
       ],
       "second": [
         { courseCode: "CHM 206", title: "Chemistry Methodology", unit: 2, type: "Core" },
         { courseCode: "CHM 208", title: "General Chemistry Practical IV", unit: 1, type: "Core" },
         { courseCode: "CHM 210", title: "Physical Chemistry I", unit: 2, type: "Core" },
         { courseCode: "CHM 212", title: "Inorganic Chemistry I", unit: 2, type: "Core" },
-        { courseCode: "CHM 214", title: "Structure And Bonding", unit: 2, type: "Core" }
+        { courseCode: "CHM 214", title: "Structure And Bonding", unit: 2, type: "Core" },
+        { borrowedCourseCode: "STA 202" },
+        { borrowedCourseCode: "GST 212" },
+        { borrowedCourseCode: "GCE 206" },
+        { borrowedCourseCode: "EDT 202" },
+        { borrowedCourseCode: "PHY 202" }
       ]
     },
     "300": {
@@ -124,7 +180,10 @@ const departmentCourses = {
         { courseCode: "CHM 301", title: "Physical Chemistry II", unit: 2, type: "Core" },
         { courseCode: "CHM 303", title: "Organic Chemistry II", unit: 2, type: "Core" },
         { courseCode: "CHM 319", title: "Environmental Chemistry", unit: 2, type: "Core" },
-        { courseCode: "CHM 321", title: "Natural Product Chemistry I", unit: 2, type: "Core" }
+        { courseCode: "CHM 321", title: "Natural Product Chemistry I", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 301" },
+        { borrowedCourseCode: "GCE 315" },
+        { borrowedCourseCode: "CAI 310" }
       ],
       "second": [
         { courseCode: "CHM 302", title: "Inorganic Chemistry II", unit: 2, type: "Core" },
@@ -132,7 +191,12 @@ const departmentCourses = {
         { courseCode: "CHM 312", title: "Analytical atomic spectroscopy", unit: 2, type: "Core" },
         { courseCode: "CHM 314", title: "Entrepreneurship skill in Chemistry", unit: 2, type: "Core" },
         { courseCode: "CHM 316", title: "Applied spectroscopy", unit: 2, type: "Core" },
-        { courseCode: "CHM 322", title: "Chemical Thermodynamics", unit: 1, type: "Core" }
+        { courseCode: "CHM 322", title: "Chemical Thermodynamics", unit: 1, type: "Core" },
+        { borrowedCourseCode: "EDU 302" },
+        { borrowedCourseCode: "GCE 310" },
+        { borrowedCourseCode: "CAI 300-332" },
+        { borrowedCourseCode: "ENT 312" },
+        { borrowedCourseCode: "GST 312" }
       ]
     },
     "400": {
@@ -141,7 +205,9 @@ const departmentCourses = {
         { courseCode: "CHM 423", title: "Organometallic Chemistry", unit: 2, type: "Core" },
         { courseCode: "CHM 425", title: "Natural Product Chemistry II", unit: 2, type: "Core" },
         { courseCode: "CHM 431", title: "Quantum Chemistry", unit: 2, type: "Core" },
-        { courseCode: "CHM 433", title: "Transition Metal Chemistry", unit: 3, type: "Core" }
+        { courseCode: "CHM 433", title: "Transition Metal Chemistry", unit: 3, type: "Core" },
+        { borrowedCourseCode: "EDU 401" },
+        { borrowedCourseCode: "EDF 413" }
       ],
       "second": [
         { courseCode: "CHM 320", title: "Chemistry of Carbohydrate and Macromolecules", unit: 2, type: "Core" },
@@ -149,7 +215,9 @@ const departmentCourses = {
         { courseCode: "CHM 406", title: "Reaction Kinetics", unit: 2, type: "Core" },
         { courseCode: "CHM 410", title: "Analytical Chemistry II", unit: 2, type: "Core" },
         { courseCode: "CHM 424", title: "Coordination Chemistry", unit: 2, type: "Core" },
-        { courseCode: "CHM 426", title: "Organic Reaction and Synthesis", unit: 2, type: "Core" }
+        { courseCode: "CHM 426", title: "Organic Reaction and Synthesis", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 400" },
+        { borrowedCourseCode: "EDM 420" }
       ]
     }
   },
@@ -157,29 +225,48 @@ const departmentCourses = {
   "COMPUTER SCIENCE": {
     "100": {
       "first": [
-        { courseCode: "CSC 101", title: "Introduction to Computing Sciences", unit: 3, type: "Core" },
-        { courseCode: "CSC 103", title: "Computer Application Packages I", unit: 1, type: "Core" }
+        { courseCode: "CSC 101", title: "Introduction to Computing Science", unit: 3, type: "Core" },
+        { courseCode: "CSC 103", title: "Computer Application Packages I", unit: 1, type: "Core" },
+        { borrowedCourseCode: "EDU 101" },
+        { borrowedCourseCode: "GST 111" },
+        { borrowedCourseCode: "MTH 101" },
+        { borrowedCourseCode: "PHY 101" },
+        { borrowedCourseCode: "PHY 107" },
+        { borrowedCourseCode: "STA 111" },
+        { borrowedCourseCode: "CHM 101" }
       ],
       "second": [
         { courseCode: "CSC 102", title: "Problem Solving", unit: 3, type: "Core" },
-        { courseCode: "CSC 104", title: "Basic Concepts of Programming", unit: 2, type: "Core" },
-        { courseCode: "CSC 106", title: "Computer Application Packages II", unit: 1, type: "Core" }
+        { courseCode: "CSC 104", title: "Basic concepts of programming", unit: 2, type: "Core" },
+        { courseCode: "CSC 106", title: "Computer Application Packages II", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 112" },
+        { borrowedCourseCode: "CHM 102" },
+        { borrowedCourseCode: "PHY 102" },
+        { borrowedCourseCode: "PHY 108" },
+        { borrowedCourseCode: "MTH 102" }
       ]
     },
     "200": {
       "first": [
         { courseCode: "CSC 201", title: "Computer Programming I", unit: 3, type: "Core" },
         { courseCode: "CSC 203", title: "Discrete Structures", unit: 2, type: "Core" },
-        { courseCode: "CSC 207", title: "Introduction to Web Technologies", unit: 2, type: "Core" },
         { courseCode: "CSC 211", title: "Digital Logic Design", unit: 2, type: "Core" },
-        { courseCode: "CSC 213", title: "Introduction to Software Engineering", unit: 2, type: "Core" }
+        { courseCode: "CSC 213", title: "Introduction to Software Engineering", unit: 2, type: "Core" },
+        { courseCode: "CSC 299", title: "SIWES I", unit: 3, type: "Core" },
+        { borrowedCourseCode: "ENT 211" },
+        { borrowedCourseCode: "EDU 201" },
+        { borrowedCourseCode: "EDF 201" },
+        { borrowedCourseCode: "MTH 201" }
       ],
       "second": [
         { courseCode: "CSC 202", title: "Computer Programming II", unit: 3, type: "Core" },
         { courseCode: "CSC 204", title: "Systems Analysis and Design", unit: 2, type: "Core" },
         { courseCode: "CSC 212", title: "Computer Architecture and Organization", unit: 2, type: "Core" },
-        { courseCode: "CSC 214", title: "Human-Computer Interaction", unit: 2, type: "Core" },
-        { courseCode: "CSC 216", title: "The Teaching of Computer Science", unit: 1, type: "Core" }
+        { courseCode: "CSC 216", title: "The Teaching of Computer Science", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 212" },
+        { borrowedCourseCode: "EDT 202" },
+        { borrowedCourseCode: "GCE 206" },
+        { borrowedCourseCode: "MTH 202" }
       ]
     },
     "300": {
@@ -187,12 +274,21 @@ const departmentCourses = {
         { courseCode: "CSC 301", title: "Data Structures", unit: 2, type: "Core" },
         { courseCode: "CSC 303", title: "Introduction to Cyber Security and Strategy", unit: 2, type: "Core" },
         { courseCode: "CSC 305", title: "Data Communication System & Network", unit: 3, type: "Core" },
-        { courseCode: "CSC 309", title: "Artificial Intelligence", unit: 2, type: "Core" }
+        { courseCode: "CSC 309", title: "Artificial Intelligence", unit: 2, type: "Core" },
+        { courseCode: "CSC 399", title: "SIWES II", unit: 3, type: "Core" },
+        { borrowedCourseCode: "EDU 301" },
+        { borrowedCourseCode: "GCE 315" },
+        { borrowedCourseCode: "CAI 301" }
       ],
       "second": [
-        { courseCode: "CSC 304", title: "Data Management I", unit: 3, type: "Core" },
-        { courseCode: "CSC 308", title: "Operating Systems II", unit: 2, type: "Core" },
-        { courseCode: "CSC 322", title: "Computer Science Innovation and New Technologies", unit: 2, type: "Core" }
+        { courseCode: "CSC 304", title: "Data Management", unit: 3, type: "Core" },
+        { courseCode: "CSC 308", title: "Operating Systems", unit: 2, type: "Core" },
+        { courseCode: "CSC 322", title: "Computer Science Innovation and New Technologies", unit: 2, type: "Core" },
+        { borrowedCourseCode: "ENT 312" },
+        { borrowedCourseCode: "EDU 302" },
+        { borrowedCourseCode: "CAI 300-332" },
+        { borrowedCourseCode: "GST 312" },
+        { borrowedCourseCode: "GCE 310" }
       ]
     },
     "400": {
@@ -202,15 +298,19 @@ const departmentCourses = {
         { courseCode: "CSC 407", title: "Seminar", unit: 2, type: "Core" },
         { courseCode: "CSC 409", title: "Research Methodology and Technical Report Writing", unit: 2, type: "Core" },
         { courseCode: "CSC 431", title: "Distributed Computing Systems", unit: 2, type: "Core" },
-        { courseCode: "CSC 497", title: "Final Year Project I", unit: 3, type: "Core" }
+        { courseCode: "CSC 497", title: "Final Year Project I", unit: 3, type: "Core" },
+        { borrowedCourseCode: "EDU 401" },
+        { borrowedCourseCode: "EDF 413" }
       ],
       "second": [
         { courseCode: "CSC 402", title: "Ethics and Legal Issues in Computer Science", unit: 1, type: "Core" },
         { courseCode: "CSC 408", title: "Modeling and Simulation", unit: 2, type: "Core" },
         { courseCode: "CSC 442", title: "Wireless Communications and Networking", unit: 2, type: "Core" },
         { courseCode: "CSC 446", title: "Electronic Learning Methodology", unit: 2, type: "Core" },
+        { courseCode: "CSC 498", title: "Final Year Project II", unit: 3, type: "Core" },
         { courseCode: "CSC 448", title: "Computer Science Innovation and New Technologies", unit: 2, type: "Core" },
-        { courseCode: "CSC 498", title: "Final Year Project II", unit: 3, type: "Core" }
+        { borrowedCourseCode: "EDU 400" },
+        { borrowedCourseCode: "EDM 420" }
       ]
     }
   },
@@ -218,11 +318,25 @@ const departmentCourses = {
   "MATHEMATICS": {
     "100": {
       "first": [
-        { courseCode: "MTH 101", title: "Elementary Mathematics I", unit: 2, type: "Core" }
+        { courseCode: "MTH 101", title: "Elementary Mathematics I", unit: 2, type: "Core" },
+        { borrowedCourseCode: "GST 111" },
+        { borrowedCourseCode: "EDU 101" },
+        { borrowedCourseCode: "SED 101" },
+        { borrowedCourseCode: "PHY 101" },
+        { borrowedCourseCode: "PHY 107" },
+        { borrowedCourseCode: "CHM 101" },
+        { borrowedCourseCode: "CHM 107" },
+        { borrowedCourseCode: "CSC 101" }
       ],
       "second": [
         { courseCode: "MTH 102", title: "Elementary Mathematics II", unit: 2, type: "Core" },
-        { courseCode: "MTH 104", title: "Elementary Mathematics III", unit: 2, type: "Core" }
+        { courseCode: "MTH 104", title: "Elementary Mathematics III", unit: 2, type: "Core" },
+        { borrowedCourseCode: "GST 112" },
+        { borrowedCourseCode: "PHY 102" },
+        { borrowedCourseCode: "PHY 108" },
+        { borrowedCourseCode: "CHM 102" },
+        { borrowedCourseCode: "CHM 108" },
+        { borrowedCourseCode: "STA 112" }
       ]
     },
     "200": {
@@ -231,12 +345,20 @@ const departmentCourses = {
         { courseCode: "MTH 203", title: "Linear Algebra I", unit: 2, type: "Core" },
         { courseCode: "MTH 205", title: "Sets, Logic and Algebra I", unit: 2, type: "Core" },
         { courseCode: "MTH 207", title: "Real Analysis I", unit: 2, type: "Core" },
-        { courseCode: "MTH 209", title: "Introduction to Numerical Analysis", unit: 2, type: "Core" }
+        { courseCode: "MTH 209", title: "Introduction to Numerical Analysis", unit: 2, type: "Core" },
+        { borrowedCourseCode: "ENT 211" },
+        { borrowedCourseCode: "EDU 201" },
+        { borrowedCourseCode: "EDF 201" },
+        { borrowedCourseCode: "CSC 201" }
       ],
       "second": [
         { courseCode: "MTH 202", title: "Elementary Differential Equations", unit: 2, type: "Core" },
         { courseCode: "MTH 204", title: "Linear Algebra II", unit: 1, type: "Core" },
-        { courseCode: "MTH 210", title: "Vector Analysis", unit: 1, type: "Core" }
+        { courseCode: "MTH 210", title: "Vector Analysis", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 212" },
+        { borrowedCourseCode: "EDT 202" },
+        { borrowedCourseCode: "GCE 206" },
+        { borrowedCourseCode: "STA 202" }
       ]
     },
     "300": {
@@ -245,11 +367,22 @@ const departmentCourses = {
         { courseCode: "MTH 301", title: "Metric Space Topology", unit: 2, type: "Core" },
         { courseCode: "MTH 303", title: "Vector and Tensor Analysis", unit: 2, type: "Core" },
         { courseCode: "MTH 305", title: "Complex Analysis I", unit: 2, type: "Core" },
-        { courseCode: "MTH 307", title: "Real Analysis II", unit: 2, type: "Core" }
+        { courseCode: "MTH 307", title: "Real Analysis II", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 301" },
+        { borrowedCourseCode: "SED 303" },
+        { borrowedCourseCode: "CAI 301" },
+        { borrowedCourseCode: "GCE 315" }
       ],
       "second": [
         { courseCode: "MTH 302", title: "Ordinary Differential Equations", unit: 2, type: "Core" },
-        { courseCode: "MTH 310", title: "Mathematical Methods II", unit: 2, type: "Core" }
+        { courseCode: "MTH 310", title: "Mathematical Methods II", unit: 2, type: "Core" },
+        { borrowedCourseCode: "GST 312" },
+        { borrowedCourseCode: "ENT 312" },
+        { borrowedCourseCode: "EDU 302" },
+        { borrowedCourseCode: "GCE 310" },
+        { borrowedCourseCode: "SED 302" },
+        { borrowedCourseCode: "CAI 300-332" },
+        { borrowedCourseCode: "STA 322" }
       ]
     },
     "400": {
@@ -257,14 +390,19 @@ const departmentCourses = {
         { courseCode: "MTH 401", title: "Theory of Ordinary Differential Equations", unit: 2, type: "Core" },
         { courseCode: "MTH 403", title: "Functional Analysis", unit: 2, type: "Core" },
         { courseCode: "MTH 405", title: "General Topology", unit: 2, type: "Core" },
-        { courseCode: "MTH 407", title: "Mathematical Methods III", unit: 2, type: "Core" }
+        { courseCode: "MTH 407", title: "Mathematical Methods III", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDF 413" },
+        { borrowedCourseCode: "EDU 401" },
+        { borrowedCourseCode: "STA 415" }
       ],
       "second": [
         { courseCode: "MTH 304", title: "Abstract Algebra II", unit: 2, type: "Core" },
         { courseCode: "MTH 316", title: "Complex Analysis II", unit: 2, type: "Core" },
         { courseCode: "MTH 308", title: "Introduction to Mathematical Modelling", unit: 2, type: "Core" },
         { courseCode: "MTH 402", title: "Theory Of Partial Differential Equations", unit: 2, type: "Core" },
-        { courseCode: "MTH 414", title: "Algebraic Topology", unit: 2, type: "Core" }
+        { courseCode: "MTH 414", title: "Algebraic Topology", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 400" },
+        { borrowedCourseCode: "EDM 420" }
       ]
     }
   },
@@ -274,12 +412,24 @@ const departmentCourses = {
       "first": [
         { courseCode: "PHY 101", title: "General Physics I", unit: 2, type: "Core" },
         { courseCode: "PHY 103", title: "General Physics III", unit: 2, type: "Core" },
-        { courseCode: "PHY 107", title: "General Physics Practical I", unit: 1, type: "Core" }
+        { courseCode: "PHY 107", title: "General Physics Practical I", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 111" },
+        { borrowedCourseCode: "EDU 101" },
+        { borrowedCourseCode: "CSC 101" },
+        { borrowedCourseCode: "CHM 101" },
+        { borrowedCourseCode: "CHM 107" },
+        { borrowedCourseCode: "MTH 101" }
       ],
       "second": [
         { courseCode: "PHY 102", title: "General Physics II", unit: 2, type: "Core" },
         { courseCode: "PHY 104", title: "General Physics IV", unit: 2, type: "Core" },
-        { courseCode: "PHY 108", title: "General Physics Practical II", unit: 1, type: "Core" }
+        { courseCode: "PHY 108", title: "General Physics Practical II", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 112" },
+        { borrowedCourseCode: "CSC 102" },
+        { borrowedCourseCode: "CHM 102" },
+        { borrowedCourseCode: "CHM 108" },
+        { borrowedCourseCode: "MTH 102" },
+        { borrowedCourseCode: "MTH 104" }
       ]
     },
     "200": {
@@ -287,13 +437,23 @@ const departmentCourses = {
         { courseCode: "PHY 201", title: "General Physics V (Modern Physics)", unit: 2, type: "Core" },
         { courseCode: "PHY 205", title: "Thermal Physics", unit: 3, type: "Core" },
         { courseCode: "PHY 207", title: "General Practical Physics III", unit: 1, type: "Core" },
-        { courseCode: "PHY 211", title: "Workshop Practice", unit: 2, type: "Core" }
+        { courseCode: "PHY 211", title: "Workshop Practice", unit: 2, type: "Core" },
+        { borrowedCourseCode: "ENT 211" },
+        { borrowedCourseCode: "EDU 201" },
+        { borrowedCourseCode: "EDF 201" },
+        { borrowedCourseCode: "CSC 201" },
+        { borrowedCourseCode: "MTH 201" }
       ],
       "second": [
         { courseCode: "PHY 202", title: "Introduction To Electronic Circuits And Electronics", unit: 2, type: "Core" },
         { courseCode: "PHY 204", title: "General Physics VI (Waves and Optics)", unit: 2, type: "Core" },
         { courseCode: "PHY 206", title: "General Physics VII (Energy & Environment)", unit: 2, type: "Core" },
-        { courseCode: "PHY 208", title: "General Physics Practical IV", unit: 1, type: "Core" }
+        { courseCode: "PHY 208", title: "General Physics Practical IV", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 212" },
+        { borrowedCourseCode: "EDT 202" },
+        { borrowedCourseCode: "GCE 206" },
+        { borrowedCourseCode: "CSC 202" },
+        { borrowedCourseCode: "MTH 202" }
       ]
     },
     "300": {
@@ -301,12 +461,20 @@ const departmentCourses = {
         { courseCode: "PHY 301", title: "Analytical Mechanics I", unit: 3, type: "Core" },
         { courseCode: "PHY 303", title: "Electromagnetism", unit: 3, type: "Core" },
         { courseCode: "PHY 305", title: "Quantum Physics", unit: 3, type: "Core" },
-        { courseCode: "PHY 307", title: "General Physics Practical V", unit: 1, type: "Core" }
+        { courseCode: "PHY 307", title: "General Physics Practical V", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GCE 315" },
+        { borrowedCourseCode: "CAI 301" },
+        { borrowedCourseCode: "EDU 301" }
       ],
       "second": [
         { courseCode: "PHY 304", title: "Electromagnetic Waves and Optics", unit: 3, type: "Core" },
         { courseCode: "PHY 306", title: "Statistical and Thermal Physics I", unit: 3, type: "Core" },
-        { courseCode: "PHY 308", title: "General Physics Practical VI", unit: 1, type: "Core" }
+        { courseCode: "PHY 308", title: "General Physics Practical VI", unit: 1, type: "Core" },
+        { borrowedCourseCode: "GST 312" },
+        { borrowedCourseCode: "ENT 312" },
+        { borrowedCourseCode: "GCE 310" },
+        { borrowedCourseCode: "CAI 300-332" },
+        { borrowedCourseCode: "EDU 302" }
       ]
     },
     "400": {
@@ -314,7 +482,10 @@ const departmentCourses = {
         { courseCode: "PHY 401", title: "Quantum Mechanics I", unit: 3, type: "Core" },
         { courseCode: "PHY 403", title: "Mathematical Methods in Physics I", unit: 3, type: "Core" },
         { courseCode: "PHY 405", title: "Physics Entrepreneurship", unit: 2, type: "Core" },
-        { courseCode: "PHY 451", title: "Atmospheric Physics I", unit: 2, type: "Core" }
+        { courseCode: "PHY 451", title: "Atmospheric Physics I", unit: 2, type: "Core" },
+        { borrowedCourseCode: "EDU 400" },
+        { borrowedCourseCode: "EDU 401" },
+        { borrowedCourseCode: "EDF 413" }
       ],
       "second": [
         { courseCode: "PHY 402", title: "Quantum Mechanics II", unit: 3, type: "Core" },
@@ -322,12 +493,12 @@ const departmentCourses = {
         { courseCode: "PHY 425", title: "Solid State Physics", unit: 3, type: "Core" },
         { courseCode: "PHY 452", title: "Atmospheric Physics II", unit: 2, type: "Core" },
         { courseCode: "PHY 454", title: "Computational Physics", unit: 2, type: "Core" },
-        { courseCode: "PHY 490", title: "Seminar", unit: 1, type: "Core" }
+        { courseCode: "PHY 490", title: "Seminar", unit: 1, type: "Core" },
+        { borrowedCourseCode: "EDM 420" }
       ]
     }
   }
 };
-
 // General Studies and Education courses (common to all departments)
 const generalCourses = {
   "GST": [
@@ -512,10 +683,14 @@ async function seedAllDepartmentCourses() {
     });
 
     let totalCoursesCreated = 0;
+    let allRegularCourses = []; // Store all regular courses first
+    let allBorrowedCourses = []; // Store all borrowed courses for later
+    let NOTFOUND = []; // Store not found borrowed course codes
 
-    // Process each department
+    // Process each department - FIRST PASS: Collect all courses
+    console.log("\n📋 Collecting all courses...");
     for (const [deptName, levels] of Object.entries(departmentCourses)) {
-      console.log(`\n📚 Processing ${deptName} Department...`);
+      console.log(`   📚 Collecting courses for ${deptName}...`);
       
       const departmentId = departmentMap[deptName] || departmentMap[departmentCodes[deptName]];
       
@@ -524,43 +699,115 @@ async function seedAllDepartmentCourses() {
         continue;
       }
 
-      let deptCoursesCreated = 0;
-
       // Process each level
       for (const [level, semesters] of Object.entries(levels)) {
         // Process each semester
         for (const [semester, courses] of Object.entries(semesters)) {
-          const coursesWithLevel = courses.map(course => ({
-            ...course,
-            level: parseInt(level),
-            semester: semester
-          }));
-
-          const preparedCourses = prepareData(coursesWithLevel, departmentId);
-          
-          try {
-            await courseModel.insertMany(preparedCourses);
-            console.log(`   ✅ Level ${level} ${semester} semester: ${courses.length} courses created`);
-            deptCoursesCreated += courses.length;
-            totalCoursesCreated += courses.length;
-          } catch (error) {
-            if (error.code === 11000) {
-              console.log(`   ⚠️  Level ${level} ${semester} semester: Some courses already exist (skipped duplicates)`);
+          // Process each course
+          for (const course of courses) {
+            if (course.borrowedCourseCode) {
+              // Store borrowed courses for later
+              allBorrowedCourses.push({
+                courseData: course,
+                departmentId,
+                level: parseInt(level),
+                semester
+              });
             } else {
-              console.log(`   ❌ Level ${level} ${semester} semester: Error - ${error.message}`);
+              // Store regular courses for first insertion
+              allRegularCourses.push({
+                courseCode: course.courseCode || "",
+                title: course.title || "",
+                unit: course.unit || 0,
+                type: course.type.toLowerCase() || "",
+                level: parseInt(level),
+                semester,
+                department: departmentId,
+                borrowedId: null
+              });
             }
           }
         }
       }
+    }
 
-      console.log(`   📊 ${deptName}: ${deptCoursesCreated} courses created`);
+    console.log(`\n📊 Course Collection Complete:`);
+    console.log(`   Regular courses: ${allRegularCourses.length}`);
+    console.log(`   Borrowed courses: ${allBorrowedCourses.length}`);
+
+    // FIRST: Create all regular courses
+    console.log("\n🔨 Creating all regular courses...");
+    if (allRegularCourses.length > 0) {
+      try {
+        await courseModel.insertMany(allRegularCourses);
+        console.log(`   ✅ ${allRegularCourses.length} regular courses created`);
+        totalCoursesCreated += allRegularCourses.length;
+      } catch (error) {
+        if (error.code === 11000) {
+          console.log(`   ⚠️  Some regular courses already exist (duplicates skipped)`);
+          // Continue even if some duplicates exist
+        } else {
+          console.log(`   ❌ Error creating regular courses: ${error.message}`);
+          throw error;
+        }
+      }
+    }
+
+    // SECOND: Create borrowed courses with proper references
+    console.log("\n🔗 Creating borrowed courses with references...");
+    if (allBorrowedCourses.length > 0) {
+      let borrowedCount = 0;
+      
+      // Process borrowed courses one by one to ensure we get proper references
+      for (const borrowed of allBorrowedCourses) {
+        try {
+          // Find the actual course to reference
+          const referencedCourse = await courseModel.findOne({ 
+            courseCode: borrowed.courseData.borrowedCourseCode 
+          }).lean();
+          
+          if (!referencedCourse) {
+            console.log(`   ⚠️  Referenced course not found: ${borrowed.courseData.borrowedCourseCode}. Skipping...`);
+            NOTFOUND.push(borrowed.courseData.borrowedCourseCode)
+            continue;
+          }
+          
+          const borrowedCourseData = {
+            borrowedId: referencedCourse._id,
+            department: borrowed.departmentId,
+            courseCode: "", // Empty for borrowed courses
+            title: "", // Empty for borrowed courses
+            unit: 0, // Zero for borrowed courses
+            type: "core", // Empty for borrowed courses
+            level: borrowed.level,
+            semester: borrowed.semester
+          };
+          
+          await courseModel.create(borrowedCourseData);
+          borrowedCount++;
+          
+        } catch (error) {
+          if (error.code === 1100340) {
+            console.log(`   ⚠️  Borrowed course already exists for ${borrowed.courseData.borrowedCourseCode}. Skipping...`);
+          } else {
+            console.log(`   ❌ Error creating borrowed course: ${error.message}`);
+          }
+        }
+      }
+      
+      console.log(`   ✅ ${borrowedCount} borrowed courses created`);
+      totalCoursesCreated += borrowedCount;
     }
 
     console.log(`\n🎉 All Department Courses Seeding Complete!`);
     console.log(`   Total Courses Created: ${totalCoursesCreated}`);
+    console.log(`   Borrowed Courses Not Found: ${NOTFOUND.length > 0 ? NOTFOUND.join(", ") : "None"}, Total: ${NOTFOUND.length}`);
 
   } catch (error) {
     console.error("❌ Error during course seeding:", error);
+  } finally {
+    await mongoose.disconnect();
+    console.log("🔌 Disconnected from database");
   }
 }
 
@@ -1114,6 +1361,67 @@ async function deleteOrphanedStudentUsers(dryRun = true) {
 
   } catch (error) {
     console.error("❌ Error deleting orphaned users:", error);
+    throw error;
+  }
+}
+
+const deleteOrphanedLecturerAssignments = async (dryRun = true) => {
+  try {
+    console.log("\n🗑️ Cleaning Up Orphaned Lecturer Assignments");
+    console.log("============================================");
+    console.log(`Mode: ${dryRun ? 'DRY RUN (No changes will be made)' : 'LIVE (Records will be deleted)'}`);
+    
+    await mongoose.connect(MONGODB_URI);
+    console.log("✅ Connected to database");
+
+    const orphanedAssignments = await LecturerAssignment.aggregate([
+      {
+        $lookup: {
+          from: "lecturers",
+          localField: "lecturerId",
+          foreignField: "_id",
+          as: "lecturerRecord"
+        }
+      },
+      {
+        $match: {
+          "lecturerRecord.0": { $exists: false }
+        }
+      }
+    ]);
+
+    if (orphanedAssignments.length === 0) {
+      console.log("🎉 No orphaned lecturer assignments found!");
+      return { deletedCount: 0 };
+    }
+
+    console.log(`\n📊 Found ${orphanedAssignments.length} orphaned lecturer assignment(s).`);
+    
+    if (dryRun) {
+      console.log(`\n💡 This was a dry run. ${orphanedAssignments.length} orphaned assignment(s) would be deleted.`)
+      return { deletedCount: 0 };
+    }
+
+    console.log(`\n⚠️  WARNING: You are about to delete ${orphanedAssignments.length} assignment record(s).`);
+    const confirmation = await question("Type 'DELETE' to confirm deletion: ");
+    
+    if (confirmation !== 'DELETE') {
+      console.log("❌ Deletion cancelled.");
+      return { deletedCount: 0 };
+    }
+
+    const assignmentIds = orphanedAssignments.map(assignment => assignment._id);
+    
+    const deleteResult = await LecturerAssignment.deleteMany({
+      _id: { $in: assignmentIds }
+    });
+
+    console.log(`\n✅ Successfully deleted ${deleteResult.deletedCount} orphaned lecturer assignment(s)!`);
+
+    return { deletedCount: deleteResult.deletedCount };
+
+  } catch (error) {
+    console.error("❌ Error deleting orphaned lecturer assignments:", error);
     throw error;
   }
 }

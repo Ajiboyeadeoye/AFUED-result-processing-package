@@ -5,7 +5,7 @@ const carryoverSchema = new mongoose.Schema({
   course: { type: mongoose.Schema.Types.ObjectId, ref: "Course", required: true },
   semester: { type: mongoose.Schema.Types.ObjectId, ref: "Semester", required: true },
   reason: { type: String, enum: ["Failed", "NotRegistered"], required: true },
-  cleared: {typr: Boolean, default: false},
+  cleared: {type: Boolean, default: false},
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // optional: admin or system
 }, { timestamps: true });
 

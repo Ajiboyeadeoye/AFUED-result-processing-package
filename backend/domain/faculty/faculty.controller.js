@@ -104,12 +104,12 @@ export const getAllFaculties = async (req, res) => {
 
     console.log("Faculties fetched successfully ✅");
     
-    // For deans: if no faculty assigned, return empty array with message
-    if (req.user.role === 'dean' && (!result || result.length === 0)) {
-      return buildResponse(res, 200, "No faculty assigned to you", []);
-    }
+    // // For deans: if no faculty assigned, return empty array with message
+    // if (req.user.role === 'dean' && (!result || result.length === 0)) {
+    //   return buildResponse(res, 200, "No faculty assigned to you", []);
+    // }
 
-    return buildResponse(res, 200, "Faculties fetched successfully", result); // FIXED MESSAGE
+    // return buildResponse(res, 200, "Faculties fetched successfully", result); // FIXED MESSAGE
   } catch (error) {
     console.error("Error fetching faculties ❌", error);
     return buildResponse(res, 500, "Error fetching faculties", null, true, error);

@@ -2180,3 +2180,226 @@
 [2025-11-30T16:05:21.197Z] [student] 6928ab59e6394a00e787df56 - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
 [2025-11-30T16:05:21.222Z] [student] 6928ab59e6394a00e787df56 - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
 [2025-11-30T16:05:21.248Z] [student] 6928ab59e6394a00e787df56 - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T12:36:50.995Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T12:36:51.024Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T12:36:51.011Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T12:36:51.059Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T12:36:51.078Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T12:36:51.098Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T14:00:04.232Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T14:00:04.241Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T14:00:04.246Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T14:00:04.259Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T14:00:04.262Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T14:00:04.275Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T15:38:16.276Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T15:38:16.285Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T15:38:16.271Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T15:38:16.350Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T15:38:16.386Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T15:38:16.390Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T15:47:11.039Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T15:47:11.042Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T15:47:11.065Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T15:47:11.086Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T15:47:11.107Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T15:47:11.129Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T19:00:08.414Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/course/available (GET) - failure
+[2025-12-01T19:38:07.153Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:38:07.246Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/course/available (GET) - failure
+[2025-12-01T19:38:07.264Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:38:07.292Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:38:07.312Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/course/available (GET) - failure
+[2025-12-01T19:38:07.328Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:42:41.014Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:42:41.018Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:42:41.025Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:42:41.044Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:42:41.054Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:42:41.064Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:47:34.153Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:47:34.185Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:47:34.190Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:47:34.199Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:47:34.210Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:47:34.218Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:47:40.478Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:47:40.498Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:47:40.526Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-01T19:47:40.528Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-01T19:47:40.538Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:47:40.582Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/admin/overview (GET) - failure
+[2025-12-01T19:58:52.622Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T19:58:52.680Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T19:58:52.697Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T19:58:52.722Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T19:58:52.770Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T19:58:52.795Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T20:03:14.966Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T20:03:14.991Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T20:03:14.997Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T20:03:15.027Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T20:03:15.032Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T20:03:15.081Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T20:09:59.708Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T20:09:59.781Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T20:09:59.804Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-01T20:09:59.859Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-01T20:09:59.865Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-01T20:09:59.901Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T06:33:41.170Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T06:33:41.287Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T06:33:41.303Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T06:33:41.316Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T06:33:41.384Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T06:33:41.442Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T07:18:49.591Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T07:18:49.654Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T07:18:49.661Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T07:18:49.674Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T07:18:49.680Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T07:18:49.703Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T07:43:43.011Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T07:43:43.031Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T07:43:43.078Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T07:43:43.094Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T07:43:43.125Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T07:43:43.172Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T08:04:35.011Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T08:04:35.037Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T08:04:35.115Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T08:04:35.126Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T08:04:35.149Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T08:04:35.153Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T21:41:37.406Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-02T21:41:37.424Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-02T21:46:17.842Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/lecturers/69294871fb08f50f100a8033 (GET) - failure
+[2025-12-02T22:18:33.452Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T22:18:33.488Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-02T22:18:33.533Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T22:18:33.549Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-02T22:18:33.596Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-02T22:18:33.631Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T04:11:52.371Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:11:52.382Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:23:17.904Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:23:17.924Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:45:36.582Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:45:40.288Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/student (POST) - failure
+[2025-12-03T04:45:41.993Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/student (POST) - failure
+[2025-12-03T04:55:18.703Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:55:18.716Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:56:03.314Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:56:03.351Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:59:06.805Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:59:06.836Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:59:09.134Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T04:59:09.169Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T05:34:42.842Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T05:34:42.835Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T05:41:55.427Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T05:41:55.471Z] [hod] 6928c5a475c778f1ee14c6c3 - Forbidden: hod tried to access restricted route at /afued/result/portal/course/all (GET) - failure
+[2025-12-03T07:42:50.126Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T07:42:50.136Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T07:42:50.149Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T07:42:50.170Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T07:42:50.173Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T07:42:50.192Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T08:01:13.008Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T08:01:13.014Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T08:01:13.018Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T08:01:13.063Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T08:01:13.074Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T08:01:13.138Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T08:07:15.598Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T08:07:15.716Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T08:07:15.775Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T08:07:15.808Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T08:07:15.850Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T08:07:15.909Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T11:08:21.697Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T11:08:21.721Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T11:08:21.813Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T11:08:21.823Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T11:08:21.832Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T11:08:21.921Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T11:11:43.571Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T11:11:43.623Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T11:11:43.660Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T11:11:43.703Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T11:11:43.720Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T11:11:43.737Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T11:18:22.452Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/course/available (GET) - failure
+[2025-12-03T12:49:35.173Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/lecturers/69294871fb08f50f100a8033 (GET) - failure
+[2025-12-03T12:50:14.812Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/course/available (GET) - failure
+[2025-12-03T13:06:06.044Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T13:06:06.054Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T13:06:06.069Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T13:06:06.126Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T13:06:06.136Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T13:06:06.176Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:25:29.166Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:25:29.174Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:25:29.182Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:25:29.203Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:25:29.209Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:25:29.223Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:36:37.055Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:36:37.060Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:36:37.137Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:36:37.171Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:36:37.188Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:36:37.242Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:37:23.812Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:37:23.831Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:37:23.853Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:37:23.949Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:37:23.972Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:37:24.026Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:41:28.771Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/course/check-registration/69289f63c3c2904e51b7564a (GET) - failure
+[2025-12-03T15:43:59.075Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:43:59.091Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:43:59.272Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T15:43:59.281Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T15:43:59.478Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T15:43:59.512Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T19:24:07.761Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T19:24:07.766Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T19:24:07.774Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T19:24:07.813Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T19:24:07.822Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T19:24:07.832Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:18:59.556Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:18:59.560Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:18:59.572Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:18:59.589Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:18:59.592Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:18:59.613Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:23:01.451Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:23:01.463Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:23:01.470Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:23:01.482Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:23:01.509Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:23:01.522Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:25:01.440Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/lecturers/69294871fb08f50f100a8033 (GET) - failure
+[2025-12-03T20:25:05.701Z] [Anonymous] Anonymous - Unauthorized access: No token provided at /afued/result/portal/course/available (GET) - failure
+[2025-12-03T20:25:21.990Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:25:21.995Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:25:21.998Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:25:22.033Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:25:22.045Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:25:22.052Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:32:49.567Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:32:49.592Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:32:49.623Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:32:49.663Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T20:32:49.714Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T20:32:49.737Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T20:32:53.675Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/semester/active (GET) - failure
+[2025-12-03T20:32:53.716Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/semester/active (GET) - failure
+[2025-12-03T21:24:48.941Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T21:24:48.953Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T21:24:48.959Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-03T21:24:48.994Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
+[2025-12-03T21:24:48.999Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
+[2025-12-03T21:24:49.038Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure

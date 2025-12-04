@@ -10,49 +10,52 @@ import {
   assignCourse,
   getLecturerCourses,
   getRegisterableCourses,
+  registerCourses,
+  getStudentRegistrations,
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
 
 const router = Router();
 
-/**
- * 📚 Get lecturer's courses
- */
+/** 📚 Get lecturer's courses */
 router.get("/lecturer", authenticate(['hod', 'admin', "lecturer"]), getLecturerCourses);
 
-/* 
-  *Get available courses for student registration
-  */
+/** Register courses */
+router.post("/register", authenticate(["hod", "admin", "student"]), registerCourses);
+
+/** Get available courses for student registration */
 router.get("/available", authenticate(['student']), getRegisterableCourses);
-/**
- * 📚 Get all courses (HOD/Admin only)
- */
+
+/** ✅ Get registered courses (Student + HOD) */
+router.get(
+  "/check-registration",
+  authenticate(['student', 'hod']),
+  getStudentRegistrations
+);
+router.get(
+  "/check-registration/:studentId",
+  authenticate(['student', 'hod']),
+  getStudentRegistrations
+);
+
+
+/** 📚 Get all courses */
 router.get("/", authenticate(["hod", "admin"]), getAllCourses);
 
-/**
- * 🔍 Get a single course by ID (authenticated users)
- */
+/** 🔍 Get a single course by ID */
 router.get("/:id", authenticate(["student"]), getCourseById);
 
-/**
- * 🧱 Create a new course (HOD/Admin only)
- */
+/** 🧱 Create a new course */
 router.post("/", authenticate(["hod", "admin"]), createCourse);
 
-/**
- * 👨‍🏫 Assign course to lecturer (HOD/Admin only)
- */
-router.post("/:id/assign", authenticate(["hod", "admin"]),  assignCourse);
+/** 👨‍🏫 Assign course to lecturer */
+router.post("/:id/assign", authenticate(["hod", "admin"]), assignCourse);
 
-/**
- * ✏️ Update a course (HOD/Admin only)
- */
-router.patch("/:id", authenticate(["hod", "admin"]),  updateCourse);
+/** ✏️ Update a course */
+router.patch("/:id", authenticate(["hod", "admin"]), updateCourse);
 
-/**
- * 🗑️ Delete a course (HOD/Admin only)
- */
-router.delete("/:id", authenticate(["hod", "admin"]), deleteCourse);
+/** 🗑️ Delete a course */
+router.delete("/:id", authenticate(["hod", "admin"]), deleteCourse); 
 
 export default router;

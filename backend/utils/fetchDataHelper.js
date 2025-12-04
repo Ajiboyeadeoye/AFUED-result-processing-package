@@ -32,13 +32,14 @@ const queryBuilder = (payload = {}, options = {}) => {
   // [Previous queryBuilder code remains exactly the same]
   const {
     page = 1,
-    limit = 10,
+
     fields = [],
     search_term = "",
     filter = {},
     sort = { createdAt: -1 },
     extraParams = {},
   } = payload;
+  let limit = payload.limit
 console.log(page)
   const enablePagination =
     options.enablePagination === undefined ? true : options.enablePagination;
@@ -48,6 +49,7 @@ console.log(page)
 
   const currentPage = parseInt(page) || 1;
   const maxLimit = options.maxLimit || 100;
+  limit = options.limit || limit;
   const itemsPerPage = Math.min(Math.max(parseInt(limit) || 20, 1), maxLimit);
   const skip = (currentPage - 1) * itemsPerPage;
 

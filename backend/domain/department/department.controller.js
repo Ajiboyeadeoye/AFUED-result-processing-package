@@ -67,7 +67,7 @@ export const getAllDepartment = async (req, res) => {
       populate: ["faculty", "hod"],
       additionalFilters
     });
-    return buildResponse(res, 200, "Filtered departments fetched", result);
+    // return buildResponse(res, 200, "Filtered departments fetched", result);
   } catch (error) {
     console.error(error);
     return buildResponse(res, 500, "Failed to fetch departments", null, true, error);

@@ -15,7 +15,11 @@ const courseRegistrationSchema = new mongoose.Schema(
     },
     attamptNumber: {type: Number, dafault: 1},
     approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    carryOverId: {type: mongoose.Schema.Types.ObjectId, ref: "carrOverSchema", default: null}  // This would be linked to a carryover document in case they are carrying the coursse over
+    carryOverId: {type: mongoose.Schema.Types.ObjectId, ref: "carrOverSchema", default: null},  // This would be linked to a carryover document in case they are carrying the coursse over
+
+    // Details in case it was registered or re-registerd by an hod
+    notes: {type: String, default: null},
+    registeredByHod: {type: mongoose.Schema.Types.ObjectId, ref: "User", default: null},
   },
   { timestamps: true }
 );

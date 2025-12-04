@@ -174,13 +174,21 @@ export const createStudent = async (req, res) => {
 
     // 🧮 If filtering/searching students
     if (fields || search_term || filters || page) {
-      console.log("📌MMy nm📌")
+      let additionalFilters = {};
+      if(req.user.role === 'hod') {
+        const departmnet = await departmentModel.findOne({ hod: req.user._id });
+        if(departmnet) {
+          additionalFilters.departmentId = departmnet._id;
+        }
+      }
+
       return await fetchDataHelper(req, res, Student, {
         configMap: dataMaps.Student,
         autoPopulate: true,
         models: { departmentModel, User },
         populate: ["departmentId", "_id"],
         custom_fields: { name: "_id", email: "_id", department: "departmentId" },
+        additionalFilters
       });
     }
 

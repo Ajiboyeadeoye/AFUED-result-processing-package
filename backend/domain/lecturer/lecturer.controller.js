@@ -152,6 +152,7 @@ export const updateLecturer = async (req, res) => {
 
     if (!lecturer) return buildResponse(res, 404, "Lecturer not found");
 
+    console.log(req.body)
     return buildResponse(res, 200, "Lecturer updated successfully", lecturer);
   } catch (error) {
     return buildResponse(res, 500, "Failed to update lecturer", null, true, error);

@@ -17,7 +17,7 @@ const router = express.Router();
 
 // 🧩 ADMIN ROUTES
 router.get("/", authenticate("admin"), getAllStudents);
-router.post("/", authenticate("admin"), createStudent);
+router.post("/", authenticate(["admin", "hod", "dean"]), createStudent);
 router.get("/profile", authenticate("student"), getMyProfile);
 router.get("/:id", authenticate("admin"), getStudentById);
 router.put("/:id", authenticate("admin"), updateStudent);

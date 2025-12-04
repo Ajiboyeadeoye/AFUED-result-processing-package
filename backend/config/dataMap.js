@@ -132,7 +132,6 @@ export const dataMaps = {
 
   Course: {
     _id: "this._id",
-    code: "this.code || this.borrowedId.code",
     code: "this.courseCode || this.borrowedId.courseCode",
     faculty_id: "this.faculty._id",
     faculty_name: "this.faculty.name",
@@ -165,7 +164,6 @@ export const dataMaps = {
 
       if (!assignment || !assignment.lecturer) return null;
 
-      console.log("The assignment lecturer", assignment.lecturer);
       return {
         _id: assignment.lecturer._id,
         name: assignment.lecturer.name || null,
@@ -246,10 +244,18 @@ export const dataMaps = {
     }
   },
 
+  RegisteredCourses: {
+    student_id: "this.student._id",
+    name: "this.student.name",
+    matric_no: "this.student.matricNumber",
+    department: "this.student.departmentId.name",
+    department_id: "this.student.departmentId._id",
+    faculty_name: "Faculty.name",
+  },
 
 
   Student: {
-    id: "this._id._id",
+    _id: "this._id._id",
     name: "this._id.name || this._id?.name",
     matric_no: "this.matricNumber",
     department: "this.departmentId.name",
@@ -258,7 +264,7 @@ export const dataMaps = {
     level: 'this.level',
     semester: async (doc, models) => {
       const activeSemester = await models.Semester.findOne({ isActive: true, department: String(doc.departmentId._id) }).lean();
-      console.log("The active semester", activeSemester, String(doc.departmentId._id) );
+      // console.log("The active semester", activeSemester, String(doc.departmentId._id) );
       return activeSemester ? activeSemester.name : "N/A";
     },
     email: "this._id.email"
@@ -274,7 +280,6 @@ export const dataMaps = {
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
     n: (doc, models)=>{
-      console.log(doc)
     }
   },
 
