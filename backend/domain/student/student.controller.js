@@ -1,6 +1,6 @@
 import Student from "./student.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
-import  fetchDataHelper  from "../../utils/fetchDataHelper.js";
+import fetchDataHelper from "../../utils/fetchDataHelper.js";
 import Semester from "../semester/semester.model.js";
 import User from "../user/user.model.js";
 import departmentModel from "../department/department.model.js";
@@ -17,14 +17,14 @@ import studentModel from "./student.model.js";
 export const getMyProfile = async (req, res) => {
   try {
     // const s
-        return fetchDataHelper(req, res, studentModel, {
-          configMap: dataMaps.Student,
-          autoPopulate: true,
-          models: { departmentModel, User, Semester },
-          populate: ["departmentId", "_id"],
-          additionalFilters: { _id: req.user._id },
-    
-        });
+    return fetchDataHelper(req, res, studentModel, {
+      configMap: dataMaps.Student,
+      autoPopulate: true,
+      models: { departmentModel, User, Semester },
+      populate: ["departmentId", "_id"],
+      additionalFilters: { _id: req.user._id },
+
+    });
 
   } catch (error) {
     console.error("❌ getMyProfile Error:", error);
@@ -147,13 +147,13 @@ export const printTranscript = async (req, res) => {
 
 // 🧾 Get all students (Admin only)
 export const getAllStudents = async (req, res) => {
-        return await fetchDataHelper(req, res, Student, {
-        configMap: dataMaps.Student,
-        autoPopulate: true,
-        models: { departmentModel, User },
-        populate: ["departmentId", "_id"],
-        custom_fields: { name: "_id", email: "_id" },
-      });
+  return await fetchDataHelper(req, res, Student, {
+    configMap: dataMaps.Student,
+    autoPopulate: true,
+    models: { departmentModel, User },
+    populate: ["departmentId", "_id"],
+    custom_fields: { name: "_id.name", email: "_id" },
+  });
 };
 
 // 🧍 Create a new student (Admin only)
@@ -175,9 +175,9 @@ export const createStudent = async (req, res) => {
     // 🧮 If filtering/searching students
     if (fields || search_term || filters || page) {
       let additionalFilters = {};
-      if(req.user.role === 'hod') {
+      if (req.user.role === 'hod') {
         const departmnet = await departmentModel.findOne({ hod: req.user._id });
-        if(departmnet) {
+        if (departmnet) {
           additionalFilters.departmentId = departmnet._id;
         }
       }
@@ -187,7 +187,35 @@ export const createStudent = async (req, res) => {
         autoPopulate: true,
         models: { departmentModel, User },
         populate: ["departmentId", "_id"],
-        custom_fields: { name: "_id", email: "_id", department: "departmentId" },
+        custom_fields: {
+          // For User reference (_id field)
+          name: {
+            path: "_id.name",
+            searchPath: "_id.name",
+            alias: "student_user_info", 
+            as: "studentName"
+          },
+          email: {
+            path: "_id.email",
+            searchPath: "_id.email",
+            alias: "student_user_info",  // SAME alias (shares lookup)
+            as: "studentEmail"
+          },
+
+          // For Department reference (departmentId field)
+          departmentName: {
+            path: "departmentId.name",      // ✅ CORRECT: Use departmentId, not department
+            searchPath: "departmentId.name",
+            alias: "student_dept_info",     // UNIQUE alias
+            as: "department"
+          },
+          departmentCode: {
+            path: "departmentId.code",
+            searchPath: "departmentId.code",
+            alias: "student_dept_info",     // SAME alias (shares lookup)
+            as: "departmentCode"
+          }
+        },
         additionalFilters
       });
     }

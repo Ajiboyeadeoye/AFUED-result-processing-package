@@ -625,8 +625,7 @@ function escapeXml(unsafe) {
  * ------------------------------------------------------------ */
 const fetchData = async (payload, Model, options = {}) => {
   const overallStart = logWithTime(`🚀 Starting fetchData for ${Model.modelName}`);
-  
-  // Build query from payload
+
   const {
     query,
     finalSort,
@@ -636,54 +635,390 @@ const fetchData = async (payload, Model, options = {}) => {
     extraParams,
     currentPage,
   } = queryBuilder(payload, options);
-  
-  // Determine if we need aggregation pipeline
-  const needsAggregation = shouldUseAggregationPipeline(query, options);
-  
+
+  // ----------------------------
+  // Build nestedPopulate array from options.custom_fields
+  // ----------------------------
+  const nestedPopulatePaths = [];
+  (options.custom_fields || {}) && Object.values(options.custom_fields || {})
+    .forEach(ref => {
+      // Handle both string and object structures
+      const path = typeof ref === 'string' ? ref : (ref.path || '');
+      if (path && path.includes('.')) nestedPopulatePaths.push(path);
+    });
+
+  const nestedPopulate = buildNestedPopulate(Model, nestedPopulatePaths);
+
+  // Detect if we're searching inside referenced custom_fields
+  const queryBuildStart = logWithTime(`🔍 Analyzing query conditions`);
+  const hasNestedSearch = options.custom_fields &&
+    Object.keys(options.custom_fields).some((key) => {
+      const fieldDef = options.custom_fields[key];
+      const path = getPathFromFieldDef(fieldDef);
+      return query.$or?.some?.((cond) => {
+        const condKey = Object.keys(cond)[0];
+        return condKey && path && (
+          // Either the query searches a nested field inside our custom path
+          condKey.startsWith(path + ".") ||
+          // OR the query searches exactly our custom path field
+          condKey === path
+        );
+      });
+    });
+
   let dataQuery;
-  let queryBuildTime;
-  
-  if (needsAggregation) {
-    queryBuildTime = logWithTime(`🔄 Building aggregation pipeline`);
-    dataQuery = await executeAggregationPipeline(Model, query, finalSort, options, {
-      skip,
-      itemsPerPage,
-      enablePagination,
-      extraParams
+  const needsRefFilter =
+    options.custom_fields &&
+    Object.keys(options.additionalFilters || {}).some(
+      (key) => key in options.custom_fields
+    );
+
+  // Add this condition to detect shared ID patterns
+  const hasSharedIdPattern = options.custom_fields &&
+    Object.values(options.custom_fields).some(fieldDef => {
+      const path = getPathFromFieldDef(fieldDef);
+      // return path && path.includes('._id') && path.includes('.');
+      return path && path.includes('.');
+
+
     });
-    logWithTime(`✅ Pipeline built`, queryBuildTime);
+  const hasNestedFilter = (filter = {}, customFields = {}) => {
+    for (const key in filter) {
+      if (!filter.hasOwnProperty(key)) continue;
+
+      if (key === "$or" || key === "$and") {
+        if (Array.isArray(filter[key])) {
+          for (const cond of filter[key]) {
+            if (cond && typeof cond === "object") {
+              if (hasNestedFilter(cond, customFields)) return true;
+            }
+          }
+        }
+      } else {
+        // Safely check if customFields[key] exists
+        if ((customFields && customFields[key]) || key.includes(".")) return true;
+      }
+    }
+    return false;
+  };
+
+
+
+  const runPipeline =
+    hasNestedSearch || needsRefFilter || hasSharedIdPattern ||
+    hasNestedFilter(options.additionalFilters, options.custom_fields);
+
+  logWithTime(`✅ Query analysis complete`, queryBuildStart);
+
+  let pipelineBuildTime;
+
+  if (runPipeline) {
+    pipelineBuildTime = logWithTime(`🔄 Building aggregation pipeline`);
+
+    const pipeline = [];
+
+    // ✅ Base match
+    const baseMatch = { ...query };
+    delete baseMatch.$or;
+
+    // 🔹 Determine deferred fields (those that belong to joined models)
+    const deferredMatch = {};
+    const joinedFields = Object.keys(options.custom_fields || {});
+
+    for (const key in baseMatch) {
+      if (joinedFields.includes(key)) {
+        const fieldDef = options.custom_fields[key];
+        const ref = typeof fieldDef === 'string' ? fieldDef : (fieldDef.path || '');
+        if (ref) {
+          deferredMatch[`${ref}.${key}`] = baseMatch[key];
+          delete baseMatch[key];
+        }
+      }
+    }
+
+    // Push base match for fields in the main model
+    if (Object.keys(baseMatch).length) pipeline.push({ $match: baseMatch });
+
+    // ✅ Collect root and nested references from custom_fields
+    const rootRefs = new Set();
+    const nestedRefs = new Set();
+
+    Object.values(options.custom_fields || {}).forEach(fieldDef => {
+      const path = typeof fieldDef === 'string' ? fieldDef : (fieldDef.path || '');
+      if (path.includes('.')) {
+        const [root, ...rest] = path.split('.');
+        rootRefs.add(root);
+        nestedRefs.add(path);
+      } else if (path) {
+        rootRefs.add(path);
+      }
+    });
+
+    // ✅ Lookups for each root ref
+    for (const ref of rootRefs) {
+      let refPath = Model.schema.path(ref);
+      let refModel = refPath?.options?.ref;
+      let localField = ref;
+
+      // Fallback patterns like refId / ref_id
+      if (!refModel) {
+        const altPaths = [`${ref}Id`, `${ref}_id`];
+        for (const alt of altPaths) {
+          const altPath = Model.schema.path(alt);
+          if (altPath?.options?.ref) {
+            refPath = altPath;
+            refModel = altPath.options.ref;
+            localField = alt;
+            break;
+          }
+        }
+      }
+
+      // Shared _id logic
+      if (!refModel && ref === "_id") {
+        const idPath = Model.schema.path("_id");
+        if (idPath?.options?.ref) {
+          refModel = idPath.options.ref;
+          localField = "_id";
+
+          const asField = ref + "Details";
+          console.log("Found shared _id reference. Creating top-level lookup:", asField);
+
+          pipeline.push({
+            $lookup: {
+              from: refModel.toLowerCase() + "s",
+              localField,
+              foreignField: "_id",
+              as: asField,
+            },
+          });
+          pipeline.push({
+            $unwind: { path: `$${asField}`, preserveNullAndEmptyArrays: true },
+          });
+          continue;
+        }
+      }
+
+      // Normal lookup for standard references
+      if (!refModel) continue;
+
+      pipeline.push({
+        $lookup: {
+          from: refModel.toLowerCase() + "s",
+          localField,
+          foreignField: "_id",
+          as: ref,
+        },
+      });
+      pipeline.push({
+        $unwind: { path: `$${ref}`, preserveNullAndEmptyArrays: true },
+      });
+    }
+
+    // ✅ Lookups for each nested ref (second level)
+    for (const ref of nestedRefs) {
+      const [root, nested] = ref.split('.');
+
+      // 1️⃣ Find the populate object for this root
+      const rootPopulateObj = (options.populate || []).find(p => p.path === root);
+      const nestedPopulateObj = rootPopulateObj?.populate
+        ? (Array.isArray(rootPopulateObj.populate)
+          ? rootPopulateObj.populate.find(p => p.path === nested)
+          : rootPopulateObj.populate.path === nested ? rootPopulateObj.populate : null
+        )
+        : null;
+
+      // 2️⃣ Determine the model to use for the nested $lookup
+      const nestedModelName = nestedPopulateObj?.model
+        || (mongoose.modelNames().includes(capitalize(nested)) ? capitalize(nested) : null)
+        || (rootPopulateObj?.model ? rootPopulateObj.model : null);
+
+      if (!nestedModelName) continue;
+
+      const defaultAsField = `${root}_${nested}`;
+      const asField = defaultAsField;
+
+      pipeline.push({
+        $lookup: {
+          from: nestedModelName.toLowerCase() + "s",
+          localField: `${root}.${nested}`,
+          foreignField: "_id",
+          as: asField,
+        }
+      });
+
+      pipeline.push({
+        $unwind: { path: `$${asField}`, preserveNullAndEmptyArrays: true }
+      });
+    }
+
+    // 🔹 Apply deferred matches AFTER lookups
+    if (Object.keys(deferredMatch).length) {
+      pipeline.push({ $match: deferredMatch });
+    }
+
+    console.log("Final $or conditions:", query.$or);
+    // ✅ Apply search conditions ($or)
+    if (query.$or?.length) pipeline.push({ $match: { $or: query.$or } });
+
+    // ✅ Sorting and pagination
+    pipeline.push({ $sort: finalSort });
+    if (enablePagination && !extraParams.asFile) {
+      pipeline.push({ $skip: skip }, { $limit: itemsPerPage });
+    }
+
+    dataQuery = Model.aggregate(pipeline);
+    logWithTime(`✅ Pipeline built with ${pipeline.length} stages`, pipelineBuildTime);
+    if (ENABLE_PERFORMANCE_LOG) console.log('📊 Pipeline stages:', pipeline.map(stage => Object.keys(stage)[0]));
+
+    console.log("Running aggregation pipeline", JSON.stringify(pipeline, null, 2));
   } else {
-    queryBuildTime = logWithTime(`🔧 Building find query`);
-    dataQuery = await executeFindQuery(Model, query, finalSort, options, {
-      skip,
-      itemsPerPage,
-      enablePagination,
-      extraParams
-    });
-    logWithTime(`✅ Find query built`, queryBuildTime);
+    console.log("Running standard find query", JSON.stringify(query, null, 2));
+    const queryBuildStart = logWithTime(`🔧 Building find query`);
+
+    // 🧠 Default behavior
+    dataQuery = Model.find(query).sort(finalSort);
+
+    // ----------------------------
+    // Merge manual populate + nestedPopulate
+    // ----------------------------
+    const manualPopulate = [].concat(options.populate || []);
+    const normalize = (p) => (typeof p === 'string' ? { path: p } : p || {});
+
+    const mergePopulate = (manualArr, nestedArr) => {
+      const map = new Map();
+      // add manual first (they take precedence)
+      for (const m of manualArr) {
+        const n = normalize(m);
+        map.set(n.path, { ...n, populate: [].concat(n.populate || []) });
+      }
+      // merge nested populates
+      for (const nRaw of nestedArr || []) {
+        const n = normalize(nRaw);
+        if (!map.has(n.path)) {
+          map.set(n.path, { ...n, populate: [].concat(n.populate || []) });
+        } else {
+          const existing = map.get(n.path);
+          existing.populate = existing.populate || [];
+          const nestedSubs = [].concat(n.populate || []);
+          for (const sub of nestedSubs) {
+            const subPath = typeof sub === 'string' ? sub : sub.path;
+            const exists = existing.populate.find(p => (typeof p === 'string' ? p : p.path) === subPath);
+            if (!exists) existing.populate.push(sub);
+          }
+          map.set(n.path, existing);
+        }
+      }
+      return Array.from(map.values());
+    };
+
+    // Keep autoPopulate behavior
+    if (options.autoPopulate !== false) {
+      const schemaPaths = Model.schema.paths;
+      const declaredPaths = new Set((manualPopulate || []).map(p => (typeof p === 'string' ? p : p.path)));
+      for (const key in schemaPaths) {
+        const path = schemaPaths[key];
+        if (path.options?.ref && !declaredPaths.has(key)) {
+          manualPopulate.push({ path: key, select: "name" });
+          declaredPaths.add(key);
+        }
+      }
+    }
+
+    // merged array of populate objects
+    const combinedPopulate = mergePopulate(manualPopulate, nestedPopulate);
+
+    // Apply combined populates to query
+    for (const p of combinedPopulate) {
+      dataQuery = dataQuery.populate(p);
+    }
+
+    // Pagination
+    if (enablePagination && !extraParams.asFile) {
+      dataQuery = dataQuery.skip(skip).limit(itemsPerPage);
+    }
+
+    logWithTime(`✅ Find query built`, queryBuildStart);
   }
-  
-  // Execute query
+
+  // Execute query with timing
   const queryStart = logWithTime(`📡 Executing database query`);
   let data;
+
   try {
-    data = await executeDatabaseQuery(dataQuery);
-    logWithTime(`✅ Database query completed`, queryStart);
+    if (typeof dataQuery.lean === "function") {
+      data = await dataQuery.lean();
+    } else {
+      data = await dataQuery;
+    }
+    const queryTime = logWithTime(`✅ Database query completed`, queryStart);
+
+    if (ENABLE_PERFORMANCE_LOG) console.log(`📊 Query returned ${data?.length || 0} records in ${queryTime}ms`);
+
   } catch (error) {
     logWithTime(`❌ Database query failed`, queryStart);
     throw error;
   }
-  
-  // Post-processing
-  data = await postProcessData(data, options, extraParams);
-  
-  // Pagination info
+
+  // 🪄 Flatten custom fields with timing
+  if (options.custom_fields && Array.isArray(data) && data.length) {
+    const flattenStart = logWithTime(`🔄 Flattening custom fields`);
+    data = data.map((item) => {
+      const newItem = { ...item };
+      for (const [field, fieldDef] of Object.entries(options.custom_fields)) {
+        let value;
+
+        if (typeof fieldDef === 'string') {
+          // Handle string path: 'user.name'
+          value = fieldDef
+            .split('.')
+            .reduce((acc, key) => (acc ? acc[key] : undefined), item);
+        } else if (fieldDef && typeof fieldDef === 'object') {
+          // Handle object structure: { path: 'borrowedId.title', fallback: 'title' }
+          const path = fieldDef.path || '';
+          if (path) {
+            value = path
+              .split('.')
+              .reduce((acc, key) => (acc ? acc[key] : undefined), item);
+          }
+
+          // If value is undefined and there's a fallback, use it
+          if (value === undefined && fieldDef.fallback) {
+            value = item[fieldDef.fallback];
+          }
+        }
+
+        if (value !== undefined) newItem[field] = value;
+      }
+      return newItem;
+    });
+    logWithTime(`✅ Custom fields flattened`, flattenStart);
+  }
+
+  // 🧠 Apply transformations with timing
+  if (options.configMap) {
+    const transformStart = logWithTime(`🎭 Applying transformations`);
+    data = await applyTransformations(data, options.configMap);
+    logWithTime(`✅ Transformations applied`, transformStart);
+  }
+
+  // 🧹 Remove excluded fields with timing
+  if (Array.isArray(extraParams.excludeFields)) {
+    const excludeStart = logWithTime(`🧹 Removing excluded fields`);
+    data = data.map((item) => {
+      extraParams.excludeFields.forEach((f) => delete item[f]);
+      return item;
+    });
+    logWithTime(`✅ Excluded fields removed`, excludeStart);
+  }
+
+  // Get pagination info with timing
   let pagination = null;
   if (enablePagination && !extraParams.asFile) {
     const countStart = logWithTime(`🔢 Counting total documents`);
     const totalItems = await Model.countDocuments(query);
     logWithTime(`✅ Document count completed`, countStart);
-    
+
     pagination = {
       current_page: currentPage,
       limit: itemsPerPage,
@@ -691,14 +1026,20 @@ const fetchData = async (payload, Model, options = {}) => {
       total_items: totalItems,
     };
   }
-  
+
   const totalTime = logWithTime(`🎉 fetchData completed for ${Model.modelName}`, overallStart);
-  
+
   // Performance summary
   if (ENABLE_PERFORMANCE_LOG) {
-    logPerformanceSummary(Model.modelName, totalTime, data?.length || 0, enablePagination, needsAggregation, currentPage, itemsPerPage);
+    console.log(`\n📈 PERFORMANCE SUMMARY for ${Model.modelName}:`);
+    console.log(`   Total time: ${totalTime}ms`);
+    console.log(`   Records returned: ${data?.length || 0}`);
+    console.log(`   Pagination enabled: ${enablePagination}`);
+    console.log(`   Used aggregation: ${runPipeline}`);
+    console.log(`   Current page: ${currentPage}`);
+    console.log(`   Page size: ${itemsPerPage}\n`);
   }
-  
+
   return {
     data,
     pagination,
@@ -710,639 +1051,11 @@ const fetchData = async (payload, Model, options = {}) => {
       performance: {
         totalTime,
         recordsReturned: data?.length || 0,
-        usedAggregation: needsAggregation
+        usedAggregation: runPipeline
       }
     }
   };
 };
-
-// ==================== HELPER FUNCTIONS ====================
-
-/**
- * Determines whether to use aggregation pipeline or find query
- */
-function shouldUseAggregationPipeline(query, options) {
-  const { custom_fields = {}, additionalFilters = {} } = options;
-  
-  // Check if we have any custom fields
-  const hasCustomFields = Object.keys(custom_fields).length > 0;
-  if (!hasCustomFields) return false;
-  
-  // Check for nested filters in query or additionalFilters
-  const hasNestedInQuery = hasNestedFilters(query, custom_fields);
-  const hasNestedInAdditional = hasNestedFilters(additionalFilters, custom_fields);
-  
-  // Check if custom fields contain nested paths
-  const hasNestedCustomFields = Object.values(custom_fields).some(fieldDef => {
-    const path = getPathFromFieldDef(fieldDef);
-    return path && path.includes('.');
-  });
-  
-  // Check for $or conditions in query
-  const hasOrConditions = query.$or && query.$or.length > 0;
-  
-  // Use aggregation if any nested conditions exist
-  return hasNestedInQuery || hasNestedInAdditional || hasNestedCustomFields || hasOrConditions;
-}
-
-/**
- * Detect nested filters that should be deferred to post-lookup match
- */
-function hasNestedFilters(filter, customFields = {}) {
-  if (!filter || typeof filter !== 'object') return false;
-  
-  for (const key in filter) {
-    if (!filter.hasOwnProperty(key)) continue;
-    
-    const value = filter[key];
-    
-    // Check for $or or $and operators
-    if (key === '$or' || key === '$and') {
-      if (Array.isArray(value)) {
-        for (const cond of value) {
-          if (cond && typeof cond === 'object' && hasNestedFilters(cond, customFields)) {
-            return true;
-          }
-        }
-      }
-      return true; // $or and $and always go to post-lookup
-    }
-    
-    // Check for nested paths
-    if (key.includes('.')) {
-      return true;
-    }
-    
-    // Check if field is in custom_fields (deferred match)
-    if (customFields && customFields[key]) {
-      return true;
-    }
-    
-    // Recursively check nested objects
-    if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof RegExp)) {
-      if (hasNestedFilters(value, customFields)) {
-        return true;
-      }
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Extract root references from custom fields
- */
-function extractRootRefs(customFields) {
-  const rootRefs = new Set();
-  
-  Object.values(customFields || {}).forEach(fieldDef => {
-    const path = getPathFromFieldDef(fieldDef);
-    if (!path) return;
-    
-    const parts = path.split('.');
-    if (parts.length === 1) {
-      rootRefs.add(path);
-    } else {
-      rootRefs.add(parts[0]);
-    }
-  });
-  
-  return Array.from(rootRefs);
-}
-
-/**
- * Extract nested references from custom fields
- */
-function extractNestedRefs(customFields) {
-  const nestedRefs = new Set();
-  
-  Object.values(customFields || {}).forEach(fieldDef => {
-    const path = getPathFromFieldDef(fieldDef);
-    if (path && path.includes('.') && path.split('.').length > 1) {
-      nestedRefs.add(path);
-    }
-  });
-  
-  return Array.from(nestedRefs);
-}
-
-/**
- * Get path from field definition
- */
-// function getPathFromFieldDef(fieldDef) {
-//   if (!fieldDef) return '';
-//   if (typeof fieldDef === 'string') return fieldDef;
-//   return fieldDef.path || '';
-// }
-
-/**
- * Split filters into root match and deferred match
- */
-function splitFiltersIntoRootAndDeferred(query, customFields = {}) {
-  const rootMatch = { ...query };
-  const deferredMatch = {};
-  
-  // Remove $or/$and from root match (they always go to deferred)
-  delete rootMatch.$or;
-  delete rootMatch.$and;
-  
-  // Identify fields that should be deferred
-  for (const key in rootMatch) {
-    if (!rootMatch.hasOwnProperty(key)) continue;
-    
-    const shouldDefer = key.includes('.') || (customFields && customFields[key]);
-    
-    if (shouldDefer) {
-      deferredMatch[key] = rootMatch[key];
-      delete rootMatch[key];
-    }
-  }
-  
-  // Add $or/$and back to deferred match if they exist
-  if (query.$or) deferredMatch.$or = query.$or;
-  if (query.$and) deferredMatch.$and = query.$and;
-  
-  return { rootMatch, deferredMatch };
-}
-
-/**
- * Build lookup stages for references
- */
-function buildLookups(Model, rootRefs, nestedRefs) {
-  const lookups = [];
-  const processedRefs = new Set();
-  
-  // Get actual collection names from models
-  const getCollectionName = (modelName) => {
-    try {
-      const model = mongoose.model(modelName);
-      return model.collection.name;  // Get actual MongoDB collection name
-    } catch (err) {
-      // Fallback to pluralized lowercase
-      return modelName.toLowerCase() + 's';
-    }
-  };
-  
-  // Process root references (like "student", "semester")
-  for (const ref of rootRefs) {
-    if (processedRefs.has(ref)) continue;
-    
-    // Get schema information
-    const schema = Model.schema;
-    const schemaPath = schema.path(ref);
-    
-    if (!schemaPath || !schemaPath.options || !schemaPath.options.ref) {
-      console.warn(`Field "${ref}" is not a reference in ${Model.modelName}`);
-      continue;
-    }
-    
-    const refModel = schemaPath.options.ref;
-    const collectionName = getCollectionName(refModel);
-    
-    lookups.push({
-      $lookup: {
-        from: collectionName,
-        localField: ref,
-        foreignField: "_id",
-        as: ref,
-      }
-    });
-    
-    lookups.push({
-      $unwind: { path: `$${ref}`, preserveNullAndEmptyArrays: true }
-    });
-    
-    processedRefs.add(ref);
-  }
-  
-  // Process nested references (like "student._id")
-  for (const nestedPath of nestedRefs) {
-    const parts = nestedPath.split('.');
-    if (parts.length < 2) continue;
-    
-    const [rootRef, nestedRef] = parts;
-    
-    // First, ensure the root document is populated
-    if (!processedRefs.has(rootRef)) {
-      // Check if rootRef is a reference in the main model
-      const schema = Model.schema;
-      const rootSchemaPath = schema.path(rootRef);
-      
-      if (rootSchemaPath && rootSchemaPath.options && rootSchemaPath.options.ref) {
-        const refModel = rootSchemaPath.options.ref;
-        const collectionName = getCollectionName(refModel);
-        
-        lookups.push({
-          $lookup: {
-            from: collectionName,
-            localField: rootRef,
-            foreignField: "_id",
-            as: rootRef,
-          }
-        });
-        
-        lookups.push({
-          $unwind: { path: `$${rootRef}`, preserveNullAndEmptyArrays: true }
-        });
-        
-        processedRefs.add(rootRef);
-      } else {
-        console.warn(`Root reference "${rootRef}" not found in schema`);
-        continue;
-      }
-    }
-    
-    // Now handle the nested reference
-    // Get the referenced model for rootRef
-    const rootSchemaPath = Model.schema.path(rootRef);
-    if (!rootSchemaPath || !rootSchemaPath.options || !rootSchemaPath.options.ref) {
-      console.warn(`Cannot find model for "${rootRef}"`);
-      continue;
-    }
-    
-    const rootModelName = rootSchemaPath.options.ref;
-    
-    try {
-      const RootModel = mongoose.model(rootModelName);
-      const nestedSchemaPath = RootModel.schema.path(nestedRef);
-      
-      if (!nestedSchemaPath || !nestedSchemaPath.options || !nestedSchemaPath.options.ref) {
-        console.warn(`"${nestedRef}" is not a reference in ${rootModelName}`);
-        continue;
-      }
-      
-      const nestedRefModel = nestedSchemaPath.options.ref;
-      const nestedCollectionName = getCollectionName(nestedRefModel);
-      
-      const asField = `${rootRef}_${nestedRef}`;
-      
-      lookups.push({
-        $lookup: {
-          from: nestedCollectionName,
-          localField: `${rootRef}.${nestedRef}`,
-          foreignField: "_id",
-          as: asField,
-        }
-      });
-      
-      lookups.push({
-        $unwind: { path: `$${asField}`, preserveNullAndEmptyArrays: true }
-      });
-      
-    } catch (err) {
-      console.error(`Error processing nested path "${nestedPath}":`, err.message);
-    }
-  }
-  
-  return lookups;
-}
-/**
- * Resolve reference model and local field
- */
-function resolveReference(Model, ref) {
-  let refPath = Model.schema.path(ref);
-  let refModel = refPath?.options?.ref;
-  let localField = ref;
-  
-  // Handle shared _id references
-  if (!refModel && ref === "_id") {
-    const idPath = Model.schema.path("_id");
-    if (idPath?.options?.ref) {
-      return {
-        refModel: idPath.options.ref,
-        localField: "_id"
-      };
-    }
-  }
-  
-  // Try alternative field patterns
-  if (!refModel) {
-    const altPaths = [`${ref}Id`, `${ref}_id`];
-    for (const alt of altPaths) {
-      const altPath = Model.schema.path(alt);
-      if (altPath?.options?.ref) {
-        refModel = altPath.options.ref;
-        localField = alt;
-        break;
-      }
-    }
-  }
-  
-  return { refModel, localField };
-}
-
-/**
- * Get nested model name for lookup
- */
-function getNestedModelName(Model, rootRef, nestedRef) {
-  // Try to get from schema first
-  const rootPath = Model.schema.path(rootRef);
-  if (rootPath?.options?.ref) {
-    const rootModel = mongoose.model(rootPath.options.ref);
-    const nestedPath = rootModel.schema.path(nestedRef);
-    if (nestedPath?.options?.ref) {
-      return nestedPath.options.ref;
-    }
-  }
-  
-  // Fallback to capitalized version
-  return capitalize(nestedRef);
-}
-
-/**
- * Build post-lookup match stage
- */
-function buildPostLookupMatch(deferredMatch, customFields) {
-  if (!deferredMatch || Object.keys(deferredMatch).length === 0) {
-    return null;
-  }
-  
-  const matchStage = { ...deferredMatch };
-  
-  // Transform custom field paths in deferred match
-  for (const key in matchStage) {
-    if (!matchStage.hasOwnProperty(key)) continue;
-    
-    if (customFields && customFields[key]) {
-      const path = getPathFromFieldDef(customFields[key]);
-      if (path) {
-        matchStage[path] = matchStage[key];
-        delete matchStage[key];
-      }
-    }
-  }
-  
-  return { $match: matchStage };
-}
-
-/**
- * Build the complete aggregation pipeline
- */
-function buildAggregationPipeline(Model, query, sort, customFields, pagination) {
-  const pipeline = [];
-  
-  // Phase 1: Pre-lookup match
-  const { rootMatch, deferredMatch } = splitFiltersIntoRootAndDeferred(query, customFields);
-  if (Object.keys(rootMatch).length > 0) {
-    pipeline.push({ $match: rootMatch });
-  }
-  
-  // Phase 2: Lookups
-  const rootRefs = extractRootRefs(customFields);
-  const nestedRefs = extractNestedRefs(customFields);
-  const lookups = buildLookups(Model, rootRefs, nestedRefs);
-  pipeline.push(...lookups);
-  
-  // Phase 3: Post-lookup match
-  const postMatch = buildPostLookupMatch(deferredMatch, customFields);
-  if (postMatch) {
-    pipeline.push(postMatch);
-  }
-  
-  // Phase 4: Sorting
-  pipeline.push({ $sort: sort });
-  
-  // Phase 5: Pagination
-  if (pagination.enablePagination && !pagination.extraParams.asFile) {
-    pipeline.push({ $skip: pagination.skip });
-    pipeline.push({ $limit: pagination.itemsPerPage });
-  }
-  
-  return pipeline;
-}
-
-/**
- * Execute aggregation pipeline
- */
-async function executeAggregationPipeline(Model, query, sort, options, pagination) {
-  const { custom_fields = {} } = options;
-  
-  const pipeline = buildAggregationPipeline(Model, query, sort, custom_fields, pagination);
-  
-  if (ENABLE_PERFORMANCE_LOG) {
-    console.log('📊 Aggregation pipeline:', JSON.stringify(pipeline, null, 2));
-  }
-  console.log(JSON.stringify(pipeline, null, 2));
-  return Model.aggregate(pipeline);
-}
-
-/**
- * Execute find query with populate
- */
-async function executeFindQuery(Model, query, sort, options, pagination) {
-  let dataQuery = Model.find(query).sort(sort);
-  
-  // Build populate configuration
-  const populateConfig = buildPopulateConfig(Model, options);
-  
-  // Apply populate
-  for (const p of populateConfig) {
-    dataQuery = dataQuery.populate(p);
-  }
-  
-  // Apply pagination
-  if (pagination.enablePagination && !pagination.extraParams.asFile) {
-    dataQuery = dataQuery.skip(pagination.skip).limit(pagination.itemsPerPage);
-  }
-  
-  return dataQuery;
-}
-
-/**
- * Build populate configuration
- */
-function buildPopulateConfig(Model, options) {
-  const { populate = [], custom_fields = {}, autoPopulate = true } = options;
-  
-  // Get nested populate paths from custom fields
-  const nestedPopulatePaths = [];
-  Object.values(custom_fields).forEach(fieldDef => {
-    const path = getPathFromFieldDef(fieldDef);
-    if (path && path.includes('.')) {
-      nestedPopulatePaths.push(path);
-    }
-  });
-  
-  const nestedPopulate = buildNestedPopulate(Model, nestedPopulatePaths);
-  
-  // Merge manual populate + nested populate
-  const manualPopulate = [].concat(populate);
-  const normalize = (p) => (typeof p === 'string' ? { path: p } : p || {});
-  
-  // Add auto-populated fields
-  if (autoPopulate !== false) {
-    const schemaPaths = Model.schema.paths;
-    const declaredPaths = new Set(manualPopulate.map(p => normalize(p).path));
-    
-    for (const key in schemaPaths) {
-      const path = schemaPaths[key];
-      if (path.options?.ref && !declaredPaths.has(key)) {
-        manualPopulate.push({ path: key, select: "name" });
-        declaredPaths.add(key);
-      }
-    }
-  }
-  
-  // Merge all populate configurations
-  return mergePopulateConfigs(manualPopulate, nestedPopulate);
-}
-
-/**
- * Merge multiple populate configurations
- */
-function mergePopulateConfigs(manualPopulate, nestedPopulate) {
-  const map = new Map();
-  
-  // Add manual populate first (takes precedence)
-  for (const m of manualPopulate) {
-    const normalized = normalizePopulate(m);
-    map.set(normalized.path, {
-      ...normalized,
-      populate: [].concat(normalized.populate || [])
-    });
-  }
-  
-  // Merge nested populate
-  for (const nRaw of nestedPopulate || []) {
-    const normalized = normalizePopulate(nRaw);
-    
-    if (!map.has(normalized.path)) {
-      map.set(normalized.path, {
-        ...normalized,
-        populate: [].concat(normalized.populate || [])
-      });
-    } else {
-      const existing = map.get(normalized.path);
-      existing.populate = existing.populate || [];
-      
-      const nestedSubs = [].concat(normalized.populate || []);
-      for (const sub of nestedSubs) {
-        const subPath = normalizePopulate(sub).path;
-        const exists = existing.populate.some(p => normalizePopulate(p).path === subPath);
-        if (!exists) existing.populate.push(sub);
-      }
-      
-      map.set(normalized.path, existing);
-    }
-  }
-  
-  return Array.from(map.values());
-}
-
-/**
- * Normalize populate object
- */
-function normalizePopulate(populate) {
-  if (!populate) return { path: '' };
-  if (typeof populate === 'string') return { path: populate };
-  return populate;
-}
-
-/**
- * Execute database query
- */
-async function executeDatabaseQuery(dataQuery) {
-  if (typeof dataQuery.lean === "function") {
-    return await dataQuery.lean();
-  }
-  return await dataQuery;
-}
-
-/**
- * Post-process data after query
- */
-async function postProcessData(data, options, extraParams) {
-  if (!Array.isArray(data) || data.length === 0) return data;
-  
-  let processedData = [...data];
-  
-  // Flatten custom fields
-  if (options.custom_fields) {
-    processedData = flattenCustomFields(processedData, options.custom_fields);
-  }
-  
-  // Apply transformations
-  if (options.configMap) {
-    processedData = await applyTransformations(processedData, options.configMap);
-  }
-  
-  // Remove excluded fields
-  if (Array.isArray(extraParams?.excludeFields)) {
-    processedData = removeExcludedFields(processedData, extraParams.excludeFields);
-  }
-  
-  return processedData;
-}
-
-/**
- * Flatten custom fields in data
- */
-function flattenCustomFields(data, customFields) {
-  return data.map(item => {
-    const newItem = { ...item };
-    
-    for (const [field, fieldDef] of Object.entries(customFields)) {
-      let value;
-      
-      if (typeof fieldDef === 'string') {
-        value = getNestedValue(item, fieldDef);
-      } else if (fieldDef && typeof fieldDef === 'object') {
-        const path = fieldDef.path || '';
-        if (path) {
-          value = getNestedValue(item, path);
-        }
-        
-        // Use fallback if value is undefined
-        if (value === undefined && fieldDef.fallback) {
-          value = item[fieldDef.fallback];
-        }
-      }
-      
-      if (value !== undefined) {
-        newItem[field] = value;
-      }
-    }
-    
-    return newItem;
-  });
-}
-
-/**
- * Get nested value from object using dot notation
- */
-function getNestedValue(obj, path) {
-  if (!obj || !path) return undefined;
-  return path.split('.').reduce((acc, key) => (acc ? acc[key] : undefined), obj);
-}
-
-/**
- * Remove excluded fields from data
- */
-function removeExcludedFields(data, excludeFields) {
-  return data.map(item => {
-    const newItem = { ...item };
-    excludeFields.forEach(field => delete newItem[field]);
-    return newItem;
-  });
-}
-
-/**
- * Log performance summary
- */
-function logPerformanceSummary(modelName, totalTime, recordCount, paginationEnabled, usedAggregation, currentPage, pageSize) {
-  console.log(`\n📈 PERFORMANCE SUMMARY for ${modelName}:`);
-  console.log(`   Total time: ${totalTime}ms`);
-  console.log(`   Records returned: ${recordCount}`);
-  console.log(`   Pagination enabled: ${paginationEnabled}`);
-  console.log(`   Used aggregation: ${usedAggregation}`);
-  console.log(`   Current page: ${currentPage}`);
-  console.log(`   Page size: ${pageSize}\n`);
-}
-
-
-
-// Note: buildNestedPopulate and applyTransformations functions remain as-is
-// from the original code as they were not provided for refactoring
 /* ------------------------------------------------------------
  * 🚀 SUPERCHARGED UNIVERSAL HELPER
  * ------------------------------------------------------------ */

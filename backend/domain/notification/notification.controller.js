@@ -180,9 +180,7 @@ export const deleteTemplate = async (req, res) => {
 
 export const sendNotification = async (req, res) => {
   try {
-    const { target, recipientId, templateId } = req.body;
-    const template = await Template.findById(templateId);
-    if (!template) return res.status(404).json({ success: false, message: "Template not found" });
+    const { target, recipientId, templateId, message } = req.body;
 
     // Global context data
     const settings = await Settings.findOne({});
@@ -201,26 +199,46 @@ export const sendNotification = async (req, res) => {
     if (recipients.length === 0)
       return res.status(400).json({ success: false, message: "No recipients found" });
 
+    let template = null;
+    let channel = "both";
+    let notificationTitle = "Notification";
+
+    if (templateId) {
+      template = await Template.findById(templateId);
+      if (!template) return res.status(404).json({ success: false, message: "Template not found" });
+      channel = template.channel;
+      notificationTitle = template.name;
+    }
+
     for (const user of recipients) {
-      const context = { user, settings, departmentCount };
-      const emailContent = template.email_template
-        ? await renderTemplate(template.email_template, context)
-        : "";
-      const whatsappContent = template.whatsapp_template
-        ? await renderTemplate(template.whatsapp_template, context)
-        : "";
+      let emailContent = "";
+      let whatsappContent = "";
+
+      if (template) {
+        const context = { user, settings, departmentCount };
+        emailContent = template.email_template
+          ? await renderTemplate(template.email_template, context)
+          : "";
+        whatsappContent = template.whatsapp_template
+          ? await renderTemplate(template.whatsapp_template, context)
+          : "";
+      } else {
+        // Non-template notification: use provided message
+        emailContent = message || "";
+        whatsappContent = message || "";
+      }
 
       await Notification.create({
         recipient_id: user._id,
-        title: template.name,
+        title: notificationTitle,
         message: whatsappContent || emailContent,
-        type: template.channel,
+        type: channel,
       });
 
-      if ((template.channel === "email" || template.channel === "both") && user.email && emailContent)
-        await sendEmail({ to: user.email, subject: template.name, html: emailContent });
+      if ((channel === "email" || channel === "both") && user.email && emailContent)
+        await sendEmail({ to: user.email, subject: notificationTitle, html: emailContent });
 
-      if ((template.channel === "whatsapp" || template.channel === "both") && whatsappContent) {
+      if ((channel === "whatsapp" || channel === "both") && whatsappContent) {
         const phone = user.phone || "08143185267";
         await sendWhatsAppMessage(phone, whatsappContent);
       }
@@ -228,7 +246,7 @@ export const sendNotification = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: `Notification sent via ${template.channel} to ${recipients.length} users`,
+      message: `Notification sent via ${channel} to ${recipients.length} users`,
     });
   } catch (error) {
     console.error(error);
@@ -302,7 +320,7 @@ export const getUnreadNotificationCount = async (req, res) => {
       // is_read: false,
     });
 
-    console.log("Notification Count fetched")
+    // console.log("Notification Count fetched")
 
     return buildResponse.success(res, "", unreadCount)
     // Return count

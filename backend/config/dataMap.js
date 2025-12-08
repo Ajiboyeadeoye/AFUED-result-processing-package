@@ -36,7 +36,7 @@ export const dataMaps = {
       return departments;
     },
     total_lecturers: async (doc, models) =>
-      await models.Lecturer.countDocuments({ departmentId: { $in: await models.Department.find({ faculty: doc._id }).distinct("_id") } }),  
+      await models.Lecturer.countDocuments({ departmentId: { $in: await models.Department.find({ faculty: doc._id }).distinct("_id") } }),
     total_students: async (doc, models) =>
       await models.Student.countDocuments({ departmentId: { $in: await models.Department.find({ faculty: doc._id }).distinct("_id") } }),
   },
@@ -132,7 +132,13 @@ export const dataMaps = {
 
   Course: {
     _id: "this._id",
-    code: "this.courseCode || this.borrowedId.courseCode",
+    code: (doc) =>{
+      // console.log(doc)
+      if(doc.borrowedId) return doc.borrowedId.courseCode;
+      if(doc.courseCode) return doc.courseCode;
+      console.log("The borrowedId", doc.borrowedId);
+      return null;
+    },
     faculty_id: "this.faculty._id",
     faculty_name: "this.faculty.name",
     unit: "this.unit || this.borrowedId.unit",
@@ -146,6 +152,7 @@ export const dataMaps = {
     description: "this.description || this.borrowedId.description",
     outline: "this.outline",
     borrowed_department: async (doc, models) => {
+      // console.log(doc)
       if (doc.borrowedId != null) {
         const dep = await models.Department.findOne({ _id: doc.borrowedId.department })
         // populate("")
@@ -190,49 +197,19 @@ export const dataMaps = {
     department: "this.department?._name || this.department?.name",
     description: "this.description",
     outline: "this.outline",
-    // Return array of lecturer objects: { _id, name, email }
-    lecturers: async (doc, models) => {
-      // find all course assignments for this course (covers multiple assignments/sessions)
-      const assignments = await models.CourseAssignment.find({ course: doc._id })
-        .populate("lecturers.user", "name email")
+    lecturer: async (doc, models) => {
+      const assignment = await models.CourseAssignment.findOne({ course: doc._id })
+        .populate("lecturer", "name email")
         .lean();
 
-      if (!assignments || assignments.length === 0) return [];
+      if (!assignment || !assignment.lecturer) return null;
 
-      // flatten lecturers from all assignments and dedupe by user id
-      const map = new Map();
-      assignments.forEach(a => {
-        (a.lecturers || []).forEach(l => {
-          const user = l.user;
-          if (user && user._id) {
-            map.set(String(user._id), {
-              _id: user._id,
-              name: user.name || null,
-              email: user.email || null,
-            });
-          }
-        });
-      });
+      return {
+        _id: assignment.lecturer._id,
+        name: assignment.lecturer.name || null,
+        email: assignment.lecturer.email || null,
+      };
 
-      return Array.from(map.values());
-    },
-    // Return array of lecturer names
-    assigned_lecturers: async (doc, models) => {
-      const assignments = await models.CourseAssignment.find({ course: doc._id })
-        .populate("lecturers.user", "name")
-        .lean();
-
-      if (!assignments || assignments.length === 0) return [];
-
-      const nameSet = new Set();
-      assignments.forEach(a => {
-        (a.lecturers || []).forEach(l => {
-          const user = l.user;
-          if (user && user.name) nameSet.add(user.name);
-        });
-      });
-
-      return Array.from(nameSet);
     },
     created_at: "this.createdAt",
     updated_at: "this.updatedAt",
@@ -263,7 +240,8 @@ export const dataMaps = {
     faculty_name: "Faculty.name",
     level: 'this.level',
     semester: async (doc, models) => {
-      const activeSemester = await models.Semester.findOne({ isActive: true, department: String(doc.departmentId._id) }).lean();
+      if(!doc.departmentId?._id) return "N/A";
+      const activeSemester = await models.Semester.findOne({ isActive: true, department: String(doc.departmentId?._id) }).lean();
       // console.log("The active semester", activeSemester, String(doc.departmentId._id) );
       return activeSemester ? activeSemester.name : "N/A";
     },
@@ -279,7 +257,8 @@ export const dataMaps = {
     department: "this.departmentId.name",
     email: "this.user?.email || this._id?.email",
     is_hod: "this.isHOD",
-    n: (doc, models)=>{
+    n: (doc, models) => {
+      console.log(doc.departmentId)
     }
   },
 
@@ -305,11 +284,6 @@ export const dataMaps = {
   },
   CourseAssignment: {
     _id: "this._id",
-    // lecturer_name: async (doc, models) => {
-    //   const lecturer = await models.Lecturer.findById(doc.lecturer).populate("_id", "name");
-    //   console.log("The lecturer 🧱", lecturer);
-    //   return lecturer && lecturer.user ? lecturer._id.name : null;
-    // },
     course_id: "this.course._id",
     name: "this.course.title",
     code: "this.course.courseCode",
@@ -321,14 +295,26 @@ export const dataMaps = {
     department: "this.department.name",
     status: "this.status",
     students: async (doc, models) => {
-      return await models.CourseRegistration.countDocuments({
-        course: doc.course?._id || doc.course,
-        semester: doc.semester?._id || doc.semester,
-      });
+      // Resolve course and semester ids (handles populated or raw ids)
+      const courseId = doc.course?._id || doc.course;
+      const semesterId = doc.semester?._id || doc.semester;
+      const session = doc.session;
+
+      console.log("CourseAssignment students resolver", { courseId, semesterId, session });
+      if (!courseId || !semesterId) return 0;
+
+      const filter = {
+        courses: courseId,     // matches documents where courses array contains courseId
+        semester: semesterId,
+      };
+
+      // include session in filter if available (registrations are unique per student+semester+session)
+      if (session) filter.session = session;
+      console.log("CourseAssignment students filter", filter);
+      return await models.CourseRegistration.countDocuments(filter);
     },
-
-
   }
+
   ,
   Applicant: {
     id: "this._id",

@@ -23,26 +23,26 @@ const router = express.Router();
  * =====================================
  */
 
-// Upload single result
+// Upload single result  → POST /results/upload
 router.post(
-  "/",
+  "/upload/:courseId",
   authenticate(["lecturer", "hod", "admin"]),
   auditLogger("Uploaded a single student result"),
   uploadResult
 );
 
-// Bulk upload results (Excel/CSV)
+// Bulk upload results → POST /results/bulk
 router.post(
-  "/bulk-upload",
+  "/bulk",
   authenticate(["lecturer", "hod", "admin"]),
-  auditLogger("Performed bulk result upload"),
+  auditLogger("Performed bulk upload of student results"),
   fileHandler("excel"),
   bulkUploadResults
 );
 
-// Update result (HOD/Lecturer)
+// Update existing result → PATCH /results/edit/:id
 router.patch(
-  "/:id",
+  "/edit/:id",
   authenticate(["lecturer", "hod"]),
   auditLogger("Updated a student result"),
   updateResult
@@ -54,53 +54,55 @@ router.patch(
  * =====================================
  */
 
-// Approve result
+// Approve a result → PATCH /results/:id/approve
 router.patch(
   "/:id/approve",
   authenticate("hod"),
-  auditLogger("Approved a result"),
+  auditLogger("Approved a student result"),
   approveResult
 );
 
-// Lock result (no further edits)
+// Lock a result → PATCH /results/:id/lock
 router.patch(
   "/:id/lock",
   authenticate(["hod", "admin"]),
-  auditLogger("Locked a result"),
+  auditLogger("Locked a student result"),
   lockResult
 );
 
-// View all results (paginated)
+// Paginated all results → GET /results/all
 router.get(
-  "/",
+  "/all",
   authenticate(["admin", "hod"]),
-  auditLogger("Fetched all results"),
+  auditLogger("Fetched all results (paginated)"),
   getAllResults
 );
 
-// View analytics summary
+// Analytics summary → GET /results/analytics
 router.get(
   "/analytics",
   authenticate(["admin", "hod"]),
-  auditLogger("Fetched result analytics summary"),
+  auditLogger("Fetched results analytics summary"),
   getResultAnalytics
 );
 
 /**
  * =====================================
- * 📊 Shared / General Routes
+ * 📊 Shared Routes (All Staff)
  * =====================================
  */
 
-// Get single result (for Admin, HOD, or Lecturer)
+
+
+// Get single result → GET /results/:id
 router.get(
   "/:id",
   authenticate(["admin", "hod", "lecturer"]),
-  auditLogger("Viewed a single result record"),
+  auditLogger("Viewed a single student result"),
   getResultById
 );
 
-// Delete result (Admin only)
+// Delete a result (Admin only) → DELETE /results/:id
 router.delete(
   "/:id",
   authenticate("admin"),

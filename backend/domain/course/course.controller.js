@@ -138,7 +138,24 @@ export const getAllCourses = async (req, res) => {
         },
 
       }),
-      custom_fields: { borrowedId: "borrowedId" }, // Map if needed
+      // custom_fields: { courseCode: "borrowedId", department: 'department' }, // Map if needed
+      // custom_fields: { courseCode: { path: 'borrowedId.courseCode', fallback: 'courseCode' }, department: 'department' }, // Map if needed
+      custom_fields: {
+        courseCode: {
+          path: 'borrowedId.courseCode',
+          find: 'borrowedId.courseCode',  // Explicit search path
+          fallback: 'courseCode'
+        },
+        courseTitle: {
+          path: 'borrowedId.title',
+          find: 'borrowedId.title',  // Explicit search path
+          fallback: 'title'
+        },
+        departmentName: {
+          path: 'department.name',  // Explicit path
+          find: 'department.name',   // Explicit search
+        }
+      },
       populate: ["department", "borrowedId"],
     };
 
@@ -165,13 +182,13 @@ export const getCourseById = async (req, res) => {
       autoPopulate: false,
       models: { departmentModel, CourseAssignment },
       additionalFilters: { _id: req.params.courseId },
-      populate: ["department"],
+      populate: ["department", "borrowedId"],
 
     });
 
-    return res
-      .status(200)
-      .json(buildResponse(res, 200, "Course fetched successfully", result));
+    // return res
+    //   .status(200)
+    //   .json(buildResponse(res, 200, "Course fetched successfully", result));
   } catch (err) {
     console.error("Error fetching course:", err);
     return res
@@ -353,72 +370,104 @@ export const registerCourses = async (req, res) => {
   try {
     const { courses: selectedCourseIds, department } = req.body;
 
-    const student = await studentModel.findById(req.user._id);
-    const level = student.level
+    // 1️⃣ GET STUDENT
+    const student = await studentModel.findById(req.user._id).lean();
+    if (!student) {
+      return buildResponse(res, 404, "Student not found", null, true);
+    }
+    const level = student.level;
 
-    // 1️⃣ Determine active semester for this student
+    // 2️⃣ DETERMINE ACTIVE SEMESTER BASED ON ROLE
     let semesterQuery = { isActive: true };
-    if (req.user?.role === "admin") {
-      if (!department) return buildResponse(res, 400, "Department is required", null, true);
+
+    if (req.user.role === "admin") {
+      if (!department) {
+        return buildResponse(res, 400, "Department is required for admin");
+      }
       semesterQuery.department = department;
-    } else if (req.user?.role === "hod") {
+    } else if (req.user.role === "hod") {
       const dept = await departmentModel.findOne({ hod: req.user._id });
-      if (!dept) return buildResponse(res, 404, "Department not found for HOD", null, true);
+      if (!dept) {
+        return buildResponse(res, 404, "HOD department not found");
+      }
       semesterQuery.department = dept._id;
     } else {
-      const dept = await departmentModel.findOne({ _id: student.departmentId });
-      if (!dept) return buildResponse(res, 404, "Department not found for Student", null, true);
-      semesterQuery.department = dept._id;
+      semesterQuery.department = student.departmentId;
     }
 
     const currentSemester = await Semester.findOne(semesterQuery).lean();
-    if (!currentSemester) return buildResponse(res, 404, "No active semester found", null, true);
+    if (!currentSemester) {
+      return buildResponse(res, 404, "No active semester found");
+    }
 
     const { _id: semesterId, session, levelSettings } = currentSemester;
-    console.log(levelSettings)
 
-    // 2️⃣ Check if student already registered
-    const existingReg = await CourseRegistration.findOne({ student, semester: semesterId, session });
-    if (existingReg) return buildResponse(res, 400, "Student already registered for this semester");
+    // 3️⃣ CHECK IF STUDENT ALREADY REGISTERED
+    const existingReg = await CourseRegistration.findOne({
+      student: student._id,
+      semester: semesterId,
+      session,
+    });
 
-    // 3️⃣ Get level-specific semester settings
+    if (existingReg) {
+      return buildResponse(res, 400, "Student already registered for this semester");
+    }
+
+    // 4️⃣ FETCH LEVEL SETTINGS
     const settings = levelSettings.find(l => String(l.level) === String(level));
-    if (!settings) return buildResponse(res, 400, `Semester settings not found for level ${level}`);
+    if (!settings) {
+      return buildResponse(res, 400, `No semester settings for level ${level}`);
+    }
 
     const { minUnits, maxUnits, minCourses, maxCourses } = settings;
-    // 4️⃣ Fetch course details (first layer)
-    let courses = await Course.find({ _id: { $in: selectedCourseIds } }).lean();
 
-    if (courses.length !== selectedCourseIds.length) {
+    // 5️⃣ FETCH SELECTED COURSES (raw)
+    let selectedCourses = await Course.find({ _id: { $in: selectedCourseIds } }).lean();
+
+    if (selectedCourses.length !== selectedCourseIds.length) {
       return buildResponse(res, 400, "Some selected courses do not exist");
     }
 
-    // 5️⃣ Resolve borrowed courses (replace them with their originals)
+    // 6️⃣ BUILD RESOLVED COURSES FOR VALIDATION
     const resolvedCourses = [];
-
-    for (const course of courses) {
+    for (const course of selectedCourses) {
       if (course.borrowedId) {
-        // Fetch the original course
+        // Borrowed course → get original for validation
         const original = await Course.findById(course.borrowedId).lean();
         if (!original) {
           return buildResponse(res, 400, `Borrowed course '${course._id}' has invalid borrowedId`);
         }
-        resolvedCourses.push(original); // use original data
+
+        resolvedCourses.push({
+          ...original,
+          _id: course._id,         // IMPORTANT: keep borrowed ID for saving
+          borrowedFrom: original._id,
+        });
       } else {
-        resolvedCourses.push(course); // normal course
+        resolvedCourses.push(course);
       }
     }
 
-    // 6️⃣ Validate total units using resolved courses
+    // 7️⃣ VALIDATE UNITS
     const totalUnits = resolvedCourses.reduce((sum, c) => sum + (c.unit || 0), 0);
-
-
-    // 6️⃣ Validate number of courses
-    if (courses.length < minCourses || courses.length > maxCourses) {
-      // return buildResponse(res, 400, `Number of courses must be between ${minCourses} and ${maxCourses}`);
+    if (totalUnits < minUnits || totalUnits > maxUnits) {
+      return buildResponse(
+        res,
+        400,
+        `Total units (${totalUnits}) must be between ${minUnits} and ${maxUnits}`
+      );
     }
 
-    // 7️⃣ Check mandatory core courses for this level (from assignment)
+    // 8️⃣ VALIDATE COURSE COUNT
+    if (selectedCourses.length < minCourses || selectedCourses.length > maxCourses) {
+      return buildResponse(
+        res,
+        400,
+        `Number of courses must be between ${minCourses} and ${maxCourses}`
+      );
+    }
+
+    // 9️⃣ VALIDATE CORE COURSES
     const coreAssignments = await CourseAssignment.find({
       semester: semesterId,
       session,
@@ -427,70 +476,86 @@ export const registerCourses = async (req, res) => {
     });
 
     const coreCourseIds = coreAssignments.map(a => a.course.toString());
-    const selectedCourseStrIds = selectedCourseIds.map(id => id.toString());
-    const missingCoreCourses = coreCourseIds.filter(c => !selectedCourseStrIds.includes(c));
+    const selectedStrIds = selectedCourseIds.map(id => id.toString());
 
-    if (missingCoreCourses.length > 0) {
-      return buildResponse(res, 400, "All core courses for this level must be registered", missingCoreCourses);
+    const missingCore = coreCourseIds.filter(id => !selectedStrIds.includes(id));
+
+    if (missingCore.length > 0) {
+      console.log("Missing core courses:", missingCore);
+      // return buildResponse(res, 400, `Missing ${missingCore.length} core courses`, missingCore);
+
     }
 
-    // 8️⃣ Check prerequisites
-    for (const course of courses) {
-      if (!course.prerequisites || course.prerequisites.length === 0) continue;
+    // 🔟 PREREQUISITE CHECK
+    for (const course of resolvedCourses) {
+      if (!course.prerequisites || !course.prerequisites.length) continue;
 
-      const passedCourses = await CourseRegistration.find({
-        student,
+      const passed = await CourseRegistration.find({
+        student: student._id,
         courses: { $in: course.prerequisites },
-        status: "Approved"
+        status: "Approved",
       }).distinct("courses");
 
-      const failedPrereqs = course.prerequisites.filter(p => !passedCourses.includes(p.toString()));
-      if (failedPrereqs.length > 0) {
-        return buildResponse(res, 400, `Prerequisites not met for ${course.title}`, failedPrereqs);
+      const failedPrereq = course.prerequisites.filter(p => !passed.includes(p.toString()));
+
+      if (failedPrereq.length > 0) {
+        return buildResponse(
+          res,
+          400,
+          `Prerequisites not met for ${course.title || "a borrowed course"}`,
+          failedPrereq
+        );
       }
     }
 
-    // 9️⃣ Check carryovers (must include previous failed courses)
-    const failedCarryovers = await carryOverSchema.find({
-      student,
-      cleared: false
+    // 1️⃣1️⃣ CARRYOVER CHECK
+    const carryovers = await carryOverSchema.find({
+      student: student._id,
+      cleared: false,
     }).lean();
 
-    for (const carry of failedCarryovers) {
-      if (!selectedCourseStrIds.includes(carry.course.toString())) {
-        return buildResponse(res, 400, `Carryover course ${carry.course} must be registered`);
+    for (const carry of carryovers) {
+      if (!selectedStrIds.includes(carry.course.toString())) {
+        return buildResponse(
+          res,
+          400,
+          `Carryover course ${carry.course} must be included`
+        );
       }
     }
 
-    // 1️⃣0️⃣ Create registration with attemptNumber
-    const attemptNumbers = await CourseRegistration.find({
-      student,
-      "courses": { $in: selectedCourseIds }
-    }).sort({ createdAt: -1 });
+    // 1️⃣2️⃣ ATTEMPT NUMBER
+    const previousAttempts = await CourseRegistration.find({
+      student: student._id,
+      courses: { $in: selectedCourseIds },
+    });
 
-    let attemptNumber = 1;
-    if (attemptNumbers.length > 0) {
-      attemptNumber = attemptNumbers.length + 1;
-    }
+    const attemptNumber = previousAttempts.length + 1;
 
+    // 1️⃣3️⃣ SAVE REGISTRATION
     const newReg = new CourseRegistration({
-      student,
-      courses: selectedCourseIds,
+      student: student._id,
+      courses: selectedCourseIds,   // IMPORTANT: NOT the originals
       semester: semesterId,
       session,
       level,
       totalUnits,
-      attamptNumber: attemptNumber,
-      registeredByHod: req.user?.role === "hod" ? req.user._id : null,
-      notes: req.user?.role === "hod" ? req.body.notes || null : null,
+      attemptNumber,
+      registeredByHod: req.user.role === "hod" ? req.user._id : null,
+      notes: req.user.role === "hod" ? req.body.notes || null : null,
     });
 
     await newReg.save();
 
-    res.status(201).json(buildResponse(res, 201, "Courses registered successfully", newReg));
+    return res.status(201).json(
+      buildResponse(res, 201, "Courses registered successfully", newReg)
+    );
+
   } catch (err) {
     console.error(err);
-    res.status(500).json(buildResponse(res, 500, "Course registration failed", null, true, err));
+    return res.status(500).json(
+      buildResponse(res, 500, "Course registration failed", null, true, err)
+    );
   }
 };
 
@@ -647,7 +712,7 @@ export const getLecturerCourses = async (req, res) => {
       configMap: dataMaps.CourseAssignment,
       autoPopulate: true,
       models: { courseModel, lecturerModel },
-      // additionalFilters: { _id: req.user?._id },
+      additionalFilters: { lecturer: req.user?._id },
       populate: ["course"],
 
     });
@@ -765,6 +830,170 @@ export const bulkRegisterCourses = async (req, res) => {
   }
 };
 
+
+export const getStudentsForCourse = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const user = req.user;
+
+    if (!courseId) {
+      return res.status(400).json({ message: "courseId is required" });
+    }
+
+    // 1️⃣ Check if the course exists
+    const course = await Course.findById(courseId).lean();
+    if (!course) {
+      return res.status(404).json({ message: "Course not found" });
+    }
+
+    // 2️⃣ Role Based Department Restriction
+    let allowedDepartment = null;
+
+    if (user.role === "admin") {
+      // Admin can see all
+      allowedDepartment = null;
+    } else if (user.role === "hod") {
+      const dept = await Department.findOne({ hod: user._id }).lean();
+      if (!dept) return res.status(404).json({ message: "HOD department not found" });
+      allowedDepartment = dept._id;
+    } else {
+      // Students can only view their own dept's course (if allowed)
+      allowedDepartment = user.departmentId;
+    }
+
+    // If course belongs to another department
+    if (allowedDepartment && String(course.department) !== String(allowedDepartment)) {
+      return res.status(403).json({ message: "Not allowed to view students for this course" });
+    }
+
+    // 3️⃣ Prepare payload for fetchDataHelper
+    const payload = {
+      ...req.query,
+      filter: {
+        course: courseId,
+        ...req.query.filter,
+      },
+      // Add department filter if applicable
+      ...(allowedDepartment && {
+        additionalFilters: {
+          // courses
+        }
+      })
+    };
+
+    const options = {
+      populate: [
+        {
+          path: "semester",
+          select: "name session",
+        },
+        {
+          path: "student",  // This populates the User document
+          select: "name email",
+          populate: {
+            path: "_id",  // User._id references the Student document
+            select: "matricNumber level gender departmentId",
+            model: "Student",
+          }
+        },
+        
+      ],
+
+      // Sort configuration
+      sort: { createdAt: -1 },
+
+      // Pagination
+      enablePagination: false,
+      limit: 1000,
+
+      // Return type
+      returnType: 'object',
+      additionalFilters: {
+          courses : courseId
+        }
+,
+      // UPDATED ConfigMap for your actual structure
+      configMap: {
+        // Basic user info from the populated student (which is actually User)
+        name: async (doc) => doc.student?.name || "",
+
+        email: async (doc) => doc.student?.email || "",
+
+        // Student-specific info comes from student._id (populated Student document)
+        gender: async (doc) => doc.student?._id?.gender || "",
+
+        matric_no: async (doc) => doc.student?._id?.matricNumber || "",
+
+        level: async (doc) => doc.student?._id?.level || "",
+
+        semesterName: async (doc) => doc.semester?.name || "",
+
+        session: async (doc) => doc.semester?.session || "",
+
+        registrationLevel: async (doc) => doc.level || "",
+
+        // Department - note the different path
+        department: async (doc, model) => {
+          // Department is in the Student document, not User
+          // console.log("Doc student:", doc.student);
+          if (doc.student?._id?.departmentId) {
+            const dept = await mongoose.model('Department').findById(doc.student._id.departmentId).lean();
+            return dept?.name || "n";
+          }
+          return "s";
+        }
+      }
+    };
+
+    // 5️⃣ Use fetchDataHelper correctly
+    const result = await fetchDataHelper(req, res, CourseRegistration, options);
+
+    // 6️⃣ Handle response
+    if (!result.data || result.data.length === 0) {
+      return res.status(200).json({
+        message: "No student has registered for this course yet",
+        data: [],
+        courseInfo: {
+          courseId,
+          courseName: course.name,
+          courseCode: course.code,
+        },
+      });
+    }
+
+    // 7️⃣ Return structured response
+    return res.status(200).json({
+      message: "Students retrieved successfully",
+      count: result.data.length,
+      courseInfo: {
+        courseId,
+        courseName: course.name,
+        courseCode: course.code,
+        department: course.department,
+      },
+      data: result.data,
+      metadata: {
+        timestamp: new Date().toISOString(),
+        requestedBy: {
+          userId: user._id,
+          role: user.role,
+        },
+        filtersApplied: {
+          courseId,
+          departmentFilter: allowedDepartment ? "applied" : "none",
+        },
+      },
+    });
+
+  } catch (error) {
+    console.error("❌ getStudentsForCourse Error:", error);
+    return res.status(500).json({
+      message: "Failed to retrieve students",
+      error: error.message,
+      ...(process.env.NODE_ENV === "development" && { stack: error.stack }),
+    });
+  }
+};
 export const getRegisterableCourses = async (req, res) => {
   try {
     const studentId = req.user?._id;
@@ -793,7 +1022,10 @@ export const getRegisterableCourses = async (req, res) => {
       autoPopulate: false,
       autoPopulate: true,
       models: { departmentModel },
-      custom_fields: { borrowedId: "borrowedId" }, // Map if needed
+      custom_fields: {
+        borrowedIdSemester: { path: 'borrowedId.semester' },
+        borrowedIdLevel: { path: 'borrowedId.level' }
+      },
       populate: ["department", "borrowedId"],
       limit: 100,
       // Make borrowedId.level trigger the pipeline
@@ -802,16 +1034,16 @@ export const getRegisterableCourses = async (req, res) => {
         department: student.departmentId,
 
         $and: [
-          // {
-          //   $or: [
-          //     { semester: semester.name },
-          //     { "borrowedId.semester": semester.name }
-          //   ]
-          // },
           {
             $or: [
-              { level: student.level },
-              { "borrowedId.level": student.level }
+              { semester: semester.name },
+              { "borrowedId.semester": semester.name }
+            ]
+          },
+          {
+            $or: [
+              { level: parseInt(student.level) },
+              { "borrowedId.level": parseInt(student.level) }
             ]
           }
         ]

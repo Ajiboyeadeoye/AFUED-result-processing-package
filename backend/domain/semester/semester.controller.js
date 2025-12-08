@@ -417,12 +417,56 @@ export const updateLevelSettings = async (req, res) => {
     // 🔹 Update fields
     semester.levelSettings = levelSettings;
 
+    // 🔹 Update deadlines with validation
     if (registrationDeadline) {
-      semester.registrationDeadline = new Date(registrationDeadline);
+      const deadline = new Date(registrationDeadline);
+
+      if (lateRegistrationDate) {
+        const lateDate = new Date(lateRegistrationDate);
+
+        if (lateDate <= deadline) {
+          return buildResponse(
+            res,
+            400,
+            "Late registration date must be *after* the registration deadline",
+            null,
+            true
+          );
+        }
+      }
+
+      semester.registrationDeadline = deadline;
     }
 
     if (lateRegistrationDate) {
-      semester.lateRegistrationDate = new Date(lateRegistrationDate);
+      const lateDate = new Date(lateRegistrationDate);
+
+      if (registrationDeadline) {
+        const deadline = new Date(registrationDeadline);
+
+        if (lateDate <= deadline) {
+          return buildResponse(
+            res,
+            400,
+            "Late registration date must be *after* the registration deadline",
+            null,
+            true
+          );
+        }
+      }
+
+      // If deadline already exists in DB, validate against it too
+      if (semester.registrationDeadline && lateDate <= semester.registrationDeadline) {
+        return buildResponse(
+          res,
+          400,
+          "Late registration date must be *after* the registration deadline",
+          null,
+          true
+        );
+      }
+
+      semester.lateRegistrationDate = lateDate;
     }
 
     semester.updatedBy = userId;

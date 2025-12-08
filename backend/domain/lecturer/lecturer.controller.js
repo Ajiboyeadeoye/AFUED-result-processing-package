@@ -248,9 +248,16 @@ export const getAllDeans = async (req, res) => {
   return fetchDataHelper(req, res, lecturerModel, {
     configMap: dataMaps.Lecturer,
     autoPopulate: true,
-    // models: { departmentModel, User },
-    // populate: ["departmentId"],
-    custom_fields: {  email: '_id', department: "departmentId" },
+    models: { departmentModel, User },
+    populate: [
+      {
+      path: "_id",
+      select: "email name",
+
+    },  {
+      path: "departmentId",
+      select: "name",
+    }],
     additionalFilters: {
       isDean: true
     }
@@ -260,9 +267,17 @@ export const getAllHODs = async (req, res) => {
   return fetchDataHelper(req, res, lecturerModel, {
     configMap: dataMaps.Lecturer,
     autoPopulate: true,
-    // models: { departmentModel, User },
-    // populate: ["departmentId"],
-    custom_fields: {  email: '_id', department: "departmentId" },
+    models: { departmentModel, User },
+    populate: [
+      {
+      path: "_id",
+      select: "email name",
+
+    },  {
+      path: "departmentId",
+      select: "name",
+    }],
+    // custom_fields: {  email: '_id.email'},
     additionalFilters: {
       isHOD: true
     }
