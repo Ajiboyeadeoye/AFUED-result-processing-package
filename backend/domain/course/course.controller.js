@@ -21,7 +21,7 @@ import courseAssignmentModel from "./courseAssignment.model.js";
 import lecturerModel from "../lecturer/lecturer.model.js";
 import courseModel from "./course.model.js";
 import studentModel from "../student/student.model.js";
-import carryOverSchema from "./carryOverSchema.js";
+import carryOverSchema from "../result/carryover.model.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -560,83 +560,85 @@ export const registerCourses = async (req, res) => {
 };
 
 export const getStudentRegistrations = async (req, res) => {
-  try {
-    let { session, semester } = req.query;
-    let studentId = req.params.studentId;
+try {
+  let { session } = req.query;   // semester removed from query
+  let studentId = req.params.studentId;
 
-    // If student, always force their own ID
-    if (req.user.role === "student") {
-      studentId = req.user._id;
+  // Student: force their own ID
+  if (req.user.role === "student") {
+    studentId = req.user._id;
+  }
+
+  // HOD validation
+  if (req.user.role === "hod") {
+    if (!studentId) {
+      return buildResponse.error(res, "studentId is required for HOD");
     }
 
-    // HOD: must include studentId
-    if (req.user.role === "hod") {
-      if (!studentId) {
-        return buildResponse.error(res, "studentId is required for HOD");
-      }
+    const hodDept = await departmentModel.findOne({ hod: req.user._id }).lean();
+    if (!hodDept) return buildResponse.error(res, "HOD department not found");
 
-      const hodDept = await departmentModel.findOne({ hod: req.user._id }).lean();
-      if (!hodDept) return buildResponse.error(res, "HOD department not found");
+    const targetStudent = await studentModel.findById(studentId).lean();
+    if (!targetStudent) return buildResponse.error(res, "Student not found");
 
-      const targetStudent = await studentModel.findById(studentId).lean();
-      if (!targetStudent) return buildResponse.error(res, "Student not found");
-
-      if (String(targetStudent.departmentId) !== String(hodDept._id)) {
-        return buildResponse.error(res, "You can only access students in your department");
-      }
+    if (String(targetStudent.departmentId) !== String(hodDept._id)) {
+      return buildResponse.error(res, "You can only access students in your department");
     }
+  }
 
+  // Fetch student
+  const student = await studentModel.findById(studentId).lean();
+  if (!student) {
+    return buildResponse.error(res, "Student not found");
+  }
 
-    // Fetch student
-    const student = await studentModel.findById(studentId).lean();
-    if (!student) {
-      return buildResponse.error(res, "Student not found");
-    }
+  // 1️⃣ Determine active semester ALWAYS
+  const departmentId =
+    req.user.role === "hod"
+      ? (await departmentModel.findOne({ hod: req.user._id }).lean())?._id
+      : student.departmentId;
 
-    // 1️⃣ Determine active semester for this student
-    let semesterQuery = { isActive: true };
+  if (!departmentId) {
+    return buildResponse.error(res, "Department not found");
+  }
 
-    if (req.user?.role === "hod") {
-      const dept = await departmentModel.findOne({ hod: req.user._id }).lean();
-      if (!dept) return buildResponse.error(res, "Department not found for HOD");
-      semesterQuery.department = dept._id;
-    } else {
-      const dept = await departmentModel.findById(student.departmentId).lean();
-      if (!dept) return buildResponse.error(res, "Department not found for Student");
-      semesterQuery.department = dept._id;
-    }
+  const currentSemester = await Semester.findOne({
+    department: departmentId,
+    isActive: true
+  }).lean();
 
-    const currentSemester = await Semester.findOne(semesterQuery).lean();
-    if (!currentSemester) {
-      return buildResponse.error(res, "Active semester not found");
-    }
+  if (!currentSemester) {
+    return buildResponse.error(res, "Active semester not found");
+  }
 
-    // 2️⃣ Build filter
-    const filter = { student: studentId };
-    if (semester) filter.semester = currentSemester._id;
+  // 2️⃣ Build filter ALWAYS using active semester
+  const filter = {
+    student: studentId,
+    semester: currentSemester._id
+  };
 
-    console.log(filter)
-    // 3️⃣ Fetch registrations
-    let registrations = await CourseRegistration.find(filter)
-      .populate("student courses semester approvedBy")
-      .sort({ createdAt: -1 })
-      .lean();
+  // 3️⃣ Fetch registrations
+  let registrations = await CourseRegistration.find(filter)
+    .populate("student courses semester approvedBy")
+    .sort({ createdAt: -1 })
+    .lean();
 
-    // 4️⃣ Resolve borrowed courses
-    for (const reg of registrations) {
-      reg.courses = await Promise.all(
-        reg.courses.map(async (course) => {
-          if (!course.borrowedId) return course;
+  // 4️⃣ Borrowed courses resolution
+  for (const reg of registrations) {
+    reg.courses = await Promise.all(
+      reg.courses.map(async (course) => {
+        if (!course.borrowedId) return course;
 
-          const original = await Course.findById(course.borrowedId).lean();
-          return original || course;
-        })
-      );
-    }
+        const original = await Course.findById(course.borrowedId).lean();
+        return original || course;
+      })
+    );
+  }
 
-    return buildResponse.success(res, "Registrations fetched", registrations);
+  return buildResponse.success(res, "Registrations fetched", registrations);
 
-  } catch (err) {
+} 
+catch (err) {
     return res
       .status(500)
       .json(buildResponse.error(res, err.message));
@@ -708,19 +710,43 @@ export const getFacultyCourses = async (req, res) => {
 export const getLecturerCourses = async (req, res) => {
   try {
 
-    const result = await fetchDataHelper(req, res, courseAssignmentModel, {
-      configMap: dataMaps.CourseAssignment,
-      autoPopulate: true,
-      models: { courseModel, lecturerModel },
-      additionalFilters: { lecturer: req.user?._id },
-      populate: ["course"],
+// Before calling fetchDataHelper
+const lecturer = await lecturerModel.findById(req.user?._id).lean();
+if (!lecturer) {
+  return buildResponse(res, 404, "Lecturer not found");
+}
 
-    });
+const deptId = lecturer.departmentId;
+if (!deptId) {
+  return buildResponse(res, 400, "Lecturer has no department assigned");
+}
+
+const activeSemester = await Semester.findOne({
+  department: deptId,
+  isActive: true
+}).lean();
+
+if (!activeSemester) {
+  return buildResponse(res, 400, "No active semester for lecturer department");
+}
+
+const result = await fetchDataHelper(req, res, courseAssignmentModel, {
+  configMap: dataMaps.CourseAssignment,
+  autoPopulate: true,
+  models: { courseModel, lecturerModel },
+  additionalFilters: {
+    lecturer: req.user?._id,
+    semester: activeSemester._id        // added automatically
+  },
+  populate: ["course"]
+});
+
     const lecturerId = req.user?._id;
     const assignments = result
 
     res.json(buildResponse(res, 200, "Lecturer courses fetched", assignments));
   } catch (err) {
+    console.log(err)
     res.status(500).json(buildResponse(res, 500, err.message));
   }
 };
@@ -1000,6 +1026,7 @@ export const getRegisterableCourses = async (req, res) => {
     const studentDepartment = await studentModel.findById(studentId).lean()
 
     const semester = await Semester.findOne({ department: String(studentDepartment.departmentId), isActive: true }).lean()
+    console.log("Semester Name", semester)
     // console.log(studentId, semesterId, studentDepartment._id)
     if (!studentId || !semester) {
       return buildResponse.error(res, "studentId and semesterId are required")

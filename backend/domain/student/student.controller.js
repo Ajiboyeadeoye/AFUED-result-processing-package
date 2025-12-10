@@ -7,6 +7,8 @@ import departmentModel from "../department/department.model.js";
 import { hashData } from "../../utils/hashData.js";
 import { dataMaps } from "../../config/dataMap.js";
 import studentModel from "./student.model.js";
+import mongoose from "mongoose";
+import studentSemseterResultModel from "./student.semseterResult.model.js";
 
 
 /**
@@ -349,3 +351,58 @@ export const deleteStudent = async (req, res) => {
 };
 
 
+export const getStudentSemesterResult = async (req, res) => {
+  try {
+    const {  semesterId } = req.params;
+
+    const studentId = req.user._id
+    if (!studentId) {
+      return buildResponse(res, 400, "Student ID is required");
+    }
+
+    // Validate Student
+    const student = await Student.findById(studentId).lean();
+    if (!student) {
+      return buildResponse(res, 404, "Student not found");
+    }
+
+    let resolvedSemesterId = semesterId;
+
+    // If semesterId is missing or invalid ObjectId
+    if (
+      !semesterId ||
+      !mongoose.Types.ObjectId.isValid(semesterId)
+    ) {
+      // Find the active semester for the student's department
+      const activeSemester = await Semester.findOne({
+        department: student.departmentId,
+        isActive: true,
+      }).lean();
+
+      if (!activeSemester) {
+        return buildResponse(res, 404, "Active semester not found for department");
+      }
+
+      resolvedSemesterId = activeSemester._id;
+    }
+
+    // Fetch the student's semester result
+    const result = await studentSemseterResultModel.findOne({
+      studentId,
+      semesterId: resolvedSemesterId,
+    })
+      .populate("courses.courseId")
+      .populate("semesterId")
+      .populate("departmentId")
+      .lean();
+
+    if (!result) {
+      return buildResponse(res, 404, "Semester result not found");
+    }
+
+    return buildResponse(res, 200, "Result fetched successfully", result);
+  } catch (error) {
+    console.error("Error fetching semester result:", error);
+    return buildResponse(res, 500, "Something went wrong");
+  }
+};

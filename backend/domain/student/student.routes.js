@@ -10,6 +10,7 @@ import {
   getMyCourses,
   viewResults,
   printTranscript,
+  getStudentSemesterResult,
 } from "./student.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 
@@ -19,6 +20,8 @@ const router = express.Router();
 router.get("/", authenticate("admin"), getAllStudents);
 router.post("/", authenticate(["admin", "hod", "dean"]), createStudent);
 router.get("/profile", authenticate("student"), getMyProfile);
+router.get("/result/:semesterId", authenticate(["student", "admin", "lecturer"]), getStudentSemesterResult);
+
 router.get("/:id", authenticate("admin"), getStudentById);
 router.put("/:id", authenticate("admin"), updateStudent);
 router.delete("/:id", authenticate("admin"), deleteStudent);

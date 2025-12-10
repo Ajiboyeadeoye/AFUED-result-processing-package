@@ -24,7 +24,7 @@ const authenticate = (roles = []) => {
         : req.cookies?.access_token;
 
       if (!token) {
-        auditLogger("Unauthorized access: No token provided")(req, res, () => {}); // 🔥 Log this event
+        auditLogger("Unauthorized access: No token provided")(req, res, () => { }); // 🔥 Log this event
         return buildResponse(res, 401, "Access denied: No token provided.", null, true)
       }
 
@@ -32,14 +32,14 @@ const authenticate = (roles = []) => {
 
       // ✅ Allow a system token override (for admin setup or service calls)
       if (token === process.env.token) {
+        decoded = {
+          role: "admin",
+          _id: "690c70aa423136f152398166",
+        };
         // decoded = {
-        //   role: "admin",
-        //   _id: process.env.admin_id,
-        // };
-                decoded = {
-          role: "student",
-          _id: "69289f97c3c2904e51b75654"
-        }
+        //   role: "student",
+        //   _id: "69289f97c3c2904e51b75654"
+        // }
       } else {
         decoded = jwt.verify(token, process.env.TOKEN_KEY);
 
@@ -50,13 +50,13 @@ const authenticate = (roles = []) => {
 
       // ✅ Check that the role exists in the authorized roles list
       if (!AUTHORIZED_ROLES.includes(decoded.role)) {
-        auditLogger(`Unauthorized role: ${decoded.role}`)(req, res, () => {}); // 🔥 Log unauthorized role
+        auditLogger(`Unauthorized role: ${decoded.role}`)(req, res, () => { }); // 🔥 Log unauthorized role
         return buildResponse(res, 403, `Unauthorized role: ${decoded.role}`, null, true)
       }
 
       // ✅ Check route-level role restriction
       if (allowedRoles.length > 0 && !allowedRoles.includes(decoded.role)) {
-        auditLogger(`Forbidden: ${decoded.role} tried to access restricted route`)(req, res, () => {});
+        auditLogger(`Forbidden: ${decoded.role} tried to access restricted route`)(req, res, () => { });
         return buildResponse(res, 403, "Forbidden: Insufficient privileges.", null, true)
       }
 
@@ -65,7 +65,7 @@ const authenticate = (roles = []) => {
       next();
     } catch (err) {
       console.error("Auth error:", err.message);
-      auditLogger(`Authentication error: ${err.message}`)(req, res, () => {});
+      auditLogger(`Authentication error: ${err.message}`)(req, res, () => { });
       return buildResponse(res, 401, "Invalid or expired token.", null, true, err)
     }
   };

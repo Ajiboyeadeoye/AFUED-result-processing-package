@@ -2,10 +2,10 @@ import mongoose from "mongoose";
 
 const studentSchema = new mongoose.Schema(
   {
-    _id: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "User", 
-      required: true 
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
     },
     matricNumber: {
       type: String,
@@ -19,7 +19,7 @@ const studentSchema = new mongoose.Schema(
       ref: "Department",
       required: true,
     },
-   
+
     level: {
       type: String,
       enum: ["100", "200", "300", "400", "500"],
@@ -50,6 +50,18 @@ const studentSchema = new mongoose.Schema(
     deletedAt: {
       type: Date,
       default: null,
+    },
+    totalCarryovers: { type: Number, default: 0 },
+    lastGPAUpdate: { type: Date },
+    probationStatus: {
+      type: String,
+      enum: ["none", "probation", "probation_lifted"],
+      default: "none"
+    },
+    terminationStatus: {
+      type: String,
+      enum: ["none", "withdrawn", "terminated", "expelled"],
+      default: "none"
     },
   },
   { timestamps: true }

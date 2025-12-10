@@ -178,81 +178,81 @@ export const deleteTemplate = async (req, res) => {
   }
 };
 
+export const sendNotificationCore = async ({ target, recipientId, templateId, message, contextOverride = {} }) => {
+  // Global context
+  const settings = contextOverride.settings || (await Settings.findOne({}));
+  const departmentCount = contextOverride.departmentCount || (await Department.countDocuments());
+
+  // Resolve recipients
+  let recipients = [];
+  if (target === "all") recipients = await User.find({});
+  else if (target === "students") recipients = await User.find({ role: "student" });
+  else if (target === "lecturers") recipients = await User.find({ role: "lecturer" });
+  else if (target === "hods") recipients = await User.find({ role: "hod" });
+  else if (target === "specific" && recipientId) {
+    const user = await User.findById(recipientId);
+    if (user) recipients = [user];
+  }
+
+  if (recipients.length === 0) return { success: false, message: "No recipients found" };
+
+  // Resolve template
+  let template = null;
+  let channel = "both";
+  let notificationTitle = "Notification";
+
+  if (templateId) {
+    template = await Template.findById(templateId);
+    if (!template) return { success: false, message: "Template not found" };
+    channel = template.channel;
+    notificationTitle = template.name;
+  }
+
+  for (const user of recipients) {
+    const context = { user, settings, departmentCount, ...contextOverride };
+
+    let emailContent = template?.email_template ? await renderTemplate(template.email_template, context) : "";
+    let whatsappContent = template?.whatsapp_template ? await renderTemplate(template.whatsapp_template, context) : "";
+
+    if (!template) {
+      emailContent = message || "";
+      whatsappContent = message || "";
+    }
+
+    await Notification.create({
+      recipient_id: user._id,
+      title: notificationTitle,
+      message: whatsappContent || emailContent,
+      type: channel,
+    });
+
+    if ((channel === "email" || channel === "both") && user.email && emailContent) {
+      await sendEmail({ to: user.email, subject: notificationTitle, html: emailContent });
+    }
+
+    if ((channel === "whatsapp" || channel === "both") && whatsappContent) {
+      const phone = user.phone || "08143185267";
+      // await sendWhatsAppMessage(phone, whatsappContent);
+    }
+  }
+
+  return { success: true, message: `Notification sent via ${channel} to ${recipients.length} users` };
+};
+
 export const sendNotification = async (req, res) => {
   try {
     const { target, recipientId, templateId, message } = req.body;
 
-    // Global context data
-    const settings = await Settings.findOne({});
-    const departmentCount = await Department.countDocuments();
+    const result = await sendNotificationCore({ target, recipientId, templateId, message });
+    if (!result.success) return res.status(400).json(result);
 
-    let recipients = [];
-    if (target === "all") recipients = await User.find({});
-    else if (target === "students") recipients = await User.find({ role: "student" });
-    else if (target === "lecturers") recipients = await User.find({ role: "lecturer" });
-    else if (target === "hods") recipients = await User.find({ role: "hod" });
-    else if (target === "specific" && recipientId) {
-      const user = await User.findById(recipientId);
-      if (user) recipients = [user];
-    }
-
-    if (recipients.length === 0)
-      return res.status(400).json({ success: false, message: "No recipients found" });
-
-    let template = null;
-    let channel = "both";
-    let notificationTitle = "Notification";
-
-    if (templateId) {
-      template = await Template.findById(templateId);
-      if (!template) return res.status(404).json({ success: false, message: "Template not found" });
-      channel = template.channel;
-      notificationTitle = template.name;
-    }
-
-    for (const user of recipients) {
-      let emailContent = "";
-      let whatsappContent = "";
-
-      if (template) {
-        const context = { user, settings, departmentCount };
-        emailContent = template.email_template
-          ? await renderTemplate(template.email_template, context)
-          : "";
-        whatsappContent = template.whatsapp_template
-          ? await renderTemplate(template.whatsapp_template, context)
-          : "";
-      } else {
-        // Non-template notification: use provided message
-        emailContent = message || "";
-        whatsappContent = message || "";
-      }
-
-      await Notification.create({
-        recipient_id: user._id,
-        title: notificationTitle,
-        message: whatsappContent || emailContent,
-        type: channel,
-      });
-
-      if ((channel === "email" || channel === "both") && user.email && emailContent)
-        await sendEmail({ to: user.email, subject: notificationTitle, html: emailContent });
-
-      if ((channel === "whatsapp" || channel === "both") && whatsappContent) {
-        const phone = user.phone || "08143185267";
-        await sendWhatsAppMessage(phone, whatsappContent);
-      }
-    }
-
-    res.status(200).json({
-      success: true,
-      message: `Notification sent via ${channel} to ${recipients.length} users`,
-    });
+    res.status(200).json(result);
   } catch (error) {
     console.error(error);
     res.status(500).json({ success: false, message: "Failed to send notification" });
   }
 };
+
 
 
 /* 📬 GET User Notifications */

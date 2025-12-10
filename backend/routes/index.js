@@ -15,8 +15,8 @@ import paymentRoutes from "../domain/payment/index.js"; // new addition
 import notificationRoutes from "../domain/notification/index.js"; // new addition
 import adminRoutes from "../domain/admin/index.js"
 import announcementRoutes from "../domain/announcement/index.js";
-
-
+import computationRoutes from "../domain/result/computation.routes.js";
+import systemMonitorRoutes from "../domain/system/systemMonitor.js"
 
 
 
@@ -36,4 +36,6 @@ router.use("/payments", paymentRoutes); // new addition
 router.use("/notifications", notificationRoutes); // new addition
 router.use("/admin", adminRoutes)
 router.use("/announcements", announcementRoutes);
+router.use("/computation", computationRoutes)
+router.use('/system', systemMonitorRoutes);
 export default router;

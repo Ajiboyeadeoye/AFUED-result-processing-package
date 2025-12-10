@@ -132,10 +132,10 @@ export const dataMaps = {
 
   Course: {
     _id: "this._id",
-    code: (doc) =>{
+    code: (doc) => {
       // console.log(doc)
-      if(doc.borrowedId) return doc.borrowedId.courseCode;
-      if(doc.courseCode) return doc.courseCode;
+      if (doc.borrowedId) return doc.borrowedId.courseCode;
+      if (doc.courseCode) return doc.courseCode;
       console.log("The borrowedId", doc.borrowedId);
       return null;
     },
@@ -165,18 +165,33 @@ export const dataMaps = {
       if (doc.borrowedId != null) return true
     },
     lecturer: async (doc, models) => {
-      const assignment = await models.CourseAssignment.findOne({ course: doc._id })
+
+
+      // 2. Get active semester for the lecturer’s department
+      const activeSemester = await models.Semester.findOne({
+        department: doc.department._id,
+        isActive: true
+      }).lean();
+
+      if (!activeSemester) return null;
+
+      // 3. Fetch the most recent CourseAssignment using course + active semester
+      const finalAssignment = await models.CourseAssignment
+        .findOne({
+          course: doc._id,
+          semester: activeSemester._id
+        })
+        .sort({ createdAt: -1 }) // most recent
         .populate("lecturer", "name email")
         .lean();
 
-      if (!assignment || !assignment.lecturer) return null;
+      if (!finalAssignment || !finalAssignment.lecturer) return null;
 
       return {
-        _id: assignment.lecturer._id,
-        name: assignment.lecturer.name || null,
-        email: assignment.lecturer.email || null,
+        _id: finalAssignment.lecturer._id,
+        name: finalAssignment.lecturer.name || null,
+        email: finalAssignment.lecturer.email || null
       };
-
     },
     createdAt: "this.createdAt",
     updatedAt: "this.updatedAt"
@@ -239,12 +254,47 @@ export const dataMaps = {
     department_id: "this.departmentId._id",
     faculty_name: "Faculty.name",
     level: 'this.level',
+    cgpa: "this.cgpa",
+    gpa: "this.gpa",
+    probationStatus: "this.probationStatus",
+    terminationStatus: "this.terminationStatus",
     semester: async (doc, models) => {
-      if(!doc.departmentId?._id) return "N/A";
+      if (!doc.departmentId?._id) return "N/A";
       const activeSemester = await models.Semester.findOne({ isActive: true, department: String(doc.departmentId?._id) }).lean();
       // console.log("The active semester", activeSemester, String(doc.departmentId._id) );
       return activeSemester ? activeSemester.name : "N/A";
     },
+    semesters: async (doc, models) => {
+      try {
+        const studentId = doc._id;
+        if (!studentId) return [];
+
+        // Fetch all semester result docs for this student
+        const results = await models.StudentSemesterResult.find({
+          studentId
+        })
+          .populate("semesterId")
+          .lean();
+
+        if (!results.length) return [];
+
+        // Transform into readable format
+        return results.map(r => ({
+          _id: r.semesterId?._id || null,
+          name: r.semesterId?.name || null,
+          session: r.semesterId?.session || null,
+          level: r.semesterId?.level || null,
+          gpa: r.gpa,
+          cgpa: r.cgpa,
+          remark: r.remark,
+          createdAt: r.createdAt
+        }));
+      } catch (err) {
+        console.error("Error fetching student semesters:", err);
+        return [];
+      }
+    },
+
     email: "this._id.email"
   },
 

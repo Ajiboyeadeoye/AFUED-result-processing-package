@@ -3,20 +3,31 @@ import mongoose from "mongoose";
 
 dotenv.config();
 
-// uri
-const { MONGODB_URI, MONGODB_URI2 } = process.env;
+const { MONGODB_URI2 } = process.env;
 
-// connect to db
+let isConnected = false;
+
 const connectToDB = async () => {
   try {
-    console.log(MONGODB_URI2)
-    await mongoose.connect(MONGODB_URI2);
+    if (isConnected) {
+      return mongoose.connection;
+    }
+
+    console.log(MONGODB_URI2);
+
+    await mongoose.connect(MONGODB_URI2, {
+      maxPoolSize: 20,
+    });
+
+    isConnected = true;
+
     console.log("✅ Connected to MongoDB");
+
+    return mongoose.connection;
   } catch (error) {
     console.error("❌ Error connecting to MongoDB:", error);
+    throw error;
   }
 };
-
-connectToDB();
 
 export default connectToDB;

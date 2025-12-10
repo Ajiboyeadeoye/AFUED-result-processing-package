@@ -3,27 +3,20 @@ import Result from "./result.model.js";
 import ComputationSummary from "./computation.model.js";
 import MasterComputation from "./masterComputation.model.js";
 import CarryoverCourse from "./carryover.model.js";
-// import studentSemseterResultModel from "./studentSemesterResult.model.js";
+import buildResponse from "../../utils/responseBuilder.js";
+import Queue from "bull";
 import studentModel from "../student/student.model.js";
 import departmentModel from "../department/department.model.js";
 import Semester from "../semester/semester.model.js";
 import courseModel from "../course/course.model.js";
-import { addDepartmentJob, departmentQueue, queueNotification } from "../../workers/department.queue.js";
-import studentSemseterResultModel from "../student/student.semseterResult.model.js";
+// import { departmentQueue } from "../../workers/department.worker.js";
 import { randomUUID } from "crypto";
-import buildResponse from "../../utils/responseBuilder.js";
+import { addDepartmentJob, queueNotification } from "../../workers/department.queue.js";
+// Initialize queues
 
-// ==================== CONFIGURATION ====================
-const ACADEMIC_RULES = {
-  PROBATION_THRESHOLD: 1.50,
-  TERMINATION_THRESHOLD: 1.00,
-  PROBATION_SEMESTER_LIMIT: 2,
-  CARRYOVER_LIMIT: 5,
-  EXCELLENT_GPA: 4.50,
-  GOOD_GPA: 2.00
-};
 
-// ==================== EXISTING UTILITY FUNCTIONS (UNCHANGED) ====================
+
+// ==================== UTILITY FUNCTIONS ====================
 
 const getGradeClassification = (gpa) => {
   if (gpa >= 4.50) return "firstClass";
@@ -40,8 +33,73 @@ const getActiveSemesterForDepartment = async (departmentId) => {
   });
 };
 
-const isPassingGrade = (grade) => {
-  return grade !== "F";
+const calculateStudentGPASemester = async (studentId, semesterId) => {
+  const pipeline = [
+    {
+      $match: {
+        studentId: new mongoose.Types.ObjectId(studentId),
+        semester: new mongoose.Types.ObjectId(semesterId),
+        deletedAt: null,
+        approved: true
+      }
+    },
+    {
+      $project: {
+        courseUnit: { $ifNull: ["$courseUnit", 1] },
+        gradePoint: 1
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalUnits: { $sum: "$courseUnit" },
+        totalPoints: { $sum: { $multiply: ["$courseUnit", "$gradePoint"] } }
+      }
+    }
+  ];
+
+  const [result] = await Result.aggregate(pipeline);
+
+  if (!result || result.totalUnits === 0) {
+    return { gpa: 0, totalUnits: 0, totalPoints: 0 };
+  }
+
+  const gpa = parseFloat((result.totalPoints / result.totalUnits).toFixed(2));
+  return { gpa, totalUnits: result.totalUnits, totalPoints: result.totalPoints };
+};
+
+const calculateStudentCGPA = async (studentId) => {
+  const pipeline = [
+    {
+      $match: {
+        studentId: new mongoose.Types.ObjectId(studentId),
+        deletedAt: null,
+        approved: true
+      }
+    },
+    {
+      $project: {
+        courseUnit: { $ifNull: ["$courseUnit", 1] },
+        gradePoint: 1
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalUnits: { $sum: "$courseUnit" },
+        totalPoints: { $sum: { $multiply: ["$courseUnit", "$gradePoint"] } }
+      }
+    }
+  ];
+
+  const [result] = await Result.aggregate(pipeline);
+
+  if (!result || result.totalUnits === 0) {
+    return { cgpa: 0, totalUnits: 0, totalPoints: 0 };
+  }
+
+  const cgpa = parseFloat((result.totalPoints / result.totalUnits).toFixed(2));
+  return { cgpa, totalUnits: result.totalUnits, totalPoints: result.totalPoints };
 };
 
 const isCoreCourse = async (courseId) => {
@@ -50,8 +108,12 @@ const isCoreCourse = async (courseId) => {
     return course ? (course.isCoreCourse === true || course.courseType === "core") : false;
   } catch (error) {
     console.error(`Error checking if course ${courseId} is core:`, error);
-    return true;
+    return true; // Default to true if we can't determine
   }
+};
+
+const isPassingGrade = (grade) => {
+  return grade !== "F";
 };
 
 const addToCarryoverBuffer = async (
@@ -117,6 +179,7 @@ const addToCarryoverBuffer = async (
     );
 
     await session.commitTransaction();
+console.log("Added to")
     return carryover;
 
   } catch (error) {
@@ -128,11 +191,15 @@ const addToCarryoverBuffer = async (
   }
 };
 
+
 const handleMissingResults = async (studentId, departmentId, semesterId, computationBatchId) => {
   try {
+    console.log("Handling missing result")
+    // Get student's current level
     const student = await studentModel.findById(studentId).select("level");
     if (!student) return;
 
+    // Get all core courses for this department at student's level
     const departmentCourses = await courseModel.find({
       department: departmentId,
       isCoreCourse: true,
@@ -171,165 +238,6 @@ const handleMissingResults = async (studentId, departmentId, semesterId, computa
   }
 };
 
-// ==================== NEW FUNCTIONS ADDED ====================
-
-const calculateGradeAndPoints = (score) => {
-  if (score >= 70) return { grade: "A", point: 5 };
-  if (score >= 60) return { grade: "B", point: 4 };
-  if (score >= 50) return { grade: "C", point: 3 };
-  if (score >= 45) return { grade: "D", point: 2 };
-  return { grade: "F", point: 0 };
-};
-
-const determineAcademicStanding = async (student, semesterGPA, cgpa, carryoverCount, currentSemesterId) => {
-  let probationStatus = student.probationStatus || "none";
-  let terminationStatus = student.terminationStatus || "none";
-  let remark = "good";
-  let actionTaken = null;
-
-  // Check for termination due to excessive carryovers
-  if (carryoverCount >= ACADEMIC_RULES.CARRYOVER_LIMIT) {
-    terminationStatus = "terminated";
-    remark = "terminated";
-    actionTaken = "terminated_carryover_limit";
-  }
-  // Check CGPA termination rule (if on probation and CGPA below threshold)
-  else if (probationStatus === "probation" && cgpa < ACADEMIC_RULES.TERMINATION_THRESHOLD) {
-    // Check previous semester results for consecutive probation
-    const previousResults = await studentSemseterResultModel.find({
-      studentId: student._id,
-      semesterId: { $ne: currentSemesterId }
-    }).sort({ createdAt: -1 }).limit(ACADEMIC_RULES.PROBATION_SEMESTER_LIMIT);
-
-    const consecutiveProbationCount = previousResults.filter(r =>
-      r.remark === "probation" || r.gpa < ACADEMIC_RULES.PROBATION_THRESHOLD
-    ).length;
-
-    if (consecutiveProbationCount >= ACADEMIC_RULES.PROBATION_SEMESTER_LIMIT - 1) {
-      terminationStatus = "withdrawn";
-      remark = "withdrawn";
-      actionTaken = "withdrawn_cgpa_low";
-    }
-  }
-  // Check for probation
-  else if (semesterGPA < ACADEMIC_RULES.PROBATION_THRESHOLD && terminationStatus === "none") {
-    if (probationStatus === "none") {
-      probationStatus = "probation";
-      actionTaken = "placed_on_probation";
-    }
-    remark = "probation";
-  }
-  // Check for probation lifting
-  else if (probationStatus === "probation" && semesterGPA >= ACADEMIC_RULES.GOOD_GPA) {
-    probationStatus = "probation_lifted";
-    actionTaken = "probation_lifted";
-  }
-  // Check for excellent performance
-  else if (semesterGPA >= ACADEMIC_RULES.EXCELLENT_GPA) {
-    remark = "excellent";
-  }
-
-  return {
-    probationStatus,
-    terminationStatus,
-    remark,
-    actionTaken
-  };
-};
-
-const createOrUpdateStudentSemesterResult = async (
-  studentId,
-  departmentId,
-  semesterId,
-  semesterResults,
-  semesterGPA,
-  cgpa,
-  semesterTotalUnits,
-  semesterTotalPoints,
-  carryoverCount,
-  remark,
-  computedBy,
-  computationSummaryId
-) => {
-  try {
-    const existingResult = await studentSemseterResultModel.findOne({
-      studentId,
-      semesterId
-    });
-
-    const courseDetails = await Promise.all(semesterResults.map(async (result) => {
-      const { grade, point } = calculateGradeAndPoints(result.score);
-      const courseIsCore = await isCoreCourse(result.courseId);
-
-      return {
-        courseId: result.courseId?._id || result.courseId,
-        courseUnit: result.courseUnit || 1,
-        score: result.score,
-        grade,
-        gradePoint: point,
-        isCoreCourse: courseIsCore,
-        isCarryover: result.isCarryover || false
-      };
-    }));
-
-    const resultData = {
-      studentId,
-      departmentId,
-      semesterId,
-      courses: courseDetails,
-      gpa: semesterGPA,
-      cgpa,
-      totalUnits: semesterTotalUnits,
-      totalPoints: semesterTotalPoints,
-      carryoverCount,
-      remark,
-      computedBy,
-      computationSummaryId,
-      status: "processed"
-    };
-
-    if (existingResult) {
-      await studentSemseterResultModel.findByIdAndUpdate(existingResult._id, resultData);
-      return existingResult._id;
-    } else {
-      const studentSemesterResult = new studentSemseterResultModel(resultData);
-      await studentSemesterResult.save();
-      return studentSemesterResult._id;
-    }
-  } catch (error) {
-    console.error(`Error creating/updating semester result for student ${studentId}:`, error);
-    throw error;
-  }
-};
-
-async function calculateStudentCGPA(studentId, currentSemesterId, semesterGPA, semesterTotalPoints, semesterTotalUnits) {
-  try {
-    const previousResults = await studentSemseterResultModel.find({
-      studentId,
-      semesterId: { $ne: currentSemesterId }
-    }).select("gpa totalUnits totalPoints");
-
-    let totalPoints = semesterTotalPoints;
-    let totalUnits = semesterTotalUnits;
-
-    for (const result of previousResults) {
-      totalPoints += result.totalPoints || 0;
-      totalUnits += result.totalUnits || 0;
-    }
-
-    if (totalUnits === 0) {
-      return { cgpa: 0, totalUnits: 0, totalPoints: 0 };
-    }
-
-    const cgpa = parseFloat((totalPoints / totalUnits).toFixed(2));
-    return { cgpa, totalUnits, totalPoints };
-  } catch (error) {
-    console.error(`Error calculating CGPA for student ${studentId}:`, error);
-    return { cgpa: 0, totalUnits: 0, totalPoints: 0 };
-  }
-}
-
-
 // ==================== DEPARTMENT JOB PROCESSOR ====================
 
 export const processDepartmentJob = async (job) => {
@@ -339,7 +247,7 @@ export const processDepartmentJob = async (job) => {
     computedBy,
     jobId,
     isRetry = false
-  } = job.data;
+  } = job;
 
   console.log(`Processing department job: ${jobId} for department ${departmentId}`);
 
@@ -357,6 +265,7 @@ export const processDepartmentJob = async (job) => {
     throw new Error(`Semester ${activeSemester.name} for ${department.name} is already locked`);
   }
 
+  // Find existing summary for retry, or create new
   let computationSummary;
   if (isRetry) {
     computationSummary = await ComputationSummary.findOne({
@@ -386,7 +295,7 @@ export const processDepartmentJob = async (job) => {
   }
 
   try {
-    const batchSize = 50;
+    const batchSize = 50; // Smaller batch size for better memory management
     let totalStudents = 0;
     let studentsWithResults = 0;
     let totalGPA = 0;
@@ -402,54 +311,43 @@ export const processDepartmentJob = async (job) => {
       fail: 0
     };
 
-    const academicStandingStats = {
-      excellent: 0,
-      good: 0,
-      probation: 0,
-      withdrawn: 0,
-      terminated: 0
-    };
-
     const failedStudents = [];
     const processedStudents = [];
 
+    // Get student count
     const studentCount = await studentModel.countDocuments({
       departmentId: departmentId,
-      terminationStatus: { $in: ["none", "probation", null] } // Only process non-terminated students
     });
 
     console.log(`Processing ${studentCount} students for department ${department.name}`);
 
+    // Process in batches
     for (let skip = 0; skip < studentCount; skip += batchSize) {
       const students = await studentModel.aggregate([
         {
           $match: {
-            departmentId: new mongoose.Types.ObjectId(departmentId),
-            terminationStatus: { $in: ["none", "probation", null] }
+        departmentId: new mongoose.Types.ObjectId(departmentId),
+        // status: "active"
           }
         },
         { $skip: skip },
         { $limit: batchSize },
         {
           $lookup: {
-            from: "users",
-            localField: "_id",
-            foreignField: "_id",
-            as: "userInfo"
+        from: "users",
+        localField: "_id",
+        foreignField: "_id",
+        as: "userInfo"
           }
         },
         { $unwind: "$userInfo" },
         {
           $project: {
-            _id: 1,
-            name: "$userInfo.name",
-            email: "$userInfo.email",
-            matricNumber: 1,
-            level: 1,
-            probationStatus: 1,
-            terminationStatus: 1,
-            cgpa: 1,
-            totalCarryovers: 1
+        _id: 1,
+        name: "$userInfo.name",
+        email: "$userInfo.email",
+        matricNumber: 1,
+        level: 1
           }
         }
       ]);
@@ -458,6 +356,13 @@ export const processDepartmentJob = async (job) => {
         totalStudents++;
 
         try {
+          // console.log({
+          //   studentId: student._id,
+          //   semester: activeSemester._id,
+          //   deletedAt: null,
+          //   approved: true
+          // })
+          // Get semester results
           const semesterResults = await Result.find({
             studentId: student._id,
             semester: activeSemester._id,
@@ -478,11 +383,11 @@ export const processDepartmentJob = async (job) => {
           // Process each result
           for (const result of semesterResults) {
             const courseId = result.courseId?._id || result.courseId;
-            const score = result.score || 0;
-            const { grade, point } = calculateGradeAndPoints(score);
+            const grade = result.grade;
+            const gradePoint = result.gradePoint || 0;
             const courseUnit = result.courseUnit || 1;
 
-            semesterTotalPoints += (point * courseUnit);
+            semesterTotalPoints += (gradePoint * courseUnit);
             semesterTotalUnits += courseUnit;
 
             if (!isPassingGrade(grade)) {
@@ -494,7 +399,7 @@ export const processDepartmentJob = async (job) => {
                   courseId,
                   resultId: result._id,
                   grade,
-                  score,
+                  score: result.score,
                   courseUnit
                 });
               }
@@ -506,9 +411,8 @@ export const processDepartmentJob = async (job) => {
             ? parseFloat((semesterTotalPoints / semesterTotalUnits).toFixed(2))
             : 0;
 
-          // Calculate overall CGPA (including this semester)
-          const cgpaData = await calculateStudentCGPA(student._id, activeSemester._id, semesterGPA, semesterTotalPoints, semesterTotalUnits);
-          const currentCGPA = cgpaData.cgpa;
+          // Calculate CGPA
+          const cgpaData = await calculateStudentCGPA(student._id);
 
           // Process failed courses for carryover
           let studentCarryovers = 0;
@@ -535,45 +439,32 @@ export const processDepartmentJob = async (job) => {
             }
           }
 
-          // Determine academic standing
-          const academicStanding = await determineAcademicStanding(
-            student,
-            semesterGPA,
-            currentCGPA,
-            student.totalCarryovers + studentCarryovers,
-            activeSemester._id
-          );
+          // Update student document
+          const studentSession = await mongoose.startSession();
+          try {
+            studentSession.startTransaction();
 
-          // Update student document with probation/termination status
-          await studentModel.findByIdAndUpdate(
-            student._id,
-            {
-              gpa: semesterGPA,
-              cgpa: currentCGPA,
-              lastGPAUpdate: new Date(),
-              probationStatus: academicStanding.probationStatus,
-              terminationStatus: academicStanding.terminationStatus,
-              $inc: { totalCarryovers: studentCarryovers }
-            }
-          );
+            await studentModel.findByIdAndUpdate(
+              student._id,
+              {
+                gpa: semesterGPA,
+                cgpa: cgpaData.cgpa,
+                lastGPAUpdate: new Date(),
+                $inc: { totalCarryovers: studentCarryovers }
+              },
+              { session: studentSession }
+            );
 
-          // Create/Update student semester result document
-          const studentSemesterResultId = await createOrUpdateStudentSemesterResult(
-            student._id,
-            departmentId,
-            activeSemester._id,
-            semesterResults,
-            semesterGPA,
-            currentCGPA,
-            semesterTotalUnits,
-            semesterTotalPoints,
-            studentCarryovers,
-            academicStanding.remark,
-            computedBy,
-            computationSummary._id
-          );
+            await studentSession.commitTransaction();
+            studentsWithResults++;
+          } catch (error) {
+            await studentSession.abortTransaction();
+            throw error;
+          } finally {
+            studentSession.endSession();
+          }
 
-          studentsWithResults++;
+          // Update statistics
           totalGPA += semesterGPA;
 
           if (semesterGPA > highestGPA) {
@@ -587,60 +478,28 @@ export const processDepartmentJob = async (job) => {
           const classification = getGradeClassification(semesterGPA);
           gradeDistribution[classification]++;
 
-          // Update academic standing stats
-          academicStandingStats[academicStanding.remark] =
-            (academicStandingStats[academicStanding.remark] || 0) + 1;
-
           processedStudents.push({
             studentId: student._id,
             gpa: semesterGPA,
-            cgpa: currentCGPA,
-            carryovers: studentCarryovers,
-            probationStatus: academicStanding.probationStatus,
-            terminationStatus: academicStanding.terminationStatus,
-            remark: academicStanding.remark,
-            resultDocumentId: studentSemesterResultId
+            cgpa: cgpaData.cgpa,
+            carryovers: studentCarryovers
           });
 
-          // Queue student notification with academic standing
-          let notificationType = "results_computed";
-          let notificationMessage = `Your ${activeSemester.name} results have been computed. GPA: ${semesterGPA.toFixed(2)}, CGPA: ${currentCGPA.toFixed(2)}.`;
-
-          if (studentCarryovers > 0) {
-            notificationType = "results_with_carryovers";
-            notificationMessage += ` You have ${studentCarryovers} carryover course(s).`;
-          }
-
-          if (academicStanding.actionTaken) {
-            if (academicStanding.actionTaken === "placed_on_probation") {
-              notificationType = "academic_probation";
-              notificationMessage += ` You have been placed on academic probation.`;
-            } else if (academicStanding.actionTaken === "probation_lifted") {
-              notificationType = "probation_lifted";
-              notificationMessage += ` Your academic probation has been lifted.`;
-            } else if (academicStanding.actionTaken === "withdrawn_cgpa_low") {
-              notificationType = "academic_withdrawal";
-              notificationMessage += ` You have been withdrawn from the university due to poor academic performance.`;
-            } else if (academicStanding.actionTaken === "terminated_carryover_limit") {
-              notificationType = "academic_termination";
-              notificationMessage += ` You have been terminated due to excessive carryover courses.`;
-            }
-          }
+          // Queue student notification
+          const notificationMessage = studentCarryovers > 0
+            ? `Your ${activeSemester.name} results have been computed. GPA: ${semesterGPA.toFixed(2)}, CGPA: ${cgpaData.cgpa.toFixed(2)}. You have ${studentCarryovers} carryover course(s).`
+            : `Your ${activeSemester.name} results have been computed. GPA: ${semesterGPA.toFixed(2)}, CGPA: ${cgpaData.cgpa.toFixed(2)}.`;
 
           await queueNotification(
             "specific",
             student._id,
-            notificationType,
+            studentCarryovers > 0 ? "results_with_carryovers" : "results_computed",
             notificationMessage,
             {
               semester: activeSemester.name,
               gpa: semesterGPA,
-              cgpa: currentCGPA,
-              carryoverCount: studentCarryovers,
-              probationStatus: academicStanding.probationStatus,
-              terminationStatus: academicStanding.terminationStatus,
-              remark: academicStanding.remark,
-              resultDocumentId: studentSemesterResultId
+              cgpa: cgpaData.cgpa,
+              carryoverCount: studentCarryovers
             }
           );
 
@@ -684,7 +543,6 @@ export const processDepartmentJob = async (job) => {
     computationSummary.highestGPA = parseFloat(highestGPA.toFixed(2));
     computationSummary.lowestGPA = parseFloat(lowestGPA.toFixed(2));
     computationSummary.gradeDistribution = gradeDistribution;
-    computationSummary.academicStandingStats = academicStandingStats;
     computationSummary.carryoverStats = {
       totalCarryovers,
       affectedStudents: processedStudents.filter(s => s.carryovers > 0).length
@@ -697,14 +555,28 @@ export const processDepartmentJob = async (job) => {
 
     // Lock semester if all successful
     if (failedStudents.length === 0) {
-      await Semester.findByIdAndUpdate(
-        activeSemester._id,
-        {
-          lockedAt: new Date(),
-          lockedBy: computedBy
-        }
-      );
-      console.log(`Locked semester ${activeSemester.name} for ${department.name}`);
+      const lockSession = await mongoose.startSession();
+      try {
+        lockSession.startTransaction();
+
+        await Semester.findByIdAndUpdate(
+          activeSemester._id,
+          {
+            // isLocked: true,
+            lockedAt: new Date(),
+            lockedBy: computedBy
+          },
+          { session: lockSession }
+        );
+
+        await lockSession.commitTransaction();
+        console.log(`Locked semester ${activeSemester.name} for ${department.name}`);
+      } catch (error) {
+        await lockSession.abortTransaction();
+        console.error("Failed to lock semester:", error);
+      } finally {
+        lockSession.endSession();
+      }
     }
 
     // Queue HOD notification
@@ -716,12 +588,6 @@ export const processDepartmentJob = async (job) => {
         `Results computation for ${department.name} - ${activeSemester.name} completed.
         Students: ${studentsWithResults}/${totalStudents}
         Average GPA: ${averageGPA.toFixed(2)}
-        Academic Standing: 
-        - Excellent: ${academicStandingStats.excellent}
-        - Good: ${academicStandingStats.good}
-        - Probation: ${academicStandingStats.probation}
-        - Withdrawn: ${academicStandingStats.withdrawn}
-        - Terminated: ${academicStandingStats.terminated}
         Carryovers: ${totalCarryovers} (${computationSummary.carryoverStats.affectedStudents} students)
         ${failedStudents.length > 0 ? `Failed: ${failedStudents.length} students` : ''}`,
         {
@@ -729,7 +595,6 @@ export const processDepartmentJob = async (job) => {
           semester: activeSemester.name,
           studentsProcessed: studentsWithResults,
           averageGPA: averageGPA.toFixed(2),
-          academicStanding: academicStandingStats,
           carryoverCount: totalCarryovers,
           failedCount: failedStudents.length
         }
@@ -737,18 +602,31 @@ export const processDepartmentJob = async (job) => {
     }
 
     // Update master computation
-    await MasterComputation.findByIdAndUpdate(
-      masterComputationId,
-      {
-        $push: { departmentSummaries: computationSummary._id },
-        $inc: {
-          departmentsProcessed: 1,
-          totalStudents: studentsWithResults,
-          totalFailedStudents: failedStudents.length,
-          totalCarryovers: totalCarryovers
-        }
-      }
-    );
+    const updateSession = await mongoose.startSession();
+    try {
+      updateSession.startTransaction();
+
+      await MasterComputation.findByIdAndUpdate(
+        masterComputationId,
+        {
+          $push: { departmentSummaries: computationSummary._id },
+          $inc: {
+            departmentsProcessed: 1,
+            totalStudents: studentsWithResults,
+            totalFailedStudents: failedStudents.length,
+            totalCarryovers: totalCarryovers
+          }
+        },
+        { session: updateSession }
+      );
+
+      await updateSession.commitTransaction();
+    } catch (error) {
+      await updateSession.abortTransaction();
+      console.error("Failed to update master computation:", error);
+    } finally {
+      updateSession.endSession();
+    }
 
     console.log(`Completed department ${department.name}: ${studentsWithResults} students, ${totalCarryovers} carryovers`);
 
@@ -757,7 +635,6 @@ export const processDepartmentJob = async (job) => {
       summaryId: computationSummary._id,
       department: department.name,
       studentsProcessed: studentsWithResults,
-      academicStanding: academicStandingStats,
       totalCarryovers,
       averageGPA,
       semesterLocked: failedStudents.length === 0
@@ -1033,7 +910,7 @@ export const getComputationStatus = async (req, res) => {
     // Get active jobs for this computation
     const waitingJobs = await departmentQueue.getWaiting();
     const activeJobs = await departmentQueue.getActive();
-console.log(waitingJobs, activeJobs)
+
     const relatedJobs = [...waitingJobs, ...activeJobs].filter(job =>
       job.data.masterComputationId === masterComputationId
     );
@@ -1061,7 +938,6 @@ console.log(waitingJobs, activeJobs)
       }))
     });
   } catch (error) {
-    console.log(error)
     return buildResponse(res, 500, "Failed to get computation status", null, true, error);
   }
 };

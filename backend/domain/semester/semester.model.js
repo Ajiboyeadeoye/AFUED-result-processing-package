@@ -33,7 +33,8 @@ const semesterSchema = new mongoose.Schema({
   isResultsPublished: { type: Boolean, default: false },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // usually super admin
   registrationDeadline: { type: Date},
-  lateRegistrationDate: {type: Date}
+  lateRegistrationDate: {type: Date},
+  isLocked: {type: Boolean}
 }, { timestamps: true });
 
 // Only one active semester per department
