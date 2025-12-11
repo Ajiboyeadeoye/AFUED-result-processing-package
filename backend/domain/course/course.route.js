@@ -13,6 +13,7 @@ import {
   registerCourses,
   getStudentRegistrations,
   getStudentsForCourse,
+  getBorrowedCoursesFromMyDept,
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
@@ -33,6 +34,8 @@ router.post("/register", authenticate(["hod", "admin", "student"]), registerCour
 
 /** Get available courses for student registration */
 router.get("/available", authenticate(['student']), getRegisterableCourses);
+router.get("/borrowed", authenticate(["hod"]), getBorrowedCoursesFromMyDept);
+
 
 /** ✅ Get registered courses (Student + HOD) */
 router.get(

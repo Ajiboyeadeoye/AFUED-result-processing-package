@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
 import Agenda from "agenda";
 import dotenv from "dotenv";
-import { processDepartmentJob } from "../domain/result/computation.controller.js";
+// import { processDepartmentJob } from "../domain/result/computation.controller.js";
 import { sendNotificationCore } from "../domain/notification/notification.controller.js";
 import departmentModel from "../domain/department/department.model.js";
+import { processDepartmentJob } from "../domain/computation/workers/computation.controller.js";
 
 dotenv.config();
 

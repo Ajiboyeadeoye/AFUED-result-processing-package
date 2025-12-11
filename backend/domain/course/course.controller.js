@@ -138,8 +138,6 @@ export const getAllCourses = async (req, res) => {
         },
 
       }),
-      // custom_fields: { courseCode: "borrowedId", department: 'department' }, // Map if needed
-      // custom_fields: { courseCode: { path: 'borrowedId.courseCode', fallback: 'courseCode' }, department: 'department' }, // Map if needed
       custom_fields: {
         courseCode: {
           path: 'borrowedId.courseCode',
@@ -171,6 +169,56 @@ export const getAllCourses = async (req, res) => {
   }
 };
 
+export const getBorrowedCoursesFromMyDept = async (req, res) => {
+  try {
+    // 🧠 Ensure user is HOD
+    if (req.user?.role !== "hod") {
+      return buildResponse(res, 403, "Only HOD can access this endpoint", null, true);
+    }
+
+    // 🔹 Get HOD's department
+    const hodDept = await departmentModel.findOne({ hod: req.user._id });
+    if (!hodDept) {
+      return buildResponse(res, 404, "Department not found for HOD", null, true);
+    }
+
+    // 🔹 Fetch all courses borrowed from this department
+    const fetchConfig = {
+      configMap: dataMaps.Course,
+      autoPopulate: true,
+      models: { departmentModel },
+      populate: ["department", "borrowedId"],
+      additionalFilters: {
+        borrowedId: { $exists: true }, // must be a borrowed course
+        "borrowedId.department": hodDept._id // original course belongs to HOD's department
+      },
+      custom_fields: {
+        courseCode: {
+          path: 'borrowedId.courseCode',
+          find: 'borrowedId.courseCode',
+          fallback: 'courseCode'
+        },
+        courseTitle: {
+          path: 'borrowedId.title',
+          find: 'borrowedId.title',
+          fallback: 'title'
+        },
+        borrowingDepartment: {
+          path: 'department.name', // department that is borrowing
+          find: 'department.name'
+        }
+      }
+    };
+
+    const result = await fetchDataHelper(req, res, Course, fetchConfig);
+
+    return buildResponse(res, 200, "Borrowed courses fetched successfully", result);
+
+  } catch (error) {
+    console.error(error);
+    return buildResponse(res, 500, "Failed to fetch borrowed courses", null, true, error);
+  }
+};
 
 
 export const getCourseById = async (req, res) => {
@@ -232,38 +280,122 @@ export const deleteCourse = async (req, res) => {
 // 🎓 COURSE ASSIGNMENT HANDLING
 // =========================================================
 
+// export const assignCourse = async (req, res) => {
+//   try {
+//     const { course, staffId: lecturer, department: borrowingDept } = req.body;
+
+//     // 🧩 Fetch course data
+//     const courseData = await Course.findById(course);
+//     if (!courseData) {
+//       return buildResponse(res, 404, "Course not found", null, true);
+//     }
+
+//     // 🔍 Determine if this is a borrowed course
+//     let originalCourse = courseData;
+//     let isBorrowed = false;
+
+//     if (courseData.borrowedId) {
+//       isBorrowed = true;
+//       originalCourse = await Course.findById(courseData.borrowedId);
+//       if (!originalCourse) {
+//         console.log(28932873293)
+//         return buildResponse(res, 404, "Original course not found", null, true);
+//       }
+//     }
+
+//     // 🧱 Determine which department the assignment should be linked to
+//     // Borrowed → borrowingDept, Normal → course's department
+//     let assignmentDeptId = isBorrowed ? borrowingDept : courseData.department;
+
+//     if (!assignmentDeptId) {
+//       return buildResponse(res, 400, "Department is required for assignment", null, true);
+//     }
+
+//     // 🏛 HOD restriction: only HOD of original department can assign
+//     if (req.user?.role === "hod") {
+//       const hodDept = await departmentModel.findOne({ hod: req.user._id });
+//       if (!hodDept) {
+//         return buildResponse(res, 404, "Department not found for HOD", null, true);
+//       }
+
+//       if (originalCourse.department.toString() !== hodDept._id.toString()) {
+//         return buildResponse(
+//           res,
+//           403,
+//           isBorrowed
+//             ? "Only HOD of the original department can assign borrowed courses"
+//             : "You cannot assign a course outside your department",
+//           null,
+//           true
+//         );
+//       }
+//     }
+
+//     // 🧠 Fetch active semester for the assignment department
+//     const currentSemester = await Semester.findOne({ department: assignmentDeptId, isActive: true });
+//     if (!currentSemester) {
+//       console.log("No active semseter")
+//       return buildResponse(res, 404, "No active semester found for this department", null, true);
+//     }
+
+//     const { _id: semester, session } = currentSemester;
+
+//     // 🔁 Prevent duplicate assignment per course + semester + session + department
+//     const existing = await CourseAssignment.findOne({
+//       course,
+//       semester,
+//       session,
+//       department: assignmentDeptId,
+//     });
+
+//     if (existing) {
+//       return buildResponse(res, 400, "Course already assigned for this session", null, true);
+//     }
+
+//     // 🪄 Create the assignment
+//     const newAssignment = new CourseAssignment({
+//       course,
+//       lecturer,
+//       semester,
+//       session,
+//       department: assignmentDeptId,
+//       assignedBy: req.user?._id,
+//     });
+
+//     await newAssignment.save();
+
+//     return buildResponse(res, 201, "Course assigned successfully", newAssignment);
+
+//   } catch (error) {
+//     console.error("❌ assignCourse error:", error);
+//     return buildResponse(res, 500, "Failed to assign course", null, true, error);
+//   }
+// };
+
 export const assignCourse = async (req, res) => {
   try {
-    const { course, staffId: lecturer, department: borrowingDept } = req.body;
+    // selectedCourseId is the course document user clicked (borrowed-copy or normal course)
+    const { course: selectedCourseId, staffId: lecturer } = req.body;
 
-    // 🧩 Fetch course data
-    const courseData = await Course.findById(course);
+    // Fetch the selected course (borrowed or normal)
+    const courseData = await Course.findById(selectedCourseId);
     if (!courseData) {
       return buildResponse(res, 404, "Course not found", null, true);
     }
 
-    // 🔍 Determine if this is a borrowed course
-    let originalCourse = courseData;
-    let isBorrowed = false;
+    // Check if this is a borrowed copy
+    const isBorrowed = !!courseData.borrowedId;
 
-    if (courseData.borrowedId) {
-      isBorrowed = true;
-      originalCourse = await Course.findById(courseData.borrowedId);
-      if (!originalCourse) {
-        console.log(28932873293)
-        return buildResponse(res, 404, "Original course not found", null, true);
-      }
+    // Get original course (for HOD check only)
+    const originalCourse = isBorrowed
+      ? await Course.findById(courseData.borrowedId)
+      : courseData;
+
+    if (!originalCourse) {
+      return buildResponse(res, 404, "Original course not found", null, true);
     }
 
-    // 🧱 Determine which department the assignment should be linked to
-    // Borrowed → borrowingDept, Normal → course's department
-    let assignmentDeptId = isBorrowed ? borrowingDept : courseData.department;
-
-    if (!assignmentDeptId) {
-      return buildResponse(res, 400, "Department is required for assignment", null, true);
-    }
-
-    // 🏛 HOD restriction: only HOD of original department can assign
+    // HOD permission check: only HOD of original department can assign
     if (req.user?.role === "hod") {
       const hodDept = await departmentModel.findOne({ hod: req.user._id });
       if (!hodDept) {
@@ -274,27 +406,40 @@ export const assignCourse = async (req, res) => {
         return buildResponse(
           res,
           403,
-          isBorrowed
-            ? "Only HOD of the original department can assign borrowed courses"
-            : "You cannot assign a course outside your department",
+          "Only the HOD of the original department can assign lecturers to this course",
           null,
           true
         );
       }
     }
 
-    // 🧠 Fetch active semester for the assignment department
-    const currentSemester = await Semester.findOne({ department: assignmentDeptId, isActive: true });
+    // The department that controls this assignment is always the selected course's department
+    const assignmentDeptId = courseData.department;
+    if (!assignmentDeptId) {
+      return buildResponse(res, 400, "Department not found for course", null, true);
+    }
+
+    // Fetch active semester for the borrowing department (selected course's department)
+    const currentSemester = await Semester.findOne({
+      department: assignmentDeptId,
+      isActive: true,
+    });
+
     if (!currentSemester) {
-      console.log("No active semseter")
-      return buildResponse(res, 404, "No active semester found for this department", null, true);
+      return buildResponse(
+        res,
+        404,
+        "No active semester for this department",
+        null,
+        true
+      );
     }
 
     const { _id: semester, session } = currentSemester;
 
-    // 🔁 Prevent duplicate assignment per course + semester + session + department
+    // Prevent duplicate assignment: check by selected course id
     const existing = await CourseAssignment.findOne({
-      course,
+      course: selectedCourseId,
       semester,
       session,
       department: assignmentDeptId,
@@ -304,25 +449,26 @@ export const assignCourse = async (req, res) => {
       return buildResponse(res, 400, "Course already assigned for this session", null, true);
     }
 
-    // 🪄 Create the assignment
-    const newAssignment = new CourseAssignment({
-      course,
+    // Create assignment: store selected course id (borrowed or normal)
+    const newAssignment = await CourseAssignment.create({
+      course: selectedCourseId,
       lecturer,
       semester,
       session,
-      department: assignmentDeptId,
-      assignedBy: req.user?._id,
+      department: assignmentDeptId, // department of the selected course
+      assignedBy: req.user._id,
     });
-
-    await newAssignment.save();
 
     return buildResponse(res, 201, "Course assigned successfully", newAssignment);
 
   } catch (error) {
-    console.error("❌ assignCourse error:", error);
+    console.error("assignCourse error:", error);
     return buildResponse(res, 500, "Failed to assign course", null, true, error);
   }
 };
+
+
+
 
 
 
@@ -560,85 +706,85 @@ export const registerCourses = async (req, res) => {
 };
 
 export const getStudentRegistrations = async (req, res) => {
-try {
-  let { session } = req.query;   // semester removed from query
-  let studentId = req.params.studentId;
+  try {
+    let { session } = req.query;   // semester removed from query
+    let studentId = req.params.studentId;
 
-  // Student: force their own ID
-  if (req.user.role === "student") {
-    studentId = req.user._id;
-  }
-
-  // HOD validation
-  if (req.user.role === "hod") {
-    if (!studentId) {
-      return buildResponse.error(res, "studentId is required for HOD");
+    // Student: force their own ID
+    if (req.user.role === "student") {
+      studentId = req.user._id;
     }
 
-    const hodDept = await departmentModel.findOne({ hod: req.user._id }).lean();
-    if (!hodDept) return buildResponse.error(res, "HOD department not found");
+    // HOD validation
+    if (req.user.role === "hod") {
+      if (!studentId) {
+        return buildResponse.error(res, "studentId is required for HOD");
+      }
 
-    const targetStudent = await studentModel.findById(studentId).lean();
-    if (!targetStudent) return buildResponse.error(res, "Student not found");
+      const hodDept = await departmentModel.findOne({ hod: req.user._id }).lean();
+      if (!hodDept) return buildResponse.error(res, "HOD department not found");
 
-    if (String(targetStudent.departmentId) !== String(hodDept._id)) {
-      return buildResponse.error(res, "You can only access students in your department");
+      const targetStudent = await studentModel.findById(studentId).lean();
+      if (!targetStudent) return buildResponse.error(res, "Student not found");
+
+      if (String(targetStudent.departmentId) !== String(hodDept._id)) {
+        return buildResponse.error(res, "You can only access students in your department");
+      }
     }
+
+    // Fetch student
+    const student = await studentModel.findById(studentId).lean();
+    if (!student) {
+      return buildResponse.error(res, "Student not found");
+    }
+
+    // 1️⃣ Determine active semester ALWAYS
+    const departmentId =
+      req.user.role === "hod"
+        ? (await departmentModel.findOne({ hod: req.user._id }).lean())?._id
+        : student.departmentId;
+
+    if (!departmentId) {
+      return buildResponse.error(res, "Department not found");
+    }
+
+    const currentSemester = await Semester.findOne({
+      department: departmentId,
+      isActive: true
+    }).lean();
+
+    if (!currentSemester) {
+      return buildResponse.error(res, "Active semester not found");
+    }
+
+    // 2️⃣ Build filter ALWAYS using active semester
+    const filter = {
+      student: studentId,
+      semester: currentSemester._id
+    };
+
+    // 3️⃣ Fetch registrations
+    let registrations = await CourseRegistration.find(filter)
+      .populate("student courses semester approvedBy")
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // 4️⃣ Borrowed courses resolution
+    for (const reg of registrations) {
+      reg.courses = await Promise.all(
+        reg.courses.map(async (course) => {
+          if (!course.borrowedId) return course;
+
+          const original = await Course.findById(course.borrowedId).lean();
+          return original || course;
+        })
+      );
+    }
+
+    return buildResponse.success(res, "Registrations fetched", registrations);
+
   }
-
-  // Fetch student
-  const student = await studentModel.findById(studentId).lean();
-  if (!student) {
-    return buildResponse.error(res, "Student not found");
-  }
-
-  // 1️⃣ Determine active semester ALWAYS
-  const departmentId =
-    req.user.role === "hod"
-      ? (await departmentModel.findOne({ hod: req.user._id }).lean())?._id
-      : student.departmentId;
-
-  if (!departmentId) {
-    return buildResponse.error(res, "Department not found");
-  }
-
-  const currentSemester = await Semester.findOne({
-    department: departmentId,
-    isActive: true
-  }).lean();
-
-  if (!currentSemester) {
-    return buildResponse.error(res, "Active semester not found");
-  }
-
-  // 2️⃣ Build filter ALWAYS using active semester
-  const filter = {
-    student: studentId,
-    semester: currentSemester._id
-  };
-
-  // 3️⃣ Fetch registrations
-  let registrations = await CourseRegistration.find(filter)
-    .populate("student courses semester approvedBy")
-    .sort({ createdAt: -1 })
-    .lean();
-
-  // 4️⃣ Borrowed courses resolution
-  for (const reg of registrations) {
-    reg.courses = await Promise.all(
-      reg.courses.map(async (course) => {
-        if (!course.borrowedId) return course;
-
-        const original = await Course.findById(course.borrowedId).lean();
-        return original || course;
-      })
-    );
-  }
-
-  return buildResponse.success(res, "Registrations fetched", registrations);
-
-} 
-catch (err) {
+  catch (err) {
     return res
       .status(500)
       .json(buildResponse.error(res, err.message));
@@ -710,36 +856,36 @@ export const getFacultyCourses = async (req, res) => {
 export const getLecturerCourses = async (req, res) => {
   try {
 
-// Before calling fetchDataHelper
-const lecturer = await lecturerModel.findById(req.user?._id).lean();
-if (!lecturer) {
-  return buildResponse(res, 404, "Lecturer not found");
-}
+    // Before calling fetchDataHelper
+    const lecturer = await lecturerModel.findById(req.user?._id).lean();
+    if (!lecturer) {
+      return buildResponse(res, 404, "Lecturer not found");
+    }
 
-const deptId = lecturer.departmentId;
-if (!deptId) {
-  return buildResponse(res, 400, "Lecturer has no department assigned");
-}
+    const deptId = lecturer.departmentId;
+    if (!deptId) {
+      return buildResponse(res, 400, "Lecturer has no department assigned");
+    }
 
-const activeSemester = await Semester.findOne({
-  department: deptId,
-  isActive: true
-}).lean();
+    const activeSemester = await Semester.findOne({
+      department: deptId,
+      isActive: true
+    }).lean();
 
-if (!activeSemester) {
-  return buildResponse(res, 400, "No active semester for lecturer department");
-}
+    if (!activeSemester) {
+      return buildResponse(res, 400, "No active semester for lecturer department");
+    }
 
-const result = await fetchDataHelper(req, res, courseAssignmentModel, {
-  configMap: dataMaps.CourseAssignment,
-  autoPopulate: true,
-  models: { courseModel, lecturerModel },
-  additionalFilters: {
-    lecturer: req.user?._id,
-    semester: activeSemester._id        // added automatically
-  },
-  populate: ["course"]
-});
+    const result = await fetchDataHelper(req, res, courseAssignmentModel, {
+      configMap: dataMaps.CourseAssignment,
+      autoPopulate: true,
+      models: { courseModel, lecturerModel },
+      additionalFilters: {
+        lecturer: req.user?._id,
+        semester: activeSemester._id        // added automatically
+      },
+      populate: ["course"]
+    });
 
     const lecturerId = req.user?._id;
     const assignments = result
@@ -922,7 +1068,7 @@ export const getStudentsForCourse = async (req, res) => {
             model: "Student",
           }
         },
-        
+
       ],
 
       // Sort configuration
@@ -935,9 +1081,9 @@ export const getStudentsForCourse = async (req, res) => {
       // Return type
       returnType: 'object',
       additionalFilters: {
-          courses : courseId
-        }
-,
+        courses: courseId
+      }
+      ,
       // UPDATED ConfigMap for your actual structure
       configMap: {
         // Basic user info from the populated student (which is actually User)

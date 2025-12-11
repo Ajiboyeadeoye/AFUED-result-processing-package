@@ -14,7 +14,7 @@ import authenticate from "../../middlewares/authenticate.js";
 const router = express.Router();
 
 // Start a new semester
-router.post("/start", authenticate(["admin", 'hod']), startNewSemester);
+router.post("/start", authenticate(["admin"]), startNewSemester);
 
 // Get semester by department
 

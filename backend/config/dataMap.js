@@ -173,7 +173,9 @@ export const dataMaps = {
         isActive: true
       }).lean();
 
-      if (!activeSemester) return null;
+      if (!activeSemester) {
+        return null
+      };
 
       // 3. Fetch the most recent CourseAssignment using course + active semester
       const finalAssignment = await models.CourseAssignment
@@ -184,8 +186,9 @@ export const dataMaps = {
         .sort({ createdAt: -1 }) // most recent
         .populate("lecturer", "name email")
         .lean();
-
-      if (!finalAssignment || !finalAssignment.lecturer) return null;
+        
+        console.log({semester: activeSemester._id})
+        if (!finalAssignment || !finalAssignment.lecturer) return null;
 
       return {
         _id: finalAssignment.lecturer._id,

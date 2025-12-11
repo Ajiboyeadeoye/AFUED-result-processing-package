@@ -189,7 +189,7 @@ export const sendNotificationCore = async ({ target, recipientId, templateId, me
   else if (target === "students") recipients = await User.find({ role: "student" });
   else if (target === "lecturers") recipients = await User.find({ role: "lecturer" });
   else if (target === "hods") recipients = await User.find({ role: "hod" });
-  else if (target === "specific" && recipientId) {
+  else if (  recipientId) {
     const user = await User.findById(recipientId);
     if (user) recipients = [user];
   }

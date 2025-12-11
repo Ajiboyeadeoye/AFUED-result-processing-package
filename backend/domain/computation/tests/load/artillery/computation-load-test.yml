@@ -1,0 +1,41 @@
+# test/load/artillery/computation-load-test.yml
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 60
+      arrivalRate: 1
+      name: "Warm up"
+    - duration: 300
+      arrivalRate: 5
+      rampTo: 20
+      name: "Ramp up load"
+    - duration: 600
+      arrivalRate: 20
+      name: "Sustained load"
+  payload:
+    path: "./departments.csv"
+    fields:
+      - "departmentId"
+      - "studentCount"
+
+scenarios:
+  - name: "Compute department results"
+    flow:
+      - post:
+          url: "/api/computation/compute"
+          json:
+            departmentId: "{{ departmentId }}"
+            force: false
+          capture:
+            json: "$.masterComputationId"
+            as: "computationId"
+      
+      - think: 30  # Wait 30 seconds
+      
+      - get:
+          url: "/api/computation/status/{{ computationId }}"
+          capture:
+            json: "$.masterComputation.status"
+            as: "status"
+      
+      - log: "Computation {{ computationId }} status: {{ status }}"

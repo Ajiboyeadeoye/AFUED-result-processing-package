@@ -20,7 +20,6 @@ export const startNewSemester = async (req, res) => {
   session.startTransaction();
 
   try {
-    const { name, session: sessionYear, levelSettings } = req.body;
     const userId = req.user._id;
 
     // Admin only
@@ -29,41 +28,55 @@ export const startNewSemester = async (req, res) => {
       return buildResponse(res, 403, "Only admin can start new semester", null, true);
     }
 
-    if (!name || !sessionYear) {
-      await session.abortTransaction();
-      return buildResponse(res, 400, "Name and session are required", null, true);
+    // ------------------ FETCH ACTIVE SEMESTER ------------------
+    const currentAcademic = await AcademicSemester.findOne(
+      { isActive: true },
+      null,
+      { session }
+    );
+
+    let nextSemesterName;
+    let nextSessionYear;
+
+    const yearNow = new Date().getFullYear();
+
+    if (!currentAcademic) {
+      // No history; system is fresh
+      nextSemesterName = "first";
+      nextSessionYear = `${yearNow}/${yearNow + 1}`;
+    } else {
+      const currentName = currentAcademic.name;
+      const [startY, endY] = currentAcademic.session.split("/").map(Number);
+
+      if (currentName === "first") {
+        nextSemesterName = "second";
+        nextSessionYear = currentAcademic.session;
+      } else {
+        nextSemesterName = "first";
+        nextSessionYear = `${endY}/${endY + 1}`;
+      }
     }
 
-    if (!VALID_SEMESTERS.includes(name)) {
-      await session.abortTransaction();
-      return buildResponse(res, 400, "Invalid semester name", null, true);
-    }
-
-    if (!sessionRegex.test(sessionYear)) {
-      await session.abortTransaction();
-      return buildResponse(res, 400, "Invalid session format. Use YYYY/YYYY", null, true);
-    }
-
-    // Default settings per level
-    const defaultLevelSettings = levelSettings || [
+    // Default level settings
+    const defaultLevelSettings = [
       { level: 100, minUnits: 12, maxUnits: 24 },
       { level: 200, minUnits: 12, maxUnits: 24 },
       { level: 300, minUnits: 12, maxUnits: 24 },
       { level: 400, minUnits: 12, maxUnits: 24 }
     ];
 
-    // --------- END OLD ACADEMIC SEMESTERS -----------
+    // ---------------- END OLD ACADEMIC SEMESTERS ----------------
     await AcademicSemester.updateMany(
       { isActive: true },
       { isActive: false, endDate: new Date() },
       { session }
     );
 
-    // --------- CREATE NEW ACADEMIC SEMESTER ----------
+    // ---------------- CREATE NEW ACADEMIC SEMESTER ----------------
     const academicSemester = await AcademicSemester.create(
       [{
-        name,
-        session: sessionYear,
+        name: nextSemesterName,
+        session: nextSessionYear,
         startDate: new Date(),
         isActive: true
       }],
@@ -72,28 +85,28 @@ export const startNewSemester = async (req, res) => {
 
     const academicSemesterDoc = academicSemester[0];
 
-    // --------- FETCH ALL DEPARTMENTS ------------------
+    // ---------------- FETCH ALL DEPARTMENTS ----------------
     const departments = await departmentModel.find({}, null, { session });
     if (departments.length === 0) {
       await session.abortTransaction();
       return buildResponse(res, 400, "No departments found", null, true);
     }
 
-    // --------- END ACTIVE DEPARTMENT SEMESTERS --------
+    // ---------------- END OLD DEPT SEMESTERS ----------------
     await Semester.updateMany(
       { isActive: true },
       { isActive: false, endDate: new Date() },
       { session }
     );
 
-    // --------- CREATE PER-DEPARTMENT SEMESTERS --------
+    // ---------------- CREATE NEW DEPT SEMESTERS ----------------
     const departmentSemesters = await Promise.all(
       departments.map((dept) =>
         Semester.create(
           [{
             academicSemester: academicSemesterDoc._id,
-            name,
-            session: sessionYear,
+            name: nextSemesterName,
+            session: nextSessionYear,
             department: dept._id,
             levelSettings: defaultLevelSettings,
             isActive: true,
@@ -106,19 +119,18 @@ export const startNewSemester = async (req, res) => {
       )
     );
 
-    // Flatten the array
     const departmentSemesterDocs = departmentSemesters.map(s => s[0]);
 
-    // --------- UPDATE SETTINGS ------------------------
+    // ---------------- UPDATE SETTINGS ----------------
     const settings = await Settings.findOneAndUpdate(
       {},
       {
-        currentSession: sessionYear,
-        currentSemester: name,
+        currentSession: nextSessionYear,
+        currentSemester: nextSemesterName,
         activeAcademicSemesterId: academicSemesterDoc._id,
         registrationOpen: false,
         resultPublicationOpen: false,
-        updatedBy: userId,
+        updatedBy: userId
       },
       { new: true, upsert: true, session }
     );
@@ -128,9 +140,11 @@ export const startNewSemester = async (req, res) => {
     session.endSession();
 
     return buildResponse(res, 200, "New semester started successfully", {
+      nextSemester: nextSemesterName,
+      nextSession: nextSessionYear,
       academicSemester: academicSemesterDoc,
       departmentSemesters: departmentSemesterDocs,
-      settings,
+      settings
     });
 
   } catch (error) {
@@ -141,61 +155,68 @@ export const startNewSemester = async (req, res) => {
   }
 };
 
+
 // 🔥 Clean & Optimized Registration Toggle
 export const toggleRegistration = async (req, res) => {
   try {
     const userId = req.user._id;
     const userRole = req.user.role;
 
-    // 🔹 Resolve department based on user role
-    let departmentId;
+    let targetDepartments = [];
+    let departmentId = req.body?.departmentId || null;
 
+    // ---------------- ADMIN LOGIC ----------------
     if (userRole === "admin") {
-      if (!req.body.departmentId) {
-        return buildResponse(res, 400, "Department ID required for admin", null, true);
+      if (departmentId) {
+        // Admin specified a department
+        targetDepartments = [departmentId];
+      } else {
+        // Admin toggles ALL departments
+        const allDepts = await departmentModel.find({}, "_id");
+        targetDepartments = allDepts.map(d => d._id);
       }
-      departmentId = req.body.departmentId;
+    }
 
-    } else if (userRole === "hod" || userRole === "dean") {
+    // ---------------- HOD / DEAN LOGIC ----------------
+    if (userRole === "hod" || userRole === "dean") {
       const dept = await departmentModel.findOne({ hod: req.user._id });
 
       if (!dept) {
         return buildResponse(res, 400, "No department assigned to user", null, true);
       }
 
-      departmentId = dept._id;
+      targetDepartments = [dept._id];
+    }
 
-    } else {
+    // ---------------- ONLY ALLOWED ROLES ----------------
+    if (targetDepartments.length === 0) {
       return buildResponse(res, 403, "Insufficient permissions", null, true);
     }
 
-    // 🔹 Fetch active semester for department
-    const semester = await Semester.findOne({ department: departmentId, isActive: true });
+    // ---------------- FETCH SEMESTERS ----------------
+    const semesters = await Semester.find({
+      department: { $in: targetDepartments },
+      isActive: true
+    });
 
-    if (!semester) {
-      return buildResponse(res, 404, "No active semester found for this department", null, true);
+    if (semesters.length === 0) {
+      return buildResponse(res, 404, "No active semester found", null, true);
     }
 
-    // 🔹 Toggling logic (THE REAL FIX 🔥)
-    const newStatus = !semester.isRegistrationOpen;
+    // Determine uniform toggle state
+    const newStatus = !semesters[0].isRegistrationOpen;
 
-    // 🔹 Update semester
-    const updated = await Semester.findOneAndUpdate(
-      { department: departmentId, isActive: true },
-      { isRegistrationOpen: newStatus, updatedBy: userId },
-      { new: true }
+    // ---------------- PERFORM UPDATE ----------------
+    await Semester.updateMany(
+      { department: { $in: targetDepartments }, isActive: true },
+      { isRegistrationOpen: newStatus, updatedBy: userId }
     );
 
-    if (!updated) {
-      return buildResponse(res, 500, "Failed to update registration status", null, true);
-    }
-
-    // 🔹 Response
     return buildResponse(
       res,
       200,
-      `Course registration ${newStatus ? "opened" : "closed"} successfully`,
-      updated
+      `Registration ${newStatus ? "opened" : "closed"} successfully`,
+      { affectedDepartments: targetDepartments }
     );
 
   } catch (error) {
@@ -204,70 +225,106 @@ export const toggleRegistration = async (req, res) => {
   }
 };
 
+
 // 🔹 Toggle results publication (HOD/Admin/Dean)
 export const toggleResultPublication = async (req, res) => {
   try {
-    const { status, departmentId } = req.body;
     const userId = req.user._id;
     const userRole = req.user.role;
+    const { status } = req.body;
 
-    if (typeof status !== 'boolean') {
+    if (typeof status !== "boolean") {
       return buildResponse(res, 400, "Status must be a boolean", null, true);
     }
 
-    // Admin can toggle for any department, HOD/Dean only for their department
-    if (userRole === 'admin') {
-      if (!departmentId) {
-        return buildResponse(res, 400, "Department ID required for admin", null, true);
+    let targetDepartments = [];
+    let departmentId = req.body?.departmentId || null;
+
+    // ---------------- ADMIN LOGIC ----------------
+    if (userRole === "admin") {
+      if (departmentId) {
+        // Admin named a department
+        targetDepartments = [departmentId];
+      } else {
+        // Admin toggles ALL departments
+        const allDepts = await departmentModel.find({}, "_id");
+        targetDepartments = allDepts.map(d => d._id);
+      }
+    }
+
+    // ---------------- HOD / DEAN LOGIC ----------------
+    if (userRole === "hod" || userRole === "dean") {
+      const dept = await departmentModel.findOne({ hod: req.user._id });
+
+      if (!dept) {
+        return buildResponse(res, 400, "No department assigned to this user", null, true);
       }
 
-      const semester = await Semester.findOneAndUpdate(
-        { department: departmentId, isActive: true },
-        { isResultsPublished: status, updatedBy: userId },
-        { new: true }
-      );
+      targetDepartments = [dept._id];
+    }
 
-      if (!semester) {
-        return buildResponse(res, 404, "No active semester found for this department", null, true);
-      }
-
-      return buildResponse(res, 200, `Result publication ${status ? "opened" : "closed"} for department`, semester);
-
-    } else if (userRole === 'hod' || userRole === 'dean') {
-      const userDepartment = req.user.department;
-
-      if (!userDepartment) {
-        return buildResponse(res, 400, "No department assigned to user", null, true);
-      }
-
-      const semester = await Semester.findOneAndUpdate(
-        { department: userDepartment, isActive: true },
-        { isResultsPublished: status, updatedBy: userId },
-        { new: true }
-      );
-
-      if (!semester) {
-        return buildResponse(res, 404, "No active semester found for your department", null, true);
-      }
-
-      return buildResponse(res, 200, `Result publication ${status ? "opened" : "closed"} for your department`, semester);
-
-    } else {
+    // ---------------- ONLY ALLOWED ROLES ----------------
+    if (targetDepartments.length === 0) {
       return buildResponse(res, 403, "Insufficient permissions", null, true);
     }
+
+    // ---------------- FETCH ACTIVE SEMESTERS ----------------
+    const semesters = await Semester.find({
+      department: { $in: targetDepartments },
+      isActive: true
+    });
+
+    if (semesters.length === 0) {
+      return buildResponse(res, 404, "No active semester(s) found", null, true);
+    }
+
+    // ---------------- UPDATE SEMESTERS ----------------
+    await Semester.updateMany(
+      { department: { $in: targetDepartments }, isActive: true },
+      { isResultsPublished: status, updatedBy: userId }
+    );
+
+    return buildResponse(
+      res,
+      200,
+      `Result publication ${status ? "opened" : "closed"} successfully`,
+      { affectedDepartments: targetDepartments }
+    );
+
   } catch (error) {
     console.error("Error updating result publication:", error);
-    return buildResponse(res, 500, "Error updating result publication", null, true, error);
+    return buildResponse(
+      res,
+      500,
+      "Error updating result publication",
+      null,
+      true,
+      error
+    );
   }
 };
+
 
 // 🔹 Get active semester (anyone)
 export const getActiveSemester = async (req, res) => {
   try {
-    let departmentFilter = {};
+    // const {deoartment}
+    let departmentId = null;
 
+    // ------------------- STUDENT -------------------
+    if (req.user.role === "student") {
+      const student = await studentModel
+        .findById(req.user._id)
+        .populate("departmentId");
 
-    // HOD/Dean
+      if (!student || !student.departmentId) {
+        return buildResponse(res, 400, "Department not found for this student", null, true);
+      }
+
+      departmentId = student.departmentId._id;
+    }
+
+    // ------------------- HOD/DEAN -------------------
     if (req.user.role === "hod" || req.user.role === "dean") {
       const userDept = await departmentModel.findOne({ hod: req.user._id });
 
@@ -275,49 +332,53 @@ export const getActiveSemester = async (req, res) => {
         return buildResponse(res, 400, "Department not found for this user", null, true);
       }
 
-      departmentFilter.department = userDept._id;
+      departmentId = userDept._id;
     }
 
-    // Admin
+    // ------------------- ADMIN -------------------
     if (req.user.role === "admin") {
-      if (!req.body.departmentId) {
-        return buildResponse(res, 400, "departmentId is required", null, true);
+      // If admin directly specifies department, use it
+      const body = req.body || {};
+      const query = req.query || {};
+      if (body.departmentId) {
+        departmentId = req.body.departmentId;
       }
 
-      departmentFilter.department = req.body.departmentId;
-    }
-
-    // Student
-    if (req.user.role === "student") {
-      const student = await studentModel.findById(req.user._id).populate('departmentId');
-
-      if (!student || !student.departmentId) {
-        return buildResponse(res, 400, "Department not found for this student", null, true);
+      // Also allow query param
+      if (query.departmentId) {
+        departmentId = req.query.departmentId;
       }
 
-      departmentFilter.department = student.departmentId._id;
+      // If no department is provided, return the academic semester (global)
+      if (!departmentId) {
+        const academic = await AcademicSemester.findOne({ isActive: true });
+
+        if (!academic) {
+          return buildResponse(res, 404, "No active academic semester found", null, true);
+        }
+
+        return buildResponse(res, 200, "Active academic semester fetched", academic);
+      }
     }
 
-    // For admin, they can specify department in query, otherwise get all active semesters
-    if (req.user.role === 'admin' && req.query.departmentId) {
-      departmentFilter.department = req.query.departmentId;
-    }
-
+    // ------------------- FETCH DEPARTMENT SEMESTER -------------------
     const semester = await Semester.findOne({
       isActive: true,
-      ...departmentFilter
-    }).populate('department', 'name code');
+      department: departmentId
+    }).populate("department", "name code");
 
     if (!semester) {
-      return buildResponse(res, 404, "No active semester found", null, true);
+      return buildResponse(res, 404, "No active semester found for this department", null, true);
     }
 
     return buildResponse(res, 200, "Active semester fetched successfully", semester);
+
   } catch (error) {
     console.error("Error fetching semester:", error);
     return buildResponse(res, 500, "Error fetching semester", null, true, error);
   }
 };
+
 
 // 🔹 Deactivate semester (admin only)
 export const deactivateSemester = async (req, res) => {

@@ -27,11 +27,28 @@ export const createLecturer = async (req, res) => {
       search_term,
       filters,
       page,
-      user: userFromMiddleware,
     } = req.body;
 
+    const userFromMiddleware = req.user
     // 🧮 If it's a filter/search request
     if (fields || search_term || filters || page) {
+
+      // Ensure safe filter object
+      const safeFilters = filters || {};
+
+      // 🔐 If user is HOD, auto-detect their department
+      if (userFromMiddleware?.role === "hod") {
+        const hodId = userFromMiddleware._id;
+
+        const department = await departmentModel.findOne({ hod: hodId });
+
+        if (!department) {
+          return buildResponse(res, 404, "Department not found for HOD", null, true);
+        }
+
+        // Inject department filter so HOD only sees lecturers in their department
+        safeFilters.departmentId = department._id;
+      }
 
       const result = await fetchDataHelper(req, res, Lecturer, {
         configMap: dataMaps.Lecturer,
@@ -39,8 +56,9 @@ export const createLecturer = async (req, res) => {
         models: { departmentModel, User },
         populate: ["departmentId", "_id"],
         custom_fields: { name: "_id", email: "_id" },
-        // filter: {departmentId: departmentId || undefined, ...filters},
+        additionalFilters: safeFilters,
       });
+
       return result;
     }
 
