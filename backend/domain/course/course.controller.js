@@ -22,6 +22,7 @@ import lecturerModel from "../lecturer/lecturer.model.js";
 import courseModel from "./course.model.js";
 import studentModel from "../student/student.model.js";
 import carryOverSchema from "../result/carryover.model.js";
+import CarryoverCourse from "../result/carryover.model.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -105,9 +106,9 @@ export const createCourse = async (req, res) => {
     await newCourse.save();
 
     // Populate for response
-    newCourse = await getCourseById({ params: { courseId: newCourse._id } }, res);
+    return await getCourseById({ params: { courseId: newCourse._id } }, res);
 
-    return buildResponse.success(res, "Course created successfully", newCourse);
+    // return buildResponse.success(res, "Course created successfully", newCourse);
 
   } catch (err) {
     console.log("Request STATUS:", err);
@@ -117,52 +118,56 @@ export const createCourse = async (req, res) => {
 
 export const getAllCourses = async (req, res) => {
   try {
-    let result;
-
-    // 🧠 If HOD, restrict to their department
     const isHod = req.user?.role === "hod";
-    const department = isHod ? await departmentModel.findOne({ hod: req.user?._id }) : null;
+    let department = null;
 
-    if (isHod && !department) {
-      return buildResponse(res, 404, "Department not found for HOD", null, true);
+    if (isHod) {
+      department = await departmentModel.findOne({ hod: req.user?._id });
+      if (!department) {
+        return buildResponse(res, 404, "Department not found for HOD", null, true);
+      }
+    }
+
+    // 🧠 Build filters incrementally
+    const additionalFilters = {};
+
+    if (isHod&&!req.params.courseId) {
+      // additionalFilters.department = department._id;
+    }
+
+    if (req.params.courseId) {
+      additionalFilters._id = req.params.courseId;
     }
 
     const fetchConfig = {
       configMap: dataMaps.Course,
       autoPopulate: true,
       models: { departmentModel },
-      populate: ["department"],
-      ...(isHod && {
-        additionalFilters: {
-          department: department._id
-        },
+      populate: ["department", "borrowedId"],
 
+      ...(Object.keys(additionalFilters).length && {
+        additionalFilters
       }),
+
       custom_fields: {
         courseCode: {
-          path: 'borrowedId.courseCode',
-          find: 'borrowedId.courseCode',  // Explicit search path
-          fallback: 'courseCode'
+          path: "borrowedId.courseCode",
+          find: "borrowedId.courseCode",
+          fallback: "courseCode",
         },
         courseTitle: {
-          path: 'borrowedId.title',
-          find: 'borrowedId.title',  // Explicit search path
-          fallback: 'title'
+          path: "borrowedId.title",
+          find: "borrowedId.title",
+          fallback: "title",
         },
         departmentName: {
-          path: 'department.name',  // Explicit path
-          find: 'department.name',   // Explicit search
-        }
+          path: "department.name",
+          find: "department.name",
+        },
       },
-      populate: ["department", "borrowedId"],
     };
-
-
-
-    result = await fetchDataHelper(req, res, Course, fetchConfig);
-
-
-    // return buildResponse(res, 200, "All Courses fetched", result);
+    const result = await fetchDataHelper(req, res, Course, fetchConfig);
+    return result;
   } catch (error) {
     console.error(error);
     return buildResponse(res, 500, "Failed to fetch courses", null, true, error);
@@ -223,20 +228,43 @@ export const getBorrowedCoursesFromMyDept = async (req, res) => {
 
 export const getCourseById = async (req, res) => {
   try {
-    // const { id } = req.params;
+    const fetchConfig = {
+      configMap: dataMaps.Course,
+      autoPopulate: true,
+      models: { departmentModel },
 
-    const result = await fetchDataHelper(req, res, Course, {
-      configMap: dataMaps.CourseById,
-      autoPopulate: false,
-      models: { departmentModel, CourseAssignment },
-      additionalFilters: { _id: req.params.courseId },
+      // ✅ Explicit populate, same pattern you already use elsewhere
       populate: ["department", "borrowedId"],
 
-    });
+      // ✅ Filter strictly by courseId
+      additionalFilters: {
+        _id: req.params.courseId,
+      },
 
-    // return res
-    //   .status(200)
-    //   .json(buildResponse(res, 200, "Course fetched successfully", result));
+      // ✅ Custom fields resolved by fetchDataHelper
+      // custom_fields: {
+      //   courseCode: {
+      //     path: "borrowedId.courseCode",
+      //     find: "borrowedId.courseCode",
+      //     fallback: "courseCode",
+      //   },
+      //   courseTitle: {
+      //     path: "borrowedId.title",
+      //     find: "borrowedId.title",
+      //     fallback: "title",
+      //   },
+      //   departmentName: {
+      //     path: "department.name",
+      //     find: "department.name",
+      //   },
+      // },
+    };
+
+    const result = await fetchDataHelper(req, res, Course, fetchConfig);
+
+    // Optional: if you ever want single-object response
+    // return res.status(200).json(buildResponse(res, 200, "Course fetched", result?.[0] || null));
+
   } catch (err) {
     console.error("Error fetching course:", err);
     return res
@@ -244,6 +272,8 @@ export const getCourseById = async (req, res) => {
       .json(buildResponse(res, 500, "Failed to fetch course", null, true, err));
   }
 };
+
+
 
 export const updateCourse = async (req, res) => {
   try {
@@ -279,98 +309,6 @@ export const deleteCourse = async (req, res) => {
 // =========================================================
 // 🎓 COURSE ASSIGNMENT HANDLING
 // =========================================================
-
-// export const assignCourse = async (req, res) => {
-//   try {
-//     const { course, staffId: lecturer, department: borrowingDept } = req.body;
-
-//     // 🧩 Fetch course data
-//     const courseData = await Course.findById(course);
-//     if (!courseData) {
-//       return buildResponse(res, 404, "Course not found", null, true);
-//     }
-
-//     // 🔍 Determine if this is a borrowed course
-//     let originalCourse = courseData;
-//     let isBorrowed = false;
-
-//     if (courseData.borrowedId) {
-//       isBorrowed = true;
-//       originalCourse = await Course.findById(courseData.borrowedId);
-//       if (!originalCourse) {
-//         console.log(28932873293)
-//         return buildResponse(res, 404, "Original course not found", null, true);
-//       }
-//     }
-
-//     // 🧱 Determine which department the assignment should be linked to
-//     // Borrowed → borrowingDept, Normal → course's department
-//     let assignmentDeptId = isBorrowed ? borrowingDept : courseData.department;
-
-//     if (!assignmentDeptId) {
-//       return buildResponse(res, 400, "Department is required for assignment", null, true);
-//     }
-
-//     // 🏛 HOD restriction: only HOD of original department can assign
-//     if (req.user?.role === "hod") {
-//       const hodDept = await departmentModel.findOne({ hod: req.user._id });
-//       if (!hodDept) {
-//         return buildResponse(res, 404, "Department not found for HOD", null, true);
-//       }
-
-//       if (originalCourse.department.toString() !== hodDept._id.toString()) {
-//         return buildResponse(
-//           res,
-//           403,
-//           isBorrowed
-//             ? "Only HOD of the original department can assign borrowed courses"
-//             : "You cannot assign a course outside your department",
-//           null,
-//           true
-//         );
-//       }
-//     }
-
-//     // 🧠 Fetch active semester for the assignment department
-//     const currentSemester = await Semester.findOne({ department: assignmentDeptId, isActive: true });
-//     if (!currentSemester) {
-//       console.log("No active semseter")
-//       return buildResponse(res, 404, "No active semester found for this department", null, true);
-//     }
-
-//     const { _id: semester, session } = currentSemester;
-
-//     // 🔁 Prevent duplicate assignment per course + semester + session + department
-//     const existing = await CourseAssignment.findOne({
-//       course,
-//       semester,
-//       session,
-//       department: assignmentDeptId,
-//     });
-
-//     if (existing) {
-//       return buildResponse(res, 400, "Course already assigned for this session", null, true);
-//     }
-
-//     // 🪄 Create the assignment
-//     const newAssignment = new CourseAssignment({
-//       course,
-//       lecturer,
-//       semester,
-//       session,
-//       department: assignmentDeptId,
-//       assignedBy: req.user?._id,
-//     });
-
-//     await newAssignment.save();
-
-//     return buildResponse(res, 201, "Course assigned successfully", newAssignment);
-
-//   } catch (error) {
-//     console.error("❌ assignCourse error:", error);
-//     return buildResponse(res, 500, "Failed to assign course", null, true, error);
-//   }
-// };
 
 export const assignCourse = async (req, res) => {
   try {
@@ -471,53 +409,17 @@ export const assignCourse = async (req, res) => {
 
 
 
-
-export const getAssignments = async (req, res) => {
-  try {
-    const { session, semester, department } = req.query;
-    const filter = {};
-    if (session) filter.session = session;
-    if (semester) filter.semester = semester;
-    if (department) filter.department = department;
-
-    const assignments = await CourseAssignment.find(filter)
-      .populate("course lecturers.user semester department assignedBy")
-      .sort({ createdAt: -1 });
-
-    res.json(buildResponse(true, "Assignments fetched successfully", assignments));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
-
-export const updateAssignmentStatus = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const assignment = await CourseAssignment.findById(id);
-    if (!assignment)
-      return res.status(404).json(buildResponse(false, "Assignment not found"));
-
-    assignment.status = status;
-    await assignment.save();
-
-    res.json(buildResponse(true, "Assignment status updated", assignment));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
-
 // =========================================================
 // 🧾 COURSE REGISTRATION SYSTEM
 // =========================================================
 
 export const registerCourses = async (req, res) => {
   try {
-    const { courses: selectedCourseIds, department } = req.body;
+    const { courses: selectedCourseIds } = req.body;
 
     // 1️⃣ GET STUDENT
     const student = await studentModel.findById(req.user._id).lean();
+    const department = student.departmentId
     if (!student) {
       return buildResponse(res, 404, "Student not found", null, true);
     }
@@ -689,6 +591,7 @@ export const registerCourses = async (req, res) => {
       attemptNumber,
       registeredByHod: req.user.role === "hod" ? req.user._id : null,
       notes: req.user.role === "hod" ? req.body.notes || null : null,
+      department
     });
 
     await newReg.save();
@@ -791,63 +694,6 @@ export const getStudentRegistrations = async (req, res) => {
   }
 };
 
-export const approveRegistration = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { status } = req.body;
-
-    const reg = await CourseRegistration.findById(id);
-    if (!reg) return res.status(404).json(buildResponse(false, "Registration not found"));
-
-    if (!["Approved", "Rejected"].includes(status))
-      return res.status(400).json(buildResponse(false, "Invalid status"));
-
-    reg.status = status;
-    reg.approvedBy = req.user?._id;
-    await reg.save();
-
-    res.json(buildResponse(true, "Registration updated", reg));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
-
-// =========================================================
-// 🧮 DEPARTMENTAL / FACULTY UTILITIES
-// =========================================================
-
-export const getDepartmentCourses = async (req, res) => {
-  try {
-    const { department, level, semester } = req.query;
-    if (!department)
-      return res.status(400).json(buildResponse(false, "Department required"));
-
-    const filter = { department };
-    if (level) filter.level = level;
-    if (semester) filter.semester = semester;
-
-    const courses = await Course.find(filter).populate("faculty department");
-    res.json(buildResponse(true, "Department courses fetched", courses));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
-
-export const getFacultyCourses = async (req, res) => {
-  try {
-    const { faculty } = req.query;
-    if (!faculty)
-      return res.status(400).json(buildResponse(false, "Faculty required"));
-
-    const courses = await Course.find({ faculty })
-      .populate("department faculty")
-      .sort({ level: 1, courseCode: 1 });
-
-    res.json(buildResponse(true, "Faculty courses fetched", courses));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
 
 // =========================================================
 // 🧑‍🏫 LECTURER COURSE MANAGEMENT
@@ -855,152 +701,276 @@ export const getFacultyCourses = async (req, res) => {
 
 export const getLecturerCourses = async (req, res) => {
   try {
+    const lecturerId = req.user?._id;
 
-    // Before calling fetchDataHelper
-    const lecturer = await lecturerModel.findById(req.user?._id).lean();
+    // 1️⃣ Ensure lecturer exists
+    const lecturer = await lecturerModel.findById(lecturerId).lean();
     if (!lecturer) {
       return buildResponse(res, 404, "Lecturer not found");
     }
 
-    const deptId = lecturer.departmentId;
-    if (!deptId) {
-      return buildResponse(res, 400, "Lecturer has no department assigned");
+    // 2️⃣ Get all semesters where this lecturer has assignments
+    const assignedSemesterIds = await courseAssignmentModel.distinct(
+      "semester",
+      { lecturer: lecturerId }
+    );
+
+    if (!assignedSemesterIds.length) {
+      return buildResponse(res, 200, "No course assignments found", []);
     }
 
-    const activeSemester = await Semester.findOne({
-      department: deptId,
+    // 3️⃣ Filter only ACTIVE semesters
+    const activeSemesterIds = await Semester.distinct("_id", {
+      _id: { $in: assignedSemesterIds },
       isActive: true
-    }).lean();
+    });
 
-    if (!activeSemester) {
-      return buildResponse(res, 400, "No active semester for lecturer department");
+    if (!activeSemesterIds.length) {
+      return buildResponse(res, 200, "No active semesters found", []);
     }
 
+    // 4️⃣ Let fetchDataHelper do its magic ✨
     const result = await fetchDataHelper(req, res, courseAssignmentModel, {
       configMap: dataMaps.CourseAssignment,
       autoPopulate: true,
       models: { courseModel, lecturerModel },
       additionalFilters: {
-        lecturer: req.user?._id,
-        semester: activeSemester._id        // added automatically
+        lecturer: lecturerId,
+        semester: { $in: activeSemesterIds }
       },
-      populate: ["course"]
+populate: [
+  {
+    path: "course",
+    populate: {
+      path: "borrowedId",
+      select: "courseCode title unit level semester department"
+    }
+  },
+  "semester"
+]
+
     });
 
-    const lecturerId = req.user?._id;
-    const assignments = result
-
-    res.json(buildResponse(res, 200, "Lecturer courses fetched", assignments));
-  } catch (err) {
-    console.log(err)
-    res.status(500).json(buildResponse(res, 500, err.message));
-  }
-};
-
-export const addLecturerToCourse = async (req, res) => {
-  try {
-    const { assignmentId, userId } = req.body;
-    const assignment = await CourseAssignment.findById(assignmentId);
-    if (!assignment)
-      return res.status(404).json(buildResponse(false, "Assignment not found"));
-
-    const alreadyAdded = assignment.lecturers.some(
-      (l) => l.user.toString() === userId
+    return res.json(
+      buildResponse(res, 200, "Lecturer courses fetched", result)
     );
-    if (alreadyAdded)
-      return res.status(400).json(buildResponse(false, "Lecturer already added"));
 
-    assignment.lecturers.push({ user: userId });
-    await assignment.save();
-
-    res.json(buildResponse(true, "Lecturer added successfully", assignment));
   } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    console.error(err);
+    return res.status(500).json(
+      buildResponse(res, 500, err.message)
+    );
   }
 };
+
+
 
 // =========================================================
 // 📊 ANALYTICS & REPORTS
 // =========================================================
 
-export const courseStatistics = async (req, res) => {
+export const getCourseRegistrationReport = async (req, res) => {
   try {
-    const totalCourses = await Course.countDocuments();
-    const totalAssignments = await CourseAssignment.countDocuments();
-    const totalRegistrations = await CourseRegistration.countDocuments();
-    const activeCourses = await Course.countDocuments({ status: "Active" });
+    const user_id = req.user._id;
+    const role = req.user.role;
+    const { level, semester, session } = req.query;
 
-    const data = {
-      totalCourses,
-      activeCourses,
-      totalAssignments,
-      totalRegistrations,
-    };
+    let match_filter = {};
+    let carryover_filter = {};
 
-    res.json(buildResponse(true, "Course statistics fetched", data));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
+    // 🔐 Role-based filtering for HOD
+    if (role === "hod") {
+      const department = await Department.findOne({ hod: user_id });
 
-// =========================================================
-// 🧩 ADVANCED SEARCH / FILTERING
-// =========================================================
-
-export const searchCourseByCodeOrTitle = async (req, res) => {
-  try {
-    const { keyword } = req.query;
-    if (!keyword)
-      return res.status(400).json(buildResponse(false, "Keyword required"));
-
-    const courses = await Course.find({
-      $or: [
-        { courseCode: { $regex: keyword, $options: "i" } },
-        { title: { $regex: keyword, $options: "i" } },
-      ],
-    }).populate("department faculty");
-
-    res.json(buildResponse(true, "Courses fetched", courses));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
-  }
-};
-
-// =========================================================
-// 🧾 MASS REGISTRATION / BULK IMPORT (for Admin)
-// =========================================================
-
-export const bulkRegisterCourses = async (req, res) => {
-  try {
-    const { students, courses, semester, session, level } = req.body;
-
-    const results = [];
-    for (const student of students) {
-      const exists = await CourseRegistration.findOne({ student, semester, session });
-      if (exists) {
-        results.push({ student, message: "Already registered" });
-        continue;
+      if (!department) {
+        return res.status(404).json({
+          success: false,
+          message: "Department not found for this HOD",
+        });
       }
 
-      const totalUnits = await calculateTotalUnits(courses);
-      const newReg = new CourseRegistration({
-        student,
-        courses,
-        semester,
-        session,
-        level,
-        totalUnits,
-      });
-
-      await newReg.save();
-      results.push({ student, message: "Registered successfully" });
+      match_filter.department = department._id;
+      carryover_filter.department = department._id;
     }
 
-    res.json(buildResponse(true, "Bulk registration processed", results));
-  } catch (err) {
-    res.status(500).json(buildResponse(false, err.message));
+    // 🎛 Optional filters from frontend
+    if (level) match_filter.level = Number(level);
+    if (semester) {
+      match_filter.semester = semester;
+      carryover_filter.semester = semester;
+    }
+    if (session) match_filter.session = session;
+
+    // ===============================
+    // 1️⃣ Summary cards from CourseRegistration
+    // ===============================
+    const summary = await CourseRegistration.aggregate([
+      { $match: match_filter },
+      {
+        $group: {
+          _id: null,
+          total_registrations: { $sum: 1 },
+          approved: { $sum: { $cond: [{ $eq: ["$status", "Approved"] }, 1, 0] } },
+          pending: { $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] } },
+          rejected: { $sum: { $cond: [{ $eq: ["$status", "Rejected"] }, 1, 0] } },
+          total_units: { $sum: "$totalUnits" },
+        },
+      },
+    ]);
+
+    // ===============================
+    // 2️⃣ Carryover summary cards
+    // ===============================
+    const carryover_summary = await CarryoverCourse.aggregate([
+      { $match: carryover_filter },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: 1 },
+          cleared: { $sum: { $cond: [{ $eq: ["$cleared", true] }, 1, 0] } },
+          uncleared: { $sum: { $cond: [{ $eq: ["$cleared", false] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    // ===============================
+    // 3️⃣ Status distribution (Pie)
+    // ===============================
+    const status_chart = await CourseRegistration.aggregate([
+      { $match: match_filter },
+      {
+        $group: {
+          _id: "$status",
+          value: { $sum: 1 },
+        },
+      },
+      {
+        $project: { _id: 0, label: "$_id", value: 1 },
+      },
+    ]);
+
+    // ===============================
+    // 4️⃣ Level distribution (Bar)
+    // ===============================
+    const level_chart = await CourseRegistration.aggregate([
+      { $match: match_filter },
+      {
+        $group: {
+          _id: "$level",
+          total: { $sum: 1 },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: { _id: 0, level: "$_id", total: 1 },
+      },
+    ]);
+
+    // ===============================
+    // 5️⃣ Semester trend (Line)
+    // ===============================
+const semester_chart = await CourseRegistration.aggregate([
+  { $match: match_filter },
+  {
+    $lookup: {
+      from: "semesters",
+      localField: "semester",
+      foreignField: "_id",
+      as: "semester_info",
+    },
+  },
+  {
+    $unwind: {
+      path: "$semester_info",
+      preserveNullAndEmptyArrays: true,
+    },
+  },
+  {
+    $group: {
+      _id: { $ifNull: ["$semester_info.name", "Unknown"] },
+      total: { $sum: 1 },
+    },
+  },
+  {
+    $project: {
+      _id: 0,
+      semester: "$_id",
+      total: 1,
+    },
+  },
+]);
+
+
+
+
+    // ===============================
+    // 6️⃣ Carryover reason chart (Pie)
+    // ===============================
+    const carryover_reason_chart = await CarryoverCourse.aggregate([
+      { $match: carryover_filter },
+      {
+        $group: {
+          _id: "$reason",
+          value: { $sum: 1 },
+        },
+      },
+      {
+        $project: { _id: 0, label: "$_id", value: 1 },
+      },
+    ]);
+
+    // ===============================
+    // 7️⃣ Carryover status chart (Cleared vs Uncleared)
+    // ===============================
+    const carryover_status_chart = await CarryoverCourse.aggregate([
+      { $match: carryover_filter },
+      {
+        $group: {
+          _id: "$cleared",
+          total: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          label: { $cond: [{ $eq: ["$_id", true] }, "Cleared", "Uncleared"] },
+          total: 1,
+        },
+      },
+    ]);
+
+    // ===============================
+    // 8️⃣ Final response
+    // ===============================
+    return res.status(200).json({
+      success: true,
+      role,
+      filters_applied: {
+        level: level || "all",
+        semester: semester || "all",
+        session: session || "all",
+      },
+      summary: {
+        ...summary[0],
+        carryovers: carryover_summary[0]?.total || 0,
+      },
+      charts: {
+        status_chart,
+        level_chart,
+        semester_chart,
+        carryover_reason_chart,
+        carryover_status_chart,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to generate course registration report",
+    });
   }
 };
+
 
 
 export const getStudentsForCourse = async (req, res) => {
@@ -1035,7 +1005,7 @@ export const getStudentsForCourse = async (req, res) => {
 
     // If course belongs to another department
     if (allowedDepartment && String(course.department) !== String(allowedDepartment)) {
-      return res.status(403).json({ message: "Not allowed to view students for this course" });
+      // return res.status(403).json({ message: "Not allowed to view students for this course" });
     }
 
     // 3️⃣ Prepare payload for fetchDataHelper

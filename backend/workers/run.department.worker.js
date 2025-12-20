@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import { sendNotificationCore } from "../domain/notification/notification.controller.js";
 import departmentModel from "../domain/department/department.model.js";
 import { processDepartmentJob } from "../domain/computation/workers/computation.controller.js";
+import MasterComputation from "../domain/result/masterComputation.model.js";
 
 dotenv.config();
 
@@ -35,35 +36,67 @@ async function startWorker() {
   await agenda.every("1000 seconds", "heartbeat");
 
   console.log(23);
-  
+
   // Define department computation job
   agenda.define(
     "department-computation",
     { priority: "high", concurrency: 3 },
     async job => {
       console.log("[Worker] >>> START job:", job.attrs._id);
-      const { departmentId, masterComputationId, computedBy, jobId } = job.attrs.data;
+
+      const {
+        departmentId,
+        masterComputationId,
+        computedBy,
+        jobId
+      } = job.attrs.data;
+
       try {
-        console.log(job.attrs.data);
         const result = await processDepartmentJob(job.attrs);
-        console.log("[Worker] <<< FINISHED job:", job.attrs._id, "Result:", result);
+        console.log("[Worker] <<< FINISHED job:", job.attrs._id);
         return result;
       } catch (err) {
         console.error("[Worker] Job failed:", job.attrs._id, err.message);
+
+        // 🔴 UPDATE MASTER COMPUTATION
+        await MasterComputation.findByIdAndUpdate(
+          masterComputationId,
+          {
+            $set: {
+              status: "completed_with_errors"
+            },
+            $push: {
+              "metadata.failedDepartments": {
+                department: departmentId,
+                jobId,
+                error: err.message,
+                failedAt: new Date()
+              }
+            }
+          },
+          { new: true }
+        );
+
+        // 📨 Notify user
         let depName = departmentId;
         try {
           const dep = await departmentModel.findById(departmentId).lean();
           if (dep?.name) depName = dep.name;
-        } catch {}
+        } catch { }
+
         await sendNotificationCore({
           target: "specific",
           recipientId: computedBy,
-          message: `Job (${jobId}) for department (${depName}) failed: ${err.message}`,
+          message: `Computation failed for ${depName} department. 
+      Reason: ${err.message}. 
+      JobId: (${jobId})`
         });
-        throw err;
+
+        throw err; // important: let Agenda mark job as failed
       }
     }
   );
+
 
   // Define notification job
   agenda.define(
@@ -72,7 +105,7 @@ async function startWorker() {
     async job => {
       console.log("[Worker] Processing notification job:", job.attrs._id);
       const { target, recipientId, templateId, message, metadata } = job.attrs.data;
-      
+
       try {
         // Call your existing notification controller
         const result = await sendNotificationCore({
@@ -110,5 +143,5 @@ async function startWorker() {
   await connectMongo();
   await startWorker();
   console.log("[Worker] Department worker running standalone!");
-  
+
 })();

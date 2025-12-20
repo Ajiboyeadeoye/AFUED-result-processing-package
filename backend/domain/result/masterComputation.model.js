@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 const masterComputationSchema = new mongoose.Schema({
   semester: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Semester"
+    ref: "AcademicSemester"
   },
   totalDepartments: {
     type: Number,
@@ -33,10 +33,23 @@ const masterComputationSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  departmentSummaries: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "ComputationSummary"
-  }],
+  departmentSummaries: {
+    type: Map,
+    of: new mongoose.Schema({
+      studentsProcessed: Number,
+      passListCount: Number,
+      probationListCount: Number,
+      withdrawalListCount: Number,
+      terminationListCount: Number,
+      carryoverCount: Number,
+      averageGPA: Number,
+      failedStudentsCount: Number,
+      status: String,
+      processed: { type: Boolean, default: false },
+      isPreview: { type: Boolean, default: false },
+      updatedAt: { type: Date, default: Date.now }
+    }, { _id: false })
+  },
   status: {
     type: String,
     enum: ["pending", "processing", "completed", "completed_with_errors", "failed", "cancelled", "locked"],
@@ -76,8 +89,26 @@ const masterComputationSchema = new mongoose.Schema({
     sentAt: Date,
     recipient: mongoose.Schema.Types.ObjectId,
     status: String
-  }]
+  }],
+  isFinal: {
+    type: Boolean,
+    default: false
+  },
+  purpose: {
+    type: String,
+    enum: ['preview', 'final', 'simulation'],
+    default: 'final'
+  },
+  isPreview: {
+    type: Boolean,
+    default: false
+  }
 }, { timestamps: true });
+
+// Add index for better query performance
+masterComputationSchema.index({ semester: 1, status: 1 });
+masterComputationSchema.index({ computedBy: 1 });
+masterComputationSchema.index({ isPreview: 1, purpose: 1 });
 
 const MasterComputation = mongoose.model("MasterComputation", masterComputationSchema);
 export default MasterComputation;

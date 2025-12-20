@@ -20,6 +20,12 @@ const courseRegistrationSchema = new mongoose.Schema(
     // Details in case it was registered or re-registerd by an hod
     notes: {type: String, default: null},
     registeredByHod: {type: mongoose.Schema.Types.ObjectId, ref: "User", default: null},
+      department: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Department",
+        required: true,
+      },
+    
   },
   { timestamps: true }
 );

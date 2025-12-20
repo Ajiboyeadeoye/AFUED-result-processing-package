@@ -157,29 +157,51 @@ class CarryoverService {
    * @param {string} computedBy - User who computed
    * @returns {Promise<Array>} Carryover buffer entries
    */
-  async processFailedCourses(failedCourses, studentId, semesterId, departmentId, computationSummaryId, computedBy) {
-    const carryoverBuffers = [];
+ // computation/services/CarryoverService.js
+// ... existing code ...
 
-    for (const failedCourse of failedCourses) {
+async processFailedCourses(failedCourses, studentId, semesterId, departmentId, computationSummaryId, computedBy) {
+  const carryoverBuffers = [];
+
+  for (const failedCourse of failedCourses) {
+    // DEBUG: Log failed course details
+    console.log(`Processing failed course for student ${studentId}:`, {
+      courseId: failedCourse.courseId,
+      resultId: failedCourse.resultId,
+      grade: failedCourse.grade,
+      score: failedCourse.score,
+      courseType: failedCourse.courseType
+    });
+
+    // Check if it's a core course (only process core courses as carryovers)
+    const courseIsCore = await ResultService.isCoreCourse(failedCourse.courseId);
+    
+    if (courseIsCore) {
       carryoverBuffers.push({
-        studentId,
-        courseId: failedCourse.courseId,
+        student: studentId,
+        course: failedCourse.courseId,
         semester: semesterId,
-        departmentId,
-        resultId: failedCourse.resultId,
+        department: departmentId,
+        result: failedCourse.resultId,
         grade: failedCourse.grade,
         score: failedCourse.score,
-        computationSummaryId,
-        computedBy,
         reason: "Failed",
-        status: "pending",
+        isCoreCourse: true,
+        cleared: false,
+        createdBy: computedBy,
+        computationBatch: computationSummaryId,
         createdAt: new Date()
       });
+    } else {
+      console.log(`Course ${failedCourse.courseId} is not core, skipping carryover`);
     }
-
-    return carryoverBuffers;
   }
 
+  console.log(`Created ${carryoverBuffers.length} carryover buffers for student ${studentId}`);
+  return carryoverBuffers;
+}
+
+// ... rest of the file ...
   /**
    * Get detailed carryover information
    * @param {Array} carryoverStudentsBuffer - Buffer of students with carryovers

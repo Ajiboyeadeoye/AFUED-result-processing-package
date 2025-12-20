@@ -17,18 +17,22 @@ async function upsertSingleResult(data, options = {}) {
   const { actor = null, allowOverrideRoles = ["admin", "hod"] } = options;
 
   // Normalize input
-  const { 
+  const {
     studentId,
     matricNumber,
     courseId,
     ca = 0,
     exam = 0,
     score = null,
-    session
+    session,
+    matric_no
   } = data || {};
 
+  if (matric_no) {
+    // matricNumber = matric_no
+  }
   if (!courseId) return { ok: false, reason: "courseId is required" };
-  if (!studentId && !matricNumber) {
+  if (!studentId && !matricNumber && !matric_no) {
     return { ok: false, reason: "Provide either studentId or matricNumber" };
   }
 
@@ -37,7 +41,13 @@ async function upsertSingleResult(data, options = {}) {
   if (studentId) {
     student = await Student.findById(studentId).lean();
   } else {
-    student = await Student.findOne({ matricNumber }).lean();
+    if (matric_no) {
+      student = await Student.findOne({ matricNumber: matric_no }).lean();
+
+    } else {
+
+      student = await Student.findOne({ matricNumber }).lean();
+    }
   }
 
   if (!student) {
@@ -47,7 +57,7 @@ async function upsertSingleResult(data, options = {}) {
   // 🔥 AUTO-RESOLVE ACTIVE SEMESTER BASED ON DEPARTMENT
   const Semester = mongoose.model("Semester");
   const semesterDoc = await Semester.findOne({
-    department: student.departmentId, 
+    department: student.departmentId,
     isActive: true
   }).lean();
 

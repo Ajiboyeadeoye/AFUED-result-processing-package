@@ -149,33 +149,6 @@ export const printTranscript = async (req, res) => {
 
 // 🧾 Get all students (Admin only)
 export const getAllStudents = async (req, res) => {
-  return await fetchDataHelper(req, res, Student, {
-    configMap: dataMaps.Student,
-    autoPopulate: true,
-    models: { departmentModel, User },
-    populate: ["departmentId", "_id"],
-    custom_fields: { name: "_id.name", email: "_id" },
-  });
-};
-
-// 🧍 Create a new student (Admin only)
-export const createStudent = async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      matric_no: matricNumber,
-      department_id: departmentId,
-      level,
-      fields,
-      search_term,
-      filters,
-      page,
-      // user: userFromMiddleware,
-    } = req.body;
-
-    // 🧮 If filtering/searching students
-    if (fields || search_term || filters || page) {
       let additionalFilters = {};
       if (req.user.role === 'hod') {
         const departmnet = await departmentModel.findOne({ hod: req.user._id });
@@ -220,6 +193,27 @@ export const createStudent = async (req, res) => {
         },
         additionalFilters
       });
+};
+
+// 🧍 Create a new student (Admin only)
+export const createStudent = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      matric_no: matricNumber,
+      department_id: departmentId,
+      level,
+      fields,
+      search_term,
+      filters,
+      page,
+      // user: userFromMiddleware,
+    } = req.body;
+
+    // 🧮 If filtering/searching students
+    if (fields || search_term || filters || page) {
+      return getAllStudents(req, res)
     }
 
     // 🔍 1. Duplicate matric number

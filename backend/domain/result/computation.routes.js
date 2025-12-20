@@ -9,7 +9,8 @@ import {
   clearCarryover,
   getComputationHistory,
   calculateSemesterGPA,
-  calculateStudentCGPAr
+  // calculateStudentCGPA,
+  // calculateStudentCGPAr
 } from "../computation/workers/computation.controller.js";
 import authenticate from "../../middlewares/authenticate.js";
 import { getHodComputationDetails, getHodComputationHistory, getHodComputationSemesters, getHodComputationSummary } from "../computation/services/helpers.js";
@@ -56,7 +57,7 @@ router.get(
   "/gpa/student/:studentId/semester/:semesterId",
   calculateSemesterGPA
 );
-router.get("/cgpa/student/:studentId", calculateStudentCGPAr);
+// router.get("/cgpa/student/:studentId", calculateStudentCGPA);
 
 // Carryover management endpoints
 router.get(

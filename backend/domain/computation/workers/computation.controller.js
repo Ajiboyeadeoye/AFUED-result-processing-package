@@ -14,71 +14,119 @@ import ComputationSummary from "../../result/computation.model.js";
 import MasterComputation from "../../result/masterComputation.model.js";
 import CarryoverCourse from "../../result/carryover.model.js";
 import studentSemseterResultModel from "../../student/student.semseterResult.model.js";
-// import studentModel from "../../student/student.model.js";
+import studentModel from "../../student/student.model.js";
 import departmentModel from "../../department/department.model.js";
 import Semester from "../../semester/semester.model.js";
 import courseModel from "../../course/course.model.js";
 import { addDepartmentJob, departmentQueue, queueNotification } from "../../../workers/department.queue.js";
 import { randomUUID } from "crypto";
 import buildResponse from "../../../utils/responseBuilder.js";
-import studentModel from "../../student/student.model.js";
+import SemesterService from "../../semester/semester.service.js";
+import { processPreviewDepartmentJob } from "./previewComputation.controller.js";
 
 // ==================== DEPARTMENT JOB PROCESSOR ====================
 
 /**
  * Updates the master computation document with department summary stats.
- * If master computation is not found, it just logs a warning.
+ * Only increments departmentsProcessed once per department.
  */
-export async function updateMasterComputation(masterComputationId, summaryId, departmentName, stats) {
-    if (!masterComputationId) {
-        console.warn(`No masterComputationId provided for department ${departmentName}`);
-        return;
-    }
-
+export async function updateMasterComputationStats(masterComputationId, departmentName, stats) {
     const masterComp = await MasterComputation.findById(masterComputationId);
-    if (!masterComp) {
-        console.warn(`MasterComputation ${masterComputationId} not found for department ${departmentName}`);
-        return;
+
+    if (!masterComp.departmentSummaries) {
+        masterComp.departmentSummaries = new Map();
     }
 
-    // Ensure there's a "departmentSummaries" field in MasterComputation schema
-    masterComp.departmentSummaries = masterComp.departmentSummaries || {};
+    const wasAlreadyProcessed = masterComp.departmentSummaries.get(departmentName)?.processed;
 
-    masterComp.departmentSummaries[departmentName] = {
-        summaryId,
+    if (!wasAlreadyProcessed) {
+        masterComp.departmentsProcessed = (masterComp.departmentsProcessed || 0) + 1;
+    }
+
+    masterComp.departmentSummaries.set(departmentName, {
         ...stats,
+        processed: true,
         updatedAt: new Date()
-    };
-    masterComp.departmentsProcessed = (masterComp.departmentsProcessed || 0) + 1;
+    });
 
+
+    // Check if all departments are processed
     if (masterComp.departmentsProcessed >= masterComp.totalDepartments) {
-        // Check for errors
-        const hasErrors = Object.values(masterComp.departmentSummaries)
-            .some(dept => dept.failedStudentsCount > 0);
+        // Calculate final overall statistics
+        const summaries = Array.from(masterComp.departmentSummaries.values());
 
+        let totalStudents = 0;
+        let totalGPA = 0;
+        let totalCarryovers = 0;
+        let totalFailedStudents = 0;
+        let departmentsWithData = 0;
+
+        for (const dept of summaries) {
+            if (dept.studentsProcessed > 0) {
+                totalStudents += dept.studentsProcessed;
+                totalGPA += (dept.averageGPA || 0);
+                totalCarryovers += (dept.carryoverCount || 0);
+                totalFailedStudents += (dept.failedStudentsCount || 0);
+                departmentsWithData++;
+            }
+        }
+
+        // Update overall stats
+        masterComp.totalStudents = totalStudents;
+        masterComp.totalCarryovers = totalCarryovers;
+        masterComp.totalFailedStudents = totalFailedStudents;
+
+        if (departmentsWithData > 0) {
+            masterComp.overallAverageGPA = parseFloat((totalGPA / departmentsWithData).toFixed(2));
+        }
+
+        // Determine final status
+        const hasErrors = summaries.some(dept => dept.failedStudentsCount > 0);
         masterComp.status = hasErrors ? "completed_with_errors" : "completed";
         masterComp.completedAt = new Date();
         masterComp.duration = Date.now() - masterComp.startedAt.getTime();
     }
+
     await masterComp.save();
-    console.log(`✅ Master computation updated for department ${departmentName}`);
+    console.log(`✅ Updated master computation for ${departmentName}: ${masterComp.departmentsProcessed}/${masterComp.totalDepartments}`);
 }
 
 export const processDepartmentJob = async (job) => {
-    const {
-        departmentId,
-        masterComputationId,
-        computedBy,
-        jobId,
-        isRetry = false
-    } = job.data;
-
-    console.log(`Processing department job: ${jobId} for department ${departmentId}`);
+  const {
+    departmentId,
+    masterComputationId,
+    computedBy,
+    jobId,
+    isRetry = false,
+    isPreview = false,
+    purpose = 'final',
+    isFinal = true
+  } = job.data;
+  
+  console.log(`Processing department job: ${jobId} for department ${departmentId}`);
+  console.log(`Job type: ${isPreview ? 'PREVIEW' : 'FINAL'}, Purpose: ${purpose}, isFinal: ${isFinal}`);
+  
+  // FIXED: Clear logic for determining job type
+  const isPreviewJob = isPreview || purpose === 'preview' || purpose === 'simulation' || !isFinal;
+  
+  // If it's a preview job, use the preview processor
+  if (isPreviewJob) {
+    console.log(`Routing to preview processor for department ${departmentId}`);
+    try {
+      const { processPreviewDepartmentJob } = await import('./previewComputation.controller.js');
+      return await processPreviewDepartmentJob(job);
+    } catch (error) {
+      console.error(`Failed to load preview processor: ${error}`);
+      throw new Error(`Preview processing failed: ${error.message}`);
+    }
+  }
+  
+  // Continue with regular processing for final jobs
+  console.log(`Processing as FINAL job for department ${departmentId}`);
 
     // Initialize services
     const bulkWriter = new BulkWriter();
 
-    const resultService = ResultService
     // Get department and semester
     const department = await StudentService.getDepartmentDetails(departmentId);
     if (!department) {
@@ -103,7 +151,7 @@ export const processDepartmentJob = async (job) => {
         isRetry
     );
 
-    // Initialize counters and buffers
+    // Initialize counters and buffers - UPDATED for level-based organization
     const counters = initializeCounters();
     const buffers = initializeBuffers();
     const gradeDistribution = initializeGradeDistribution();
@@ -133,24 +181,26 @@ export const processDepartmentJob = async (job) => {
                 gradeDistribution,
                 levelStats,
                 processedStudentIds,
-                bulkWriter,
-                resultService
+                bulkWriter
             );
 
             // Update job progress
             const progress = Math.min(((i + studentBatch.length) / studentIds.length) * 100, 100);
-            // await job.progress(progress);
+            // await job.progress(progress); // Commented out as job object might not have progress method
 
-            // Process bulk operations
-            await bulkWriter.executeBulkWrites();
+            // Process bulk operations if buffer is full
+            if (bulkWriter.shouldFlush()) {
+                await bulkWriter.executeBulkWrites();
+            }
         }
 
         // Process any remaining bulk operations
         await bulkWriter.executeBulkWrites();
 
-        // Reupdate computation summary due to changes from bulk rewite
+        // Re-fetch computation summary due to changes from bulk write
         computationSummary = await ComputationSummary.findById(computationSummary._id);
-        // Finalize computation
+
+        // Finalize computation - UPDATED for level-based organization
         await finalizeComputation(
             computationSummary,
             counters,
@@ -164,16 +214,21 @@ export const processDepartmentJob = async (job) => {
             bulkWriter
         );
 
-        await updateMasterComputationAfterDepartment(
+        // Send any remaining notifications
+        if (buffers.notificationQueue.length > 0) {
+            await ReportService.sendStudentNotifications(buffers.notificationQueue);
+        }
+
+        // Update master computation - ONLY CALL THIS ONCE
+        await updateMasterComputationStats(
             masterComputationId,
             department.name,
-            computationSummary._id,
             {
                 studentsProcessed: counters.studentsWithResults,
-                passListCount: buffers.passList.length,
-                probationListCount: buffers.probationList.length,
-                withdrawalListCount: buffers.withdrawalList.length,
-                terminationListCount: buffers.terminationList.length,
+                passListCount: buffers.flatLists.passList.length,
+                probationListCount: buffers.flatLists.probationList.length,
+                withdrawalListCount: buffers.flatLists.withdrawalList.length,
+                terminationListCount: buffers.flatLists.terminationList.length,
                 carryoverCount: counters.totalCarryovers,
                 averageGPA: counters.studentsWithResults > 0
                     ? counters.totalGPA / counters.studentsWithResults
@@ -189,10 +244,10 @@ export const processDepartmentJob = async (job) => {
       ${counters.studentsWithResults} students processed
       ${counters.totalCarryovers} carryovers
       ${counters.affectedStudentsCount} students with carryovers
-      Pass List: ${buffers.passList.length} students
-      Probation List: ${buffers.probationList.length} students
-      Withdrawal List: ${buffers.withdrawalList.length} students
-      Termination List: ${buffers.terminationList.length} students
+      Pass List: ${buffers.flatLists.passList.length} students
+      Probation List: ${buffers.flatLists.probationList.length} students
+      Withdrawal List: ${buffers.flatLists.withdrawalList.length} students
+      Termination List: ${buffers.flatLists.terminationList.length} students
       ${buffers.failedStudents.length} failed students`);
 
         return {
@@ -200,12 +255,12 @@ export const processDepartmentJob = async (job) => {
             summaryId: computationSummary._id,
             department: department.name,
             studentsProcessed: counters.studentsWithResults,
-            passListCount: buffers.passList.length,
-            probationListCount: buffers.probationList.length,
-            withdrawalListCount: buffers.withdrawalList.length,
-            terminationListCount: buffers.terminationList.length,
+            passListCount: buffers.flatLists.passList.length,
+            probationListCount: buffers.flatLists.probationList.length,
+            withdrawalListCount: buffers.flatLists.withdrawalList.length,
+            terminationListCount: buffers.flatLists.terminationList.length,
             carryoverCount: counters.totalCarryovers,
-            averageGPA: counters.totalGPA / counters.studentsWithResults,
+            averageGPA: counters.studentsWithResults > 0 ? counters.totalGPA / counters.studentsWithResults : 0,
             semesterLocked: buffers.failedStudents.length === 0,
             reportGenerated: true
         };
@@ -220,10 +275,7 @@ export const processDepartmentJob = async (job) => {
 // ==================== HELPER FUNCTIONS ====================
 
 async function getActiveSemesterForDepartment(departmentId) {
-    return await Semester.findOne({
-        department: departmentId,
-        isActive: true,
-    });
+    return await SemesterService.getActiveDepartmentSemester(departmentId);
 }
 
 async function initializeComputationSummary(departmentId, semesterId, masterComputationId, computedBy, isRetry) {
@@ -241,20 +293,20 @@ async function initializeComputationSummary(departmentId, semesterId, masterComp
             computationSummary.retryCount = (computationSummary.retryCount || 0) + 1;
             computationSummary.lastRetryAt = new Date();
             await computationSummary.save();
+            return computationSummary;
         }
     }
 
-    if (!computationSummary) {
-        computationSummary = new ComputationSummary({
-            department: departmentId,
-            semester: semesterId,
-            masterComputationId,
-            status: "processing",
-            computedBy,
-            startedAt: new Date()
-        });
-        await computationSummary.save();
-    }
+    // Create new summary
+    computationSummary = new ComputationSummary({
+        department: departmentId,
+        semester: semesterId,
+        masterComputationId,
+        status: "processing",
+        computedBy,
+        startedAt: new Date()
+    });
+    await computationSummary.save();
 
     return computationSummary;
 }
@@ -273,11 +325,21 @@ function initializeCounters() {
 
 function initializeBuffers() {
     return {
-        passList: [],
-        probationList: [],
-        withdrawalList: [],
-        terminationList: [],
-        carryoverStudents: [],
+        // Level-based organization
+        studentSummariesByLevel: {}, // { [level]: [studentSummary] }
+        listEntriesByLevel: {}, // { [level]: [listEntry] }
+        keyToCoursesByLevel: {}, // { [level]: [course] }
+        
+        // Old flat lists for backward compatibility (deprecated but still used in some places)
+        flatLists: {
+            passList: [],
+            probationList: [],
+            withdrawalList: [],
+            terminationList: [],
+            carryoverStudents: [],
+        },
+        
+        // Other buffers
         failedStudents: [],
         notificationQueue: [],
         notificationBatchSize: NOTIFICATION_BATCH_SIZE
@@ -305,8 +367,7 @@ async function processStudentBatch(
     gradeDistribution,
     levelStats,
     processedStudentIds,
-    bulkWriter,
-    resultService,
+    bulkWriter
 ) {
     // Fetch student details and results in parallel
     const [students, resultsByStudent] = await Promise.all([
@@ -317,8 +378,13 @@ async function processStudentBatch(
     const batchPromises = students.map(async (student) => {
         counters.totalStudents++;
 
+        // Check if already processed (for retry scenarios)
+        if (processedStudentIds.has(student._id.toString())) {
+            return null;
+        }
+
         try {
-            const studentResults = resultsByStudent[student._id.toString()];
+            const studentResults = resultsByStudent[student._id.toString()] || [];
 
             if (!studentResults || studentResults.length === 0) {
                 await CarryoverService.handleMissingResults(
@@ -330,7 +396,7 @@ async function processStudentBatch(
                 return null;
             }
 
-            // Process student results
+            // Process student results - UPDATED for level-based organization
             const studentResult = await processStudentResults(
                 student,
                 studentResults,
@@ -342,8 +408,7 @@ async function processStudentBatch(
                 buffers,
                 gradeDistribution,
                 levelStats,
-                bulkWriter,
-                resultService
+                bulkWriter
             );
 
             processedStudentIds.add(student._id.toString());
@@ -357,6 +422,11 @@ async function processStudentBatch(
     return await Promise.allSettled(batchPromises);
 }
 
+async function flushNotifications(notifications) {
+    if (notifications.length === 0) return;
+    await ReportService.sendStudentNotifications(notifications);
+}
+
 async function processStudentResults(
     student,
     results,
@@ -368,35 +438,103 @@ async function processStudentResults(
     buffers,
     gradeDistribution,
     levelStats,
-    bulkWriter,
-    resultService
+    bulkWriter
 ) {
-    // In processStudentResults or batch processing:
+    // Calculate semester GPA with detailed breakdown for master sheet
+    const gpaData = GPACalculator.calculateSemesterGPA(results);
+
+    // Calculate CGPA with TCP/TNU for master sheet
+    const cgpaData = await GPACalculator.calculateStudentCGPAWithTCP(
+        student._id,
+        activeSemester._id,
+        gpaData.totalCreditPoints,
+        gpaData.totalUnits
+    );
+
+    // Determine academic standing
+    const academicStanding = AcademicStandingEngine.determineAcademicStandingOptimized(
+        student,
+        gpaData.semesterGPA,
+        cgpaData.cgpa,
+        student.totalCarryovers + gpaData.failedCount
+    );
+
+    // Calculate outstanding courses for master sheet
+    const outstandingCourses = await GPACalculator.calculateOutstandingCourses(
+        student._id,
+        activeSemester._id
+    );
+
+    // Calculate academic history for MMS2
+    const academicHistory = await GPACalculator.calculateAcademicHistory(student._id);
+
+    // Build student summary for master sheet - UPDATED for level-based organization
+    const studentLevel = student.level || "100";
+    const studentSummary = SummaryListBuilder.buildStudentSummary(
+        student,
+        gpaData,
+        cgpaData,
+        academicStanding,
+        outstandingCourses,
+        academicHistory
+    );
+
+    // Add to level-based buffers
+    if (!buffers.studentSummariesByLevel[studentLevel]) {
+        buffers.studentSummariesByLevel[studentLevel] = [];
+    }
+    buffers.studentSummariesByLevel[studentLevel].push(studentSummary.summary);
+
+    // Build list entries - UPDATED for level-based organization
+    const listEntries = SummaryListBuilder.addStudentToLists(
+        student,
+        academicStanding,
+        gpaData.semesterGPA,
+        gpaData.failedCount,
+        gpaData.failedCourses
+    );
+
+    // Add to level-based buffers
+    if (!buffers.listEntriesByLevel[studentLevel]) {
+        buffers.listEntriesByLevel[studentLevel] = [];
+    }
+    buffers.listEntriesByLevel[studentLevel].push(listEntries);
+
+    // Also add to flat lists for backward compatibility
+    if (listEntries.passList) buffers.flatLists.passList.push(listEntries.passList);
+    if (listEntries.probationList) buffers.flatLists.probationList.push(listEntries.probationList);
+    if (listEntries.withdrawalList) buffers.flatLists.withdrawalList.push(listEntries.withdrawalList);
+    if (listEntries.terminationList) buffers.flatLists.terminationList.push(listEntries.terminationList);
+    if (listEntries.carryoverList) buffers.flatLists.carryoverStudents.push(listEntries.carryoverList);
+
+    // Build key to courses for this level if not already built
+    if (!buffers.keyToCoursesByLevel[studentLevel]) {
+        buffers.keyToCoursesByLevel[studentLevel] = await SummaryListBuilder.buildKeyToCourses(results);
+    } else {
+        // Merge new courses into existing key to courses
+        const existingCoursesMap = new Map(
+            buffers.keyToCoursesByLevel[studentLevel].map(course => [course.courseCode, course])
+        );
+        
+        const newKeyToCourses = await SummaryListBuilder.buildKeyToCourses(results);
+        for (const course of newKeyToCourses) {
+            if (!existingCoursesMap.has(course.courseCode)) {
+                buffers.keyToCoursesByLevel[studentLevel].push(course);
+            }
+        }
+    }
+
+    // Flush notifications if buffer is full
     if (buffers.notificationQueue.length >= buffers.notificationBatchSize) {
         await flushNotifications(buffers.notificationQueue);
         buffers.notificationQueue = [];
     }
 
-    async function flushNotifications(notifications) {
-        await ReportService.sendStudentNotifications(notifications);
+    // Initialize level stats if not exists
+    if (!levelStats[studentLevel]) {
+        levelStats[studentLevel] = initializeLevelStats();
     }
-    // Initialize level stats
-    if (!levelStats[student.level]) {
-        levelStats[student.level] = initializeLevelStats();
-    }
-    levelStats[student.level].totalStudents++;
-
-    // Calculate semester GPA
-    const gpaData = GPACalculator.calculateSemesterGPA(results);
-
-    // Calculate CGPA
-    const cgpaData = await GPACalculator.calculateStudentCGPAOptimized(
-        student._id,
-        activeSemester._id,
-        gpaData.semesterGPA,
-        gpaData.totalPoints,
-        gpaData.totalUnits
-    );
+    levelStats[studentLevel].totalStudents++;
 
     // Process failed courses
     if (gpaData.failedCount > 0) {
@@ -407,22 +545,15 @@ async function processStudentResults(
             department._id,
             computationSummary._id,
             computedBy,
-            counters
+            counters,
+            bulkWriter
         );
     }
-
-    // Determine academic standing
-    const academicStanding = AcademicStandingEngine.determineAcademicStandingOptimized(
-        student,
-        gpaData.semesterGPA,
-        cgpaData.cgpa,
-        student.totalCarryovers + gpaData.failedCount
-    );
 
     // Update student record
     await updateStudentRecord(student, gpaData, cgpaData, academicStanding, gpaData.failedCount, bulkWriter);
 
-    // ✅ CREATE SEMESTER RESULT RECORD
+    // CREATE SEMESTER RESULT RECORD
     const semesterResultData = await buildStudentSemesterResult(
         student,
         results,
@@ -432,25 +563,22 @@ async function processStudentResults(
         cgpaData,
         academicStanding,
         computedBy,
-        computationSummary,
-        resultService
+        computationSummary
     );
-    console.log("Smester Result data: ", semesterResultData)
 
     // Add to bulk writer for batch insertion
     bulkWriter.addSemesterResultUpdate(null, semesterResultData);
 
-
-    // Update statistics
+    // Update statistics - UPDATED for level-based organization
     updateStatistics(
+        studentLevel,
         student,
         gpaData,
         cgpaData,
         counters,
         gradeDistribution,
         levelStats,
-        academicStanding,
-        buffers
+        academicStanding
     );
 
     // Queue notification
@@ -472,6 +600,7 @@ async function processStudentResults(
         standing: academicStanding.remark
     };
 }
+
 async function buildStudentSemesterResult(
     student,
     results,
@@ -481,23 +610,24 @@ async function buildStudentSemesterResult(
     cgpaData,
     academicStanding,
     computedBy,
-    computationSummary,
-    resultService
+    computationSummary
 ) {
     const courseDetails = [];
 
     // Process each course result
     for (const result of results) {
         const gradeInfo = GPACalculator.calculateGradeAndPoints(result.score);
-        const courseDetailsFromDB = await resultService.getCourseDetails(result.courseId?._id || result.courseId);
+        // Use populated course data or fallback
+        const courseUnit = result.courseUnit || result.courseId?.credits || result.courseId?.unit || 1;
+        const isCoreCourse = result.courseId?.isCoreCourse || result.courseId?.courseType === "core" || false;
 
         courseDetails.push({
             courseId: result.courseId?._id || result.courseId,
-            courseUnit: result.courseUnit || courseDetailsFromDB?.unit || 1,
+            courseUnit: courseUnit,
             score: result.score,
             grade: gradeInfo.grade,
             gradePoint: gradeInfo.point,
-            isCoreCourse: courseDetailsFromDB?.isCoreCourse || false,
+            isCoreCourse: isCoreCourse,
             isCarryover: result.isCarryover || false
         });
     }
@@ -506,18 +636,31 @@ async function buildStudentSemesterResult(
         studentId: student._id,
         departmentId: department._id,
         semesterId: activeSemester._id,
+        session: activeSemester.academicYear || new Date().getFullYear().toString(),
+        level: student.level || "100",
         courses: courseDetails,
         gpa: gpaData.semesterGPA,
         cgpa: cgpaData.cgpa,
         totalUnits: gpaData.totalUnits,
         totalPoints: gpaData.totalPoints,
         carryoverCount: gpaData.failedCount,
+        
+        // TCP/TNU tracking for master sheet
+        previousCumulativeTCP: cgpaData.previousCumulativeTCP,
+        previousCumulativeTNU: cgpaData.previousCumulativeTNU,
+        currentTCP: gpaData.totalCreditPoints,
+        currentTNU: gpaData.totalUnits,
+        cumulativeTCP: cgpaData.cumulativeTCP,
+        cumulativeTNU: cgpaData.cumulativeTNU,
+        
         remark: academicStanding.remark,
         status: "processed",
         computedBy,
-        computationSummaryId: computationSummary._id
+        computationSummaryId: computationSummary._id,
+        createdAt: new Date()
     };
 }
+
 function initializeLevelStats() {
     return {
         totalStudents: 0,
@@ -536,10 +679,14 @@ async function processFailedCourses(
     departmentId,
     computationSummaryId,
     computedBy,
-    counters
+    counters,
+    bulkWriter
 ) {
-    counters.totalCarryovers += failedCourses.length;
-    counters.affectedStudentsCount++;
+    if (failedCourses.length === 0) {
+        return;
+    }
+
+    console.log(`Processing ${failedCourses.length} failed courses for student ${student._id}`);
 
     // Process carryovers
     const carryoverBuffers = await CarryoverService.processFailedCourses(
@@ -551,12 +698,22 @@ async function processFailedCourses(
         computedBy
     );
 
-    // Add to bulk writer (implementation depends on your BulkWriter interface)
-    // bulkWriter.addCarryovers(carryoverBuffers);
+    // Update counters based on actual carryovers created (core courses only)
+    counters.totalCarryovers += carryoverBuffers.length;
+    if (carryoverBuffers.length > 0) {
+        counters.affectedStudentsCount++;
+    }
+
+    // DEBUG: Log what's being added to bulk writer
+    console.log(`Adding ${carryoverBuffers.length} carryovers to bulk writer for student ${student._id}`);
+
+    // Add to bulk writer
+    for (const carryoverBuffer of carryoverBuffers) {
+        bulkWriter.addCarryover(carryoverBuffer);
+    }
 }
 
 async function updateStudentRecord(student, gpaData, cgpaData, academicStanding, failedCount, bulkWriter) {
-    // const bulkWriter = new BulkWriter()
     const updates = {
         set: {
             gpa: gpaData.semesterGPA,
@@ -575,14 +732,14 @@ async function updateStudentRecord(student, gpaData, cgpaData, academicStanding,
 }
 
 function updateStatistics(
+    studentLevel,
     student,
     gpaData,
     cgpaData,
     counters,
     gradeDistribution,
     levelStats,
-    academicStanding,
-    buffers
+    academicStanding
 ) {
     counters.studentsWithResults++;
     counters.totalGPA += gpaData.semesterGPA;
@@ -594,34 +751,19 @@ function updateStatistics(
     }
 
     // Update level stats
-    levelStats[student.level].totalGPA += gpaData.semesterGPA;
-    if (gpaData.semesterGPA > levelStats[student.level].highestGPA) {
-        levelStats[student.level].highestGPA = gpaData.semesterGPA;
+    const levelStat = levelStats[studentLevel];
+    levelStat.totalGPA += gpaData.semesterGPA;
+    if (gpaData.semesterGPA > levelStat.highestGPA) {
+        levelStat.highestGPA = gpaData.semesterGPA;
     }
-    if (gpaData.semesterGPA < levelStats[student.level].lowestGPA && gpaData.semesterGPA > 0) {
-        levelStats[student.level].lowestGPA = gpaData.semesterGPA;
+    if (gpaData.semesterGPA < levelStat.lowestGPA && gpaData.semesterGPA > 0) {
+        levelStat.lowestGPA = gpaData.semesterGPA;
     }
 
     // Update grade distribution
     const classification = GPACalculator.getGradeClassification(gpaData.semesterGPA);
     gradeDistribution[classification]++;
-    levelStats[student.level].gradeDistribution[classification]++;
-
-    // Add student to appropriate lists
-    const listEntries = SummaryListBuilder.addStudentToLists(
-        student,
-        academicStanding,
-        gpaData.semesterGPA,
-        gpaData.failedCount,
-        gpaData.failedCourses
-    );
-
-    // Add to buffers
-    if (listEntries.passList) buffers.passList.push(listEntries.passList);
-    if (listEntries.probationList) buffers.probationList.push(listEntries.probationList);
-    if (listEntries.withdrawalList) buffers.withdrawalList.push(listEntries.withdrawalList);
-    if (listEntries.terminationList) buffers.terminationList.push(listEntries.terminationList);
-    if (listEntries.carryoverList) buffers.carryoverStudents.push(listEntries.carryoverList);
+    levelStat.gradeDistribution[classification]++;
 }
 
 function handleStudentProcessingError(student, error, buffers, department, activeSemester) {
@@ -667,109 +809,184 @@ async function finalizeComputation(
     masterComputationId,
     bulkWriter
 ) {
+    // Re-fetch computation summary due to changes from bulk write
     computationSummary = await ComputationSummary.findById(computationSummary._id);
 
-    // Calculate final statistics
-    const summaryStats = SummaryListBuilder.buildSummaryStats(counters, gradeDistribution, levelStats);
-
-    // Get detailed carryover info
-    const detailedCarryoverInfo = await CarryoverService.getDetailedCarryoverInfo(
-        buffers.carryoverStudents,
-        activeSemester._id
+    // Group data by level using SummaryListBuilder
+    const groupedStudentSummaries = SummaryListBuilder.groupStudentSummariesByLevel(
+        buffers.studentSummariesByLevel
+    );
+    
+    const groupedLists = SummaryListBuilder.groupListsByLevel(
+        buffers.listEntriesByLevel
     );
 
-    // Prepare summary data
+    // Calculate summary statistics with level-based organization
+    const summaryStats = SummaryListBuilder.buildSummaryStatsByLevel(
+        counters, 
+        gradeDistribution, 
+        levelStats
+    );
+
+    // Build summary of results by level
+    const summaryOfResultsByLevel = {};
+    for (const [level, stats] of Object.entries(levelStats)) {
+        if (stats.totalStudents > 0) {
+            const averageGPA = stats.totalGPA / stats.totalStudents;
+            summaryOfResultsByLevel[level] = {
+                totalStudents: stats.totalStudents,
+                studentsWithResults: stats.totalStudents,
+                
+                gpaStatistics: {
+                    average: parseFloat(averageGPA.toFixed(2)),
+                    highest: parseFloat(stats.highestGPA.toFixed(2)),
+                    lowest: parseFloat(stats.lowestGPA.toFixed(2)),
+                    standardDeviation: 0 // Can be calculated if needed
+                },
+                
+                classDistribution: stats.gradeDistribution
+            };
+        }
+    }
+
+    // Get detailed carryover info from database (not just buffers)
+    const carryoverDetails = await CarryoverCourse.find({
+        semester: activeSemester._id,
+        department: department._id
+    })
+        .populate('course', 'courseCode title unit')
+        .populate('student', 'matricNumber name level')
+        .limit(100)
+        .lean();
+
+    // Group carryovers by level
+    const carryoverStatsByLevel = {};
+    for (const carryover of carryoverDetails) {
+        const studentLevel = carryover.student?.level || "100";
+        if (!carryoverStatsByLevel[studentLevel]) {
+            carryoverStatsByLevel[studentLevel] = {
+                totalCarryovers: 0,
+                affectedStudentsCount: 0,
+                affectedStudents: []
+            };
+        }
+        
+        carryoverStatsByLevel[studentLevel].totalCarryovers++;
+        
+        // Check if student already counted
+        const studentIndex = carryoverStatsByLevel[studentLevel].affectedStudents
+            .findIndex(s => s.studentId?.toString() === carryover.student?._id?.toString());
+        
+        if (studentIndex === -1) {
+            carryoverStatsByLevel[studentLevel].affectedStudentsCount++;
+            carryoverStatsByLevel[studentLevel].affectedStudents.push({
+                studentId: carryover.student?._id,
+                matricNumber: carryover.student?.matricNumber,
+                name: carryover.student?.name,
+                courseCode: carryover.course?.courseCode,
+                courseTitle: carryover.course?.title
+            });
+        }
+    }
+
+    // Prepare student lists by level
+    const studentListsByLevel = {};
+    for (const [level] of Object.entries(groupedStudentSummaries)) {
+        studentListsByLevel[level] = {
+            passList: groupedLists.passList[level] || [],
+            probationList: groupedLists.probationList[level] || [],
+            withdrawalList: groupedLists.withdrawalList[level] || [],
+            terminationList: groupedLists.terminationList[level] || [],
+            carryoverStudents: groupedLists.carryoverStudents[level] || []
+        };
+    }
+
+    // Prepare summary data for computation summary - UPDATED for level-based model
     const summaryData = {
         ...summaryStats,
-        passList: buffers.passList,
-        probationList: buffers.probationList,
-        withdrawalList: buffers.withdrawalList,
-        terminationList: buffers.terminationList,
+        
+        // Level-based data
+        studentSummariesByLevel: groupedStudentSummaries,
+        keyToCoursesByLevel: buffers.keyToCoursesByLevel,
+        studentListsByLevel,
+        carryoverStatsByLevel,
+        summaryOfResultsByLevel,
+        
+        // Overall data (for backward compatibility and quick access)
+        totalStudents: counters.totalStudents,
+        studentsWithResults: counters.studentsWithResults,
+        studentsProcessed: counters.studentsWithResults,
+        averageGPA: counters.studentsWithResults > 0 ? 
+                   parseFloat((counters.totalGPA / counters.studentsWithResults).toFixed(2)) : 0,
+        highestGPA: parseFloat(counters.highestGPA.toFixed(2)),
+        lowestGPA: parseFloat(counters.lowestGPA.toFixed(2)),
+        
+        // Grade distribution in new format
+        gradeDistribution: {
+            firstClass: gradeDistribution.firstClass || 0,
+            secondClassUpper: gradeDistribution.secondClassUpper || 0,
+            secondClassLower: gradeDistribution.secondClassLower || 0,
+            thirdClass: gradeDistribution.thirdClass || 0,
+            fail: gradeDistribution.fail || 0
+        },
+        
+        // Backward compatible data (deprecated but kept for compatibility)
+        passList: buffers.flatLists.passList.slice(0, 100),
+        probationList: buffers.flatLists.probationList.slice(0, 100),
+        withdrawalList: buffers.flatLists.withdrawalList.slice(0, 100),
+        terminationList: buffers.flatLists.terminationList.slice(0, 100),
         carryoverStats: {
             totalCarryovers: counters.totalCarryovers,
             affectedStudentsCount: counters.affectedStudentsCount,
-            affectedStudents: detailedCarryoverInfo
+            affectedStudents: buffers.flatLists.carryoverStudents.slice(0, 100).map(co => ({
+                studentId: co.studentId,
+                matricNumber: co.matricNumber,
+                name: co.name,
+                courses: co.courses,
+                notes: co.notes
+            }))
         },
+        
         failedStudents: buffers.failedStudents,
         additionalMetrics: {
-            levelStats,
-            // Add repeat ranking if needed
+            levelStats
         }
     };
 
-    // Update computation summary
+    // Update computation summary using BulkWriter
     await bulkWriter.updateComputationSummary(computationSummary._id, summaryData);
-
-    // // Generate report asynchronously
-    // ReportService.generateReportAsync(
-    //     computationSummary._id,
-    //     department,
-    //     activeSemester,
-    //     summaryStats
-    // );
 
     // Lock semester if successful
     if (buffers.failedStudents.length === 0) {
-        await Semester.findByIdAndUpdate(
-            activeSemester._id,
-            {
-                lockedAt: new Date(),
-                lockedBy: computedBy,
-                computationSummary: computationSummary._id
-            }
-        );
-        console.log(`Locked semester ${activeSemester.name} for ${department.name}`);
+        await SemesterService.lockSemester({
+            semesterId: activeSemester._id,
+            session: null
+        });
+        console.log(`✅ Locked semester ${activeSemester.name} for ${department.name}`);
+    } else {
+        console.log(`⚠️ Semester NOT locked due to ${buffers.failedStudents.length} failed student(s)`);
     }
 
-    // ✅ REFRESH SUMMARY BEFORE SENDING
-    computationSummary = await ComputationSummary.findById(computationSummary._id)
-        .populate('department', 'name code hod')
-        .populate('semester', 'name');
-
-    // ✅ VERIFY DATA IS PRESENT
-    if (!computationSummary.averageGPA &&
-        !computationSummary.studentsWithResults) {
-        console.warn("Summary data incomplete, delaying HOD notification");
-        // Optionally retry or queue for later
-    }
-
-    await updateMasterComputation(
-        masterComputationId,
-        computationSummary._id,
-        department.name,
-        {
-            studentsProcessed: counters.studentsWithResults,
-            failedStudentsCount: buffers.failedStudents.length,
+    // Send HOD notification with actual data
+    await ReportService.sendHODNotification(department, activeSemester, {
+        ...summaryStats,
+        studentsWithResults: counters.studentsWithResults,
+        passList: buffers.flatLists.passList,
+        probationList: buffers.flatLists.probationList,
+        withdrawalList: buffers.flatLists.withdrawalList,
+        terminationList: buffers.flatLists.terminationList,
+        carryoverStats: {
             totalCarryovers: counters.totalCarryovers,
-            affectedStudentsCount: counters.affectedStudentsCount,
-            passListCount: buffers.passList.length,
-            probationListCount: buffers.probationList.length,
-            withdrawalListCount: buffers.withdrawalList.length,
-            terminationListCount: buffers.terminationList.length,
-            averageGPA: counters.studentsWithResults > 0
-                ? counters.totalGPA / counters.studentsWithResults
-                : 0
-        }
-    );
-
-
-    // Send HOD notification
-    await ReportService.sendHODNotification(department, activeSemester, computationSummary);
+            affectedStudentsCount: counters.affectedStudentsCount
+        },
+        failedStudents: buffers.failedStudents,
+        _id: computationSummary._id
+    });
 
     // Send student notifications
-    await ReportService.sendStudentNotifications(buffers.notificationQueue);
-
-    // Update master computation
-    await updateMasterComputation(masterComputationId, computationSummary._id, department.name, {
-        studentsWithResults: counters.studentsWithResults,
-        failedStudentsCount: buffers.failedStudents.length,
-        totalCarryovers: counters.totalCarryovers,
-        affectedStudentsCount: counters.affectedStudentsCount,
-        passListCount: buffers.passList.length,
-        probationListCount: buffers.probationList.length,
-        withdrawalListCount: buffers.withdrawalList.length,
-        terminationListCount: buffers.terminationList.length
-    });
+    if (buffers.notificationQueue.length > 0) {
+        await ReportService.sendStudentNotifications(buffers.notificationQueue);
+    }
 }
 
 async function handleJobFailure(computationSummary, department, activeSemester, error) {
@@ -796,14 +1013,21 @@ async function handleJobFailure(computationSummary, department, activeSemester, 
     }
 }
 
+// ==================== CONTROLLER FUNCTIONS ====================
+
 export const computeAllResults = async (req, res) => {
     const session = await mongoose.startSession();
 
     try {
         await session.startTransaction();
         const computedBy = req.user._id;
-        console.log(computedBy)
-
+        const {
+            isRetry = false,
+            isPreview = false,
+            purpose = 'final',
+            isFinal = true
+        } = req.body
+        console.log("Computed by:", computedBy)
 
         // Get all active departments
         const departments = await departmentModel.find({
@@ -844,9 +1068,15 @@ export const computeAllResults = async (req, res) => {
             return buildResponse(res, 400, "No departments have results in their active semesters");
         }
 
+        // Get the active semester
+        const activeSemester = await SemesterService.getActiveAcademicSemester();
         // Create master computation record
-        console.log(computedBy)
+        if (!activeSemester) {
+            await session.abortTransaction();
+            return buildResponse(res, 400, "No active academic semester found");
+        }
         const masterComputation = new MasterComputation({
+            semester: activeSemester._id,
             totalDepartments: departmentsToProcess.length,
             status: "processing",
             computedBy,
@@ -863,11 +1093,6 @@ export const computeAllResults = async (req, res) => {
         await masterComputation.save({ session });
         await session.commitTransaction();
 
-        // await departmentQueue.isReady();
-        // if (!departmentQueue) {
-        //   console.error("Queue not initialized yet");
-        //   return;
-        // }
         // Add each department to processing queue
         for (const dept of departmentsToProcess) {
             const uniqueJobId = `dept-${dept.departmentId}-${masterComputation._id}-${Date.now()}-${randomUUID()}`;
@@ -878,6 +1103,10 @@ export const computeAllResults = async (req, res) => {
                     computedBy,
                     jobId: uniqueJobId,
                     priority: 1,
+                    isRetry,
+                    isPreview,
+                    purpose,
+                    isFinal,
                 }
             );
         }
@@ -933,7 +1162,7 @@ const monitorMasterCompletion = async (masterComputationId, adminId) => {
 
                 // Get all summaries for final stats
                 const summaries = await ComputationSummary.find({
-                    _id: { $in: masterComputation.departmentSummaries }
+                    masterComputationId: masterComputationId
                 }).select("averageGPA totalStudents failedStudents carryoverStats");
 
                 const totalGPA = summaries.reduce((sum, s) => sum + (s.averageGPA || 0), 0);
@@ -1011,60 +1240,30 @@ export const getComputationStatus = async (req, res) => {
 
         const masterComputation = await MasterComputation.findById(masterComputationId)
             .populate("computedBy", "name email")
-            .populate({
-                path: "departmentSummaries",
-                populate: [
-                    {
-                        path: "department",
-                        select: "name code"
-                    },
-                    {
-                        path: "semester",
-                        select: "name academicYear isActive isLocked"
-                    }
-                ]
-            });
+            .lean();
 
         if (!masterComputation) {
             return buildResponse(res, 404, "Computation record not found");
         }
 
-        // Get queue statistics
-        const waitingCount = await departmentQueue.getWaitingCount();
-        const activeCount = await departmentQueue.getActiveCount();
-        const completedCount = await departmentQueue.getCompletedCount();
-        const failedCount = await departmentQueue.getFailedCount();
-
-        // Get active jobs for this computation
-        const waitingJobs = await departmentQueue.getWaiting();
-        const activeJobs = await departmentQueue.getActive();
-        console.log(waitingJobs, activeJobs)
-        const relatedJobs = [...waitingJobs, ...activeJobs].filter(job =>
-            job.data.masterComputationId === masterComputationId
-        );
+        // Get computation summaries for this master
+        const summaries = await ComputationSummary.find({
+            masterComputationId: masterComputationId
+        })
+            .populate("department", "name code")
+            .populate("semester", "name academicYear isActive isLocked")
+            .lean();
 
         return buildResponse(res, 200, "Computation status retrieved", {
             masterComputation,
-            queueStats: {
-                waiting: waitingCount,
-                active: activeCount,
-                completed: completedCount,
-                failed: failedCount
-            },
+            summaries,
             progress: {
                 percentage: masterComputation.totalDepartments > 0
                     ? (masterComputation.departmentsProcessed / masterComputation.totalDepartments * 100).toFixed(1)
                     : 0,
                 processed: masterComputation.departmentsProcessed,
                 total: masterComputation.totalDepartments
-            },
-            activeJobs: relatedJobs.map(job => ({
-                departmentId: job.data.departmentId,
-                status: job.getState(),
-                // progress: job.progress(),
-                progress: null,
-                attempts: job.attemptsMade
-            }))
+            }
         });
     } catch (error) {
         console.log(error)
@@ -1080,16 +1279,26 @@ export const cancelComputation = async (req, res) => {
         const { masterComputationId } = req.params;
         const computedBy = req.user._id;
 
-        // Remove queued jobs
-        const waitingJobs = await departmentQueue.getWaiting();
-        const activeJobs = await departmentQueue.getActive();
+        // Check if queue is available
+        if (!departmentQueue) {
+            await session.abortTransaction();
+            return buildResponse(res, 500, "Job queue not available");
+        }
 
-        const jobsToRemove = [...waitingJobs, ...activeJobs].filter(job =>
-            job.data.masterComputationId === masterComputationId
-        );
+        // Remove queued jobs (if queue methods exist)
+        try {
+            const waitingJobs = await departmentQueue.getWaiting();
+            const activeJobs = await departmentQueue.getActive();
 
-        for (const job of jobsToRemove) {
-            await job.remove();
+            const jobsToRemove = [...waitingJobs, ...activeJobs].filter(job =>
+                job.data.masterComputationId === masterComputationId
+            );
+
+            for (const job of jobsToRemove) {
+                await job.remove();
+            }
+        } catch (queueError) {
+            console.warn("Could not remove jobs from queue:", queueError);
         }
 
         // Update master computation
@@ -1115,8 +1324,7 @@ export const cancelComputation = async (req, res) => {
         );
 
         return buildResponse(res, 200, "Computation cancelled successfully", {
-            masterComputationId,
-            cancelledJobs: jobsToRemove.length
+            masterComputationId
         });
 
     } catch (error) {
@@ -1142,7 +1350,7 @@ export const retryFailedDepartments = async (req, res) => {
 
         // Get failed department summaries
         const failedSummaries = await ComputationSummary.find({
-            _id: { $in: masterComputation.departmentSummaries },
+            masterComputationId: masterComputationId,
             status: { $in: ["failed", "completed_with_errors"] }
         });
 
@@ -1157,17 +1365,18 @@ export const retryFailedDepartments = async (req, res) => {
         // Add retry jobs
         const retryJobs = [];
         for (const summary of departmentsToRetry) {
-            const job = await departmentQueue.add("department-computation", {
+            const uniqueJobId = `retry-${summary.department}-${masterComputationId}-${Date.now()}`;
+
+            const jobData = {
                 departmentId: summary.department,
                 masterComputationId,
                 computedBy,
-                jobId: `retry-${summary.department}-${Date.now()}`,
+                jobId: uniqueJobId,
                 isRetry: true
-            }, {
-                jobId: `retry-${summary.department}-${masterComputationId}`,
-                priority: 2 // Higher priority for retries
-            });
-            retryJobs.push(job.id);
+            };
+
+            await addDepartmentJob(jobData);
+            retryJobs.push(uniqueJobId);
         }
 
         return buildResponse(res, 200, "Failed departments queued for retry", {
@@ -1179,6 +1388,8 @@ export const retryFailedDepartments = async (req, res) => {
         return buildResponse(res, 500, "Failed to retry departments", null, true, error);
     }
 };
+
+// Rest of the functions remain the same...
 
 export const getDepartmentCarryoverStats = async (req, res) => {
     try {
@@ -1228,7 +1439,7 @@ export const getDepartmentCarryoverStats = async (req, res) => {
 
         // Get department info
         const department = await departmentModel.findById(departmentId).select("name code");
-        const semester = await Semester.findById(semesterId).select("name academicYear");
+        const semester = await SemesterService.getSemesterById(semesterId);
 
         return buildResponse(res, 200, "Carryover statistics retrieved", {
             department,
@@ -1358,6 +1569,7 @@ export const getComputationHistory = async (req, res) => {
         const [computations, total] = await Promise.all([
             MasterComputation.find(query)
                 .populate("computedBy", "name email")
+                .populate("semester", "name")
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit)
@@ -1384,7 +1596,16 @@ export const calculateSemesterGPA = async (req, res) => {
     try {
         const { studentId, semesterId } = req.params;
 
-        const gpaData = await calculateStudentGPASemester(studentId, semesterId);
+        // Get student results
+        const results = await Result.find({
+            studentId,
+            semester: semesterId,
+            deletedAt: null
+        })
+        .populate("courseId", "credits unit")
+        .lean();
+
+        const gpaData = GPACalculator.calculateSemesterGPA(results);
 
         return buildResponse(res, 200, "Semester GPA calculated", {
             studentId,
@@ -1396,144 +1617,34 @@ export const calculateSemesterGPA = async (req, res) => {
     }
 };
 
-export const calculateStudentCGPAr = async (req, res) => {
+export const calculateStudentCGPA = async (req, res) => {
     try {
         const { studentId } = req.params;
 
-        const cgpaData = await calculateStudentCGPA(studentId);
+        // Get all semester results for the student
+        const semesterResults = await studentSemseterResultModel.find({
+            studentId,
+            isPreview: false
+        }).lean();
+
+        let totalPoints = 0;
+        let totalUnits = 0;
+
+        for (const result of semesterResults) {
+            totalPoints += result.totalPoints || 0;
+            totalUnits += result.totalUnits || 0;
+        }
+
+        const cgpa = totalUnits > 0 ? parseFloat((totalPoints / totalUnits).toFixed(2)) : 0;
 
         return buildResponse(res, 200, "CGPA calculated", {
             studentId,
-            ...cgpaData
+            cgpa,
+            totalPoints,
+            totalUnits,
+            semesterResultsCount: semesterResults.length
         });
     } catch (error) {
         return buildResponse(res, 500, "Failed to calculate CGPA", null, true, error);
     }
 };
-/**
- * Update master computation after a department completes
- */
-async function updateMasterComputationAfterDepartment(
-    masterComputationId,
-    departmentName,
-    summaryId,
-    stats
-) {
-    try {
-        const masterComp = await MasterComputation.findById(masterComputationId);
-        if (!masterComp) {
-            console.warn(`MasterComputation ${masterComputationId} not found`);
-            return;
-        }
-
-        // Increment processed count
-        masterComp.departmentsProcessed = (masterComp.departmentsProcessed || 0) + 1;
-
-        // Update department summaries
-        masterComp.departmentSummaries = masterComp.departmentSummaries || {};
-        masterComp.departmentSummaries[departmentName] = {
-            summaryId,
-            ...stats,
-            updatedAt: new Date()
-        };
-
-        // Update overall status if all departments are done
-        if (masterComp.departmentsProcessed >= masterComp.totalDepartments) {
-            // Check if any departments have errors
-            const hasErrors = Object.values(masterComp.departmentSummaries)
-                .some(dept => dept.failedStudentsCount > 0);
-
-            masterComp.status = hasErrors ? "completed_with_errors" : "completed";
-            masterComp.completedAt = new Date();
-            masterComp.duration = Date.now() - masterComp.startedAt.getTime();
-
-            // Calculate overall statistics
-            await calculateMasterComputationStats(masterComp);
-        }
-
-        await masterComp.save();
-        console.log(`✅ Master computation updated for department ${departmentName}`);
-
-    } catch (error) {
-        console.error(`Failed to update master computation:`, error);
-    }
-}
-
-/**
- * Update master computation when a department fails
- */
-async function updateMasterComputationOnFailure(
-    masterComputationId,
-    departmentName,
-    errorMessage
-) {
-    try {
-        const masterComp = await MasterComputation.findById(masterComputationId);
-        if (!masterComp) return;
-
-        // Mark as failed in department summaries
-        masterComp.departmentSummaries = masterComp.departmentSummaries || {};
-        masterComp.departmentSummaries[departmentName] = {
-            error: errorMessage,
-            status: "failed",
-            updatedAt: new Date()
-        };
-
-        // Still increment processed count (even though failed)
-        masterComp.departmentsProcessed = (masterComp.departmentsProcessed || 0) + 1;
-
-        // Update overall status if all departments are done
-        if (masterComp.departmentsProcessed >= masterComp.totalDepartments) {
-            masterComp.status = "completed_with_errors";
-            masterComp.completedAt = new Date();
-            masterComp.duration = Date.now() - masterComp.startedAt.getTime();
-        }
-
-        await masterComp.save();
-
-    } catch (error) {
-        console.error(`Failed to update master computation on failure:`, error);
-    }
-}
-
-/**
- * Calculate overall statistics for master computation
- */
-async function calculateMasterComputationStats(masterComp) {
-    try {
-        const summaries = Object.values(masterComp.departmentSummaries || {});
-
-        if (summaries.length === 0) return;
-
-        // Calculate totals
-        let totalStudents = 0;
-        let totalGPA = 0;
-        let totalCarryovers = 0;
-        let totalFailedStudents = 0;
-        let departmentsWithData = 0;
-
-        for (const dept of summaries) {
-            if (dept.studentsProcessed > 0) {
-                totalStudents += dept.studentsProcessed;
-                totalGPA += (dept.averageGPA || 0);
-                totalCarryovers += (dept.carryoverCount || 0);
-                totalFailedStudents += (dept.failedStudentsCount || 0);
-                departmentsWithData++;
-            }
-        }
-
-        // Update master computation with overall stats
-        masterComp.totalStudents = totalStudents;
-        masterComp.totalCarryovers = totalCarryovers;
-        masterComp.totalFailedStudents = totalFailedStudents;
-
-        if (departmentsWithData > 0) {
-            masterComp.overallAverageGPA = parseFloat((totalGPA / departmentsWithData).toFixed(2));
-        }
-
-        await masterComp.save();
-
-    } catch (error) {
-        console.error(`Failed to calculate master computation stats:`, error);
-    }
-}

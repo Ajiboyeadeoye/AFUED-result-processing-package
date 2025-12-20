@@ -375,13 +375,86 @@ class SummaryListBuilder {
    * @param {Array|Object} listEntries - Array of list entries with level, or already grouped object
    * @returns {Object} Lists grouped by level
    */
-/**
- * Group student lists by level - FIXED VERSION
- */
-groupListsByLevel(listEntries) {
-  // Handle empty or null input
-  if (!listEntries) {
-    console.warn('groupListsByLevel: No data provided');
+  groupListsByLevel(listEntries) {
+    // Handle empty or null input
+    if (!listEntries) {
+      console.warn('groupListsByLevel: No data provided');
+      return {
+        passList: {},
+        probationList: {},
+        withdrawalList: {},
+        terminationList: {},
+        carryoverStudents: {}
+      };
+    }
+
+    // If already grouped, return as-is (with proper structure)
+    if (typeof listEntries === 'object' && !Array.isArray(listEntries)) {
+      // Check if it has the expected structure
+      const expectedKeys = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
+      const hasAllKeys = expectedKeys.every(key => key in listEntries);
+      
+      if (hasAllKeys) {
+        return listEntries;
+      }
+      
+      // If it's already grouped by level but not in our expected structure
+      // (e.g., {level1: [{...}], level2: [{...}]})
+      if (Object.keys(listEntries).some(key => !isNaN(parseInt(key)))) {
+        // Convert to our expected structure
+        return this._convertFlatGroupToStructured(listEntries);
+      }
+    }
+
+    // If it's an array, group by level
+    if (Array.isArray(listEntries)) {
+      const grouped = {
+        passList: {},
+        probationList: {},
+        withdrawalList: {},
+        terminationList: {},
+        carryoverStudents: {}
+      };
+      
+      for (const entry of listEntries) {
+        if (!entry || typeof entry !== 'object') {
+          console.warn('groupListsByLevel: Invalid entry', entry);
+          continue;
+        }
+        
+        const level = entry.level || "100";
+        
+        if (entry.passList) {
+          if (!grouped.passList[level]) grouped.passList[level] = [];
+          grouped.passList[level].push(entry.passList);
+        }
+        
+        if (entry.probationList) {
+          if (!grouped.probationList[level]) grouped.probationList[level] = [];
+          grouped.probationList[level].push(entry.probationList);
+        }
+        
+        if (entry.withdrawalList) {
+          if (!grouped.withdrawalList[level]) grouped.withdrawalList[level] = [];
+          grouped.withdrawalList[level].push(entry.withdrawalList);
+        }
+        
+        if (entry.terminationList) {
+          if (!grouped.terminationList[level]) grouped.terminationList[level] = [];
+          grouped.terminationList[level].push(entry.terminationList);
+        }
+        
+        if (entry.carryoverList) {
+          if (!grouped.carryoverStudents[level]) grouped.carryoverStudents[level] = [];
+          grouped.carryoverStudents[level].push(entry.carryoverList);
+        }
+      }
+      
+      return grouped;
+    }
+
+    // Return empty structure for any other input
+    console.warn('groupListsByLevel: Invalid input type', typeof listEntries);
     return {
       passList: {},
       probationList: {},
@@ -391,104 +464,6 @@ groupListsByLevel(listEntries) {
     };
   }
 
-  // Initialize result structure
-  const result = {
-    passList: {},
-    probationList: {},
-    withdrawalList: {},
-    terminationList: {},
-    carryoverStudents: {}
-  };
-
-  // Handle different input formats
-  if (Array.isArray(listEntries)) {
-    // Input is array of list entries
-    console.log(`groupListsByLevel: Processing ${listEntries.length} list entries`);
-    
-    for (const entry of listEntries) {
-      if (!entry || typeof entry !== 'object') {
-        console.warn('groupListsByLevel: Invalid entry', entry);
-        continue;
-      }
-      
-      const level = entry.level || "100";
-      
-      // Initialize arrays for this level if not exists
-      if (!result.passList[level]) result.passList[level] = [];
-      if (!result.probationList[level]) result.probationList[level] = [];
-      if (!result.withdrawalList[level]) result.withdrawalList[level] = [];
-      if (!result.terminationList[level]) result.terminationList[level] = [];
-      if (!result.carryoverStudents[level]) result.carryoverStudents[level] = [];
-      
-      // Add entries to appropriate lists
-      if (entry.passList && entry.passList !== null) {
-        result.passList[level].push(entry.passList);
-      }
-      
-      if (entry.probationList && entry.probationList !== null) {
-        result.probationList[level].push(entry.probationList);
-      }
-      
-      if (entry.withdrawalList && entry.withdrawalList !== null) {
-        result.withdrawalList[level].push(entry.withdrawalList);
-      }
-      
-      if (entry.terminationList && entry.terminationList !== null) {
-        result.terminationList[level].push(entry.terminationList);
-      }
-      
-      if (entry.carryoverList && entry.carryoverList !== null) {
-        result.carryoverStudents[level].push(entry.carryoverList);
-      }
-    }
-  } else if (typeof listEntries === 'object') {
-    // Input might already be grouped
-    console.log('groupListsByLevel: Input is already an object');
-    
-    // Check if it has our expected structure
-    const expectedKeys = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
-    const hasAllKeys = expectedKeys.every(key => key in listEntries);
-    
-    if (hasAllKeys) {
-      // Already in correct structure, just return
-      return listEntries;
-    } else {
-      // Might be {level: [entries]} format
-      for (const [level, entries] of Object.entries(listEntries)) {
-        if (!Array.isArray(entries)) continue;
-        
-        // Initialize arrays for this level
-        result.passList[level] = [];
-        result.probationList[level] = [];
-        result.withdrawalList[level] = [];
-        result.terminationList[level] = [];
-        result.carryoverStudents[level] = [];
-        
-        // Process each entry
-        for (const entry of entries) {
-          if (!entry || typeof entry !== 'object') continue;
-          
-          // Add based on entry type
-          if (entry.passList) result.passList[level].push(entry.passList);
-          if (entry.probationList) result.probationList[level].push(entry.probationList);
-          if (entry.withdrawalList) result.withdrawalList[level].push(entry.withdrawalList);
-          if (entry.terminationList) result.terminationList[level].push(entry.terminationList);
-          if (entry.carryoverList) result.carryoverStudents[level].push(entry.carryoverList);
-        }
-      }
-    }
-  }
-  
-  // Log what we found
-  console.log('groupListsByLevel Result:', {
-    totalLevels: Object.keys(result.passList).length,
-    passListCounts: Object.keys(result.passList).map(l => `${l}: ${result.passList[l].length}`),
-    probationListCounts: Object.keys(result.probationList).map(l => `${l}: ${result.probationList[l].length}`),
-    terminationListCounts: Object.keys(result.terminationList).map(l => `${l}: ${result.terminationList[l].length}`)
-  });
-  
-  return result;
-}
   /**
    * Convert flat grouped structure to structured format
    * @param {Object} flatGroup - Object with levels as keys

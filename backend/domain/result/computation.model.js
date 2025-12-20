@@ -11,11 +11,82 @@ const computationSummarySchema = new mongoose.Schema({
     ref: "Semester",
     required: true
   },
+  
+  // Master computation reference
   masterComputationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "MasterComputation"
   },
 
+  // Student performance summaries organized by level
+  studentSummariesByLevel: {
+    type: Map,
+    of: [{
+      studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+      matricNumber: String,
+      name: String,
+      level: String,
+      
+      // Current semester performance
+      currentSemester: {
+        tcp: { type: Number, default: 0 },
+        tnu: { type: Number, default: 0 },
+        gpa: { type: Number, default: 0 }
+      },
+      
+      // Previous performance
+      previousPerformance: {
+        cumulativeTCP: { type: Number, default: 0 },
+        cumulativeTNU: { type: Number, default: 0 },
+        cumulativeGPA: { type: Number, default: 0 },
+        previousSemesterGPA: { type: Number, default: 0 }
+      },
+      
+      // Cumulative performance
+      cumulativePerformance: {
+        totalTCP: { type: Number, default: 0 },
+        totalTNU: { type: Number, default: 0 },
+        cgpa: { type: Number, default: 0 }
+      },
+      
+      // Course results
+      courseResults: [{
+        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        courseCode: String,
+        courseTitle: String,
+        unitLoad: Number,
+        score: Number,
+        grade: String,
+        gradePoint: Number,
+        creditPoint: Number,
+        status: {
+          type: String,
+          enum: ["passed", "failed", "outstanding"],
+          default: "passed"
+        }
+      }],
+      
+      // Outstanding courses
+      outstandingCourses: [{
+        courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+        courseCode: String,
+        courseTitle: String,
+        unitLoad: Number,
+        fromSemester: String,
+        attempts: { type: Number, default: 1 }
+      }],
+      
+      // Academic status
+      academicStatus: {
+        type: String,
+        enum: ["good", "probation", "withdrawal", "terminated"],
+        default: "good"
+      }
+    }],
+    default: new Map()
+  },
+
+  // Overall department statistics
   totalStudents: { type: Number, default: 0 },
   studentsWithResults: { type: Number, default: 0 },
   studentsProcessed: { type: Number, default: 0 },
@@ -24,6 +95,7 @@ const computationSummarySchema = new mongoose.Schema({
   highestGPA: { type: Number, default: 0 },
   lowestGPA: { type: Number, default: 0 },
 
+  // Overall grade distribution
   gradeDistribution: {
     firstClass: { type: Number, default: 0 },
     secondClassUpper: { type: Number, default: 0 },
@@ -32,64 +104,67 @@ const computationSummarySchema = new mongoose.Schema({
     fail: { type: Number, default: 0 }
   },
 
-  // Existing: Outstanding Courses / Carryover
-  carryoverStats: {
-    totalCarryovers: { type: Number, default: 0 },
-    affectedStudentsCount: { type: Number, default: 0 },
-    affectedStudents: [{
-      studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-      matricNumber: String,
-      name: String,
-      courses: [{ type: mongoose.Schema.Types.ObjectId, ref: "Course" }],
-      notes: String
-    }]
+  // Summary of results by level
+  summaryOfResultsByLevel: {
+    type: Map,
+    of: {
+      totalStudents: { type: Number, default: 0 },
+      studentsWithResults: { type: Number, default: 0 },
+      
+      gpaStatistics: {
+        average: { type: Number, default: 0 },
+        highest: { type: Number, default: 0 },
+        lowest: { type: Number, default: 0 }
+      },
+      
+      classDistribution: {
+        firstClass: { type: Number, default: 0 },
+        secondClassUpper: { type: Number, default: 0 },
+        secondClassLower: { type: Number, default: 0 },
+        thirdClass: { type: Number, default: 0 },
+        pass: { type: Number, default: 0 },
+        fail: { type: Number, default: 0 }
+      }
+    },
+    default: new Map()
   },
 
-  // Existing: Failed Students
-  failedStudents: [{
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-    matricNumber: String,
-    name: String,
-    error: String,
-    notified: { type: Boolean, default: false },
-    notifiedAt: Date
-  }],
+  // Student lists by level
+  studentListsByLevel: {
+    type: Map,
+    of: {
+      passList: [{
+        studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+        matricNumber: String,
+        name: String,
+        gpa: Number
+      }],
+      probationList: [{
+        studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+        matricNumber: String,
+        name: String,
+        gpa: Number,
+        remarks: String
+      }],
+      withdrawalList: [{
+        studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+        matricNumber: String,
+        name: String,
+        reason: String,
+        remarks: String
+      }],
+      terminationList: [{
+        studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+        matricNumber: String,
+        name: String,
+        reason: String,
+        remarks: String
+      }]
+    },
+    default: new Map()
+  },
 
-  // NEW: Pass List
-  passList: [{
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-    matricNumber: String,
-    name: String,
-    gpa: Number
-  }],
-
-  // NEW: Probation List
-  probationList: [{
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-    matricNumber: String,
-    name: String,
-    gpa: Number,
-    remarks: String
-  }],
-
-  // NEW: Withdrawal List
-  withdrawalList: [{
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-    matricNumber: String,
-    name: String,
-    reason: String,
-    remarks: String
-  }],
-
-  // NEW: Termination List
-  terminationList: [{
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
-    matricNumber: String,
-    name: String,
-    reason: String,
-    remarks: String
-  }],
-
+  // Status tracking
   status: {
     type: String,
     enum: [
@@ -116,26 +191,68 @@ const computationSummarySchema = new mongoose.Schema({
     ref: "User"
   },
 
-  notifications: [{
-    type: {
-      type: String,
-      enum: ["hod", "admin", "student"]
-    },
-    sentAt: Date,
-    recipient: mongoose.Schema.Types.ObjectId,
-    status: {
-      type: String,
-      enum: ["pending", "sent", "failed"]
-    }
-  }],
-  recommendations: [{
-    priority: { type: String },
-    title: { type: String },
-    description: { type: String },
-    action: { type: String },
-
-  }]
+  // Preview/final tracking
+  isFinal: {
+    type: Boolean,
+    default: false
+  },
+  
+  isPreview: {
+    type: Boolean,
+    default: false
+  },
+  
+  purpose: {
+    type: String,
+    enum: ["final", "preview", "simulation"],
+    default: "final"
+  },
+  
+  // Master sheet data
+  masterSheetDataByLevel: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: new Map()
+  },
+  
+  masterSheetGenerated: {
+    type: Boolean,
+    default: false
+  },
+  
+  masterSheetGeneratedAt: Date
 }, { timestamps: true });
+
+// Indexes for performance
+computationSummarySchema.index({ department: 1, semester: 1 });
+computationSummarySchema.index({ masterComputationId: 1 });
+computationSummarySchema.index({ isPreview: 1, purpose: 1 });
+computationSummarySchema.index({ status: 1 });
+computationSummarySchema.post('save', function(doc) {
+    console.log('💾 Document saved:');
+    console.log('  ID:', doc._id);
+    console.log('  studentListsByLevel type:', typeof doc.studentListsByLevel);
+    
+    if (doc.studentListsByLevel instanceof Map) {
+      console.log('  Is Map: YES');
+      for (const [level, lists] of doc.studentListsByLevel.entries()) {
+        console.log(`  Level ${level}:`);
+        console.log(`    Pass list: ${lists?.passList?.length || 0} items`);
+        console.log(`    Termination list: ${lists?.terminationList?.length || 0} items`);
+      }
+    } else {
+      console.log('  Is Map: NO, type:', doc.studentListsByLevel?.constructor?.name);
+      console.log('  Raw value:', JSON.stringify(doc.studentListsByLevel).substring(0, 200));
+    }
+  });
+// Pre-save middleware to initialize Maps
+computationSummarySchema.pre('save', function(next) {
+  if (!this.studentSummariesByLevel) this.studentSummariesByLevel = new Map();
+  if (!this.summaryOfResultsByLevel) this.summaryOfResultsByLevel = new Map();
+  if (!this.studentListsByLevel) this.studentListsByLevel = new Map();
+  if (!this.masterSheetDataByLevel) this.masterSheetDataByLevel = new Map();
+  next();
+});
 
 const ComputationSummary = mongoose.model("ComputationSummary", computationSummarySchema);
 export default ComputationSummary;

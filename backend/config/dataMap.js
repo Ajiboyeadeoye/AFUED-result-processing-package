@@ -186,9 +186,9 @@ export const dataMaps = {
         .sort({ createdAt: -1 }) // most recent
         .populate("lecturer", "name email")
         .lean();
-        
-        console.log({semester: activeSemester._id})
-        if (!finalAssignment || !finalAssignment.lecturer) return null;
+
+      console.log({ semester: activeSemester._id })
+      if (!finalAssignment || !finalAssignment.lecturer) return null;
 
       return {
         _id: finalAssignment.lecturer._id,
@@ -338,32 +338,64 @@ export const dataMaps = {
   CourseAssignment: {
     _id: "this._id",
     course_id: "this.course._id",
-    name: "this.course.title",
-    code: "this.course.courseCode",
-    unit: "this.course.unit",
-    level: "this.course.level",
+
+    name: (doc) => {
+      if (doc.course?.borrowedId) return doc.course.borrowedId.title;
+      return doc.course?.title ?? null;
+    },
+
+    code: (doc) => {
+      if (doc.course?.borrowedId) return doc.course.borrowedId.courseCode;
+      return doc.course?.courseCode ?? null;
+    },
+
+    unit: (doc) => {
+      if (doc.course?.borrowedId) return doc.course.borrowedId.unit;
+      return doc.course?.unit ?? null;
+    },
+
+    level: (doc) => {
+      if (doc.course?.borrowedId) return doc.course.borrowedId.level;
+      return doc.course?.level ?? null;
+    },
+
     semester: "this.semester.name",
     session: "this.session",
-    department_id: "this.department._id",
-    department: "this.department.name",
+
+    department_id: (doc) => {
+      // borrowing department (context)
+      return doc.course?.department?._id ?? null;
+    },
+
+    department: (doc) => {
+      return doc.course?.department?.name ?? null;
+    },
+
+    is_borrowed: (doc) => Boolean(doc.course?.borrowedId),
+
+    owning_department_id: (doc) => {
+      if (doc.course?.borrowedId) {
+        return doc.course.borrowedId.department?._id ?? null;
+      }
+      return doc.course?.department?._id ?? null;
+    },
+
     status: "this.status",
+
     students: async (doc, models) => {
-      // Resolve course and semester ids (handles populated or raw ids)
       const courseId = doc.course?._id || doc.course;
       const semesterId = doc.semester?._id || doc.semester;
       const session = doc.session;
 
-      console.log("CourseAssignment students resolver", { courseId, semesterId, session });
       if (!courseId || !semesterId) return 0;
 
       const filter = {
-        courses: courseId,     // matches documents where courses array contains courseId
+        courses: courseId,
         semester: semesterId,
       };
 
-      // include session in filter if available (registrations are unique per student+semester+session)
       if (session) filter.session = session;
-      console.log("CourseAssignment students filter", filter);
+
       return await models.CourseRegistration.countDocuments(filter);
     },
   }

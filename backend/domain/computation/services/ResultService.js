@@ -41,7 +41,7 @@ class ResultService {
   async getCourseDetails(courseId) {
     try {
       return await courseModel.findById(courseId)
-        .select("courseType isCoreCourse title courseCode unit level")
+        .select("type isCoreCourse title courseCode unit level")
         .lean();
     } catch (error) {
       console.error(`Error fetching course ${courseId}:`, error);
@@ -57,7 +57,7 @@ class ResultService {
   async isCoreCourse(courseId) {
     try {
       const course = await this.getCourseDetails(courseId);
-      return course ? (course.isCoreCourse === true || course.courseType === "core") : false;
+      return course ? (course.isCoreCourse === true || course.type === "core") : false;
     } catch (error) {
       console.error(`Error checking if course ${courseId} is core:`, error);
       return true; // Default to true to be safe

@@ -16,6 +16,7 @@ export const GRADE_POINTS = {
   B: 4,
   C: 3,
   D: 2,
+  E: 1,  // Added E grade
   F: 0
 };
 
@@ -24,6 +25,7 @@ export const GRADE_BOUNDARIES = {
   B: 60,
   C: 50,
   D: 45,
+  E: 40,  // Added E: 40-44
   F: 0
 };
 
@@ -51,5 +53,18 @@ export const REMARK_CATEGORIES = {
   TERMINATED: 'terminated'
 };
 
-export const BATCH_SIZE =  100
-export const NOTIFICATION_BATCH_SIZE =  100
+export const BATCH_SIZE = 100;
+export const NOTIFICATION_BATCH_SIZE = 100;
+
+// New constants for grade system
+export const GRADES = {
+  A: 'A',
+  B: 'B', 
+  C: 'C',
+  D: 'D',
+  E: 'E',
+  F: 'F'
+};
+
+export const PASSING_GRADES = ['A', 'B', 'C', 'D', 'E']; // E is a passing grade
+export const FAILING_GRADE = 'F';

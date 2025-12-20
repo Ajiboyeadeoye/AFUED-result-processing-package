@@ -14,6 +14,7 @@ import {
   getStudentRegistrations,
   getStudentsForCourse,
   getBorrowedCoursesFromMyDept,
+  getCourseRegistrationReport
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
@@ -21,6 +22,9 @@ import fetchDataHelper from "../../utils/fetchDataHelper.js";
 import Result from "../result/result.model.js";
 
 const router = Router();
+
+// Get course registration Statistics
+router.get("/stats", authenticate(["hod", "admin"]), getCourseRegistrationReport)
 
 /** 📚 Get lecturer's courses */
 router.get("/lecturer", authenticate(['hod', 'admin', "lecturer"]), getLecturerCourses);
@@ -65,7 +69,7 @@ router.get(
   "/:courseId/results",
   async (req, res) => {
     return fetchDataHelper(req, res, Result, {
-      filters: { courseId: req.params.courseId },
+      additionalFilters: { courseId: req.params.courseId },
       enablePagination: true,
       sort: { createdAt: -1 },
       configMap: {

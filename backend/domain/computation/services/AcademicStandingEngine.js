@@ -12,7 +12,13 @@ class AcademicStandingEngine {
    * @param {string} currentSemesterId - Current semester ID
    * @returns {Promise<Object>} Academic standing decision
    */
-  async determineAcademicStanding(student, semesterGPA, cgpa, carryoverCount, currentSemesterId) {
+  async determineAcademicStanding(student, semesterGPA, cgpa, carryoverCount, currentSemesterId, isFinal = true) {
+    // For non-final computations, we don't actually change student statuses
+    if (!isFinal) {
+      return this._getPreviewStanding(student, semesterGPA, cgpa, carryoverCount);
+    }
+    
+    // Original logic for final computations
     let probationStatus = student.probationStatus || STUDENT_STATUS.NONE;
     let terminationStatus = student.terminationStatus || STUDENT_STATUS.NONE;
     let remark = REMARK_CATEGORIES.GOOD;
@@ -71,7 +77,13 @@ class AcademicStandingEngine {
    * @param {number} totalCarryovers - Total carryovers
    * @returns {Object} Academic standing
    */
-  determineAcademicStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers) {
+  determineAcademicStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers, isFinal=true) {
+    // For non-final computations, just calculate the status without actions
+    if (!isFinal) {
+      return this._getPreviewStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers);
+    }
+    
+    // Original logic for final computations
     const rules = {
       probation: currentCGPA < 1.5 || semesterGPA < 1.0,
       withdrawn: currentCGPA < 1.0 && student.level > 1,
@@ -130,6 +142,76 @@ class AcademicStandingEngine {
       actionTaken: "none"
     };
   }
+ /**
+   * Get preview standing without changing actual statuses
+   */
+  _getPreviewStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers) {
+    const rules = {
+      probation: currentCGPA < 1.5 || semesterGPA < 1.0,
+      withdrawn: currentCGPA < 1.0 && student.level > 1,
+      terminated: totalCarryovers > 8 || (currentCGPA < 0.5 && student.level > 2)
+    };
+
+    if (rules.terminated) {
+      return {
+        probationStatus: STUDENT_STATUS.PROBATION, // Preview only, not actual
+        terminationStatus: STUDENT_STATUS.TERMINATED, // Preview only
+        remark: REMARK_CATEGORIES.TERMINATED,
+        actionTaken: "would_be_terminated_carryover_limit",
+        isPreview: true
+      };
+    }
+
+    if (rules.withdrawn) {
+      return {
+        probationStatus: STUDENT_STATUS.NONE,
+        terminationStatus: STUDENT_STATUS.WITHDRAWN, // Preview only
+        remark: REMARK_CATEGORIES.WITHDRAWN,
+        actionTaken: "would_be_withdrawn_cgpa_low",
+        isPreview: true
+      };
+    }
+
+    if (rules.probation) {
+      return {
+        probationStatus: STUDENT_STATUS.PROBATION, // Preview only
+        terminationStatus: STUDENT_STATUS.NONE,
+        remark: REMARK_CATEGORIES.PROBATION,
+        actionTaken: student.probationStatus === STUDENT_STATUS.NONE ? "would_be_placed_on_probation" : "probation_continued",
+        isPreview: true
+      };
+    }
+
+    if (currentCGPA >= 4.0) {
+      return {
+        probationStatus: STUDENT_STATUS.NONE,
+        terminationStatus: STUDENT_STATUS.NONE,
+        remark: REMARK_CATEGORIES.EXCELLENT,
+        actionTaken: "none",
+        isPreview: true
+      };
+    }
+
+    if (currentCGPA >= 3.0) {
+      return {
+        probationStatus: STUDENT_STATUS.NONE,
+        terminationStatus: STUDENT_STATUS.NONE,
+        remark: REMARK_CATEGORIES.GOOD,
+        actionTaken: "none",
+        isPreview: true
+      };
+    }
+
+    return {
+      probationStatus: STUDENT_STATUS.NONE,
+      terminationStatus: STUDENT_STATUS.NONE,
+      remark: REMARK_CATEGORIES.GOOD,
+      actionTaken: "none",
+      isPreview: true
+    };
+  }
+
+
 
   /**
    * Check consecutive probation semesters
