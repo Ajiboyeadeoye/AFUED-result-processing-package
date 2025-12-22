@@ -247,50 +247,142 @@ class SummaryListBuilder {
     }
   }
 
+// In SummaryListBuilder.js - FIXED buildKeyToCoursesByLevel
+
   /**
-   * Build key to courses from results, organized by level
+   * Build key to courses from results, organized by level - FIXED VERSION
    * @param {Array} results - All results in the semester
    * @returns {Promise<Object>} Key to courses organized by level {level: [courses]}
    */
   async buildKeyToCoursesByLevel(results) {
-    const coursesByLevel = {};
-    
-    if (!Array.isArray(results)) {
-      console.warn('buildKeyToCoursesByLevel: results is not an array', results);
+    try {
+      console.log(`📊 [KeyToCourses] Building from ${results?.length || 0} results`);
+      
+      if (!Array.isArray(results) || results.length === 0) {
+        console.warn('buildKeyToCoursesByLevel: No results or not an array');
+        return {};
+      }
+      
+      const coursesByLevel = {};
+      const uniqueCourses = new Map(); // Track unique courses by level
+      
+      for (const result of results) {
+        if (!result || typeof result !== 'object') {
+          console.warn('Skipping invalid result:', result);
+          continue;
+        }
+        
+        // Get course data from result
+        const course = result.courseId;
+        if (!course) {
+          console.warn('Result missing courseId:', result);
+          continue;
+        }
+        
+        // Get level from student or course
+        let level;
+        if (result.studentId && typeof result.studentId === 'object' && result.studentId.level) {
+          level = result.studentId.level.toString();
+        } else if (result.studentId && typeof result.studentId !== 'object' && result.student) {
+          level = result.student?.level?.toString();
+        } else if (course.level) {
+          level = course.level.toString();
+        } else {
+          level = "100"; // Default
+        }
+        
+        // ✅ CRITICAL FIX: Initialize courses array for this level
+        if (!coursesByLevel[level]) {
+          coursesByLevel[level] = [];  // ✅ Direct array, not nested object
+          uniqueCourses.set(level, new Set());
+        }
+        
+        // Create unique key for this course
+        const courseKey = course._id?.toString() || JSON.stringify(course);
+        const levelUniqueSet = uniqueCourses.get(level);
+        
+        // Skip if we've already added this course for this level
+        if (levelUniqueSet.has(courseKey)) {
+          continue;
+        }
+        levelUniqueSet.add(courseKey);
+        
+        // Handle borrowed courses
+        let finalCourse = {
+          courseId: course._id,
+          courseCode: course.courseCode || 'N/A',
+          title: course.title || 'N/A',
+          unit: course.unit || 0,
+          level: parseInt(level),
+          type: course.type || 'core',
+          isCoreCourse: course.isCoreCourse || false,
+          isBorrowed: false
+        };
+        
+        // If course has borrowedId and it's populated, use the original course data
+        if (course.borrowedId && typeof course.borrowedId === 'object') {
+          const originalCourse = course.borrowedId;
+          finalCourse = {
+            ...finalCourse,
+            courseCode: originalCourse.courseCode || course.courseCode,
+            title: originalCourse.title || course.title,
+            unit: originalCourse.unit || course.unit,
+            level: originalCourse.level || course.level || parseInt(level),
+            type: originalCourse.type || course.type,
+            isCoreCourse: originalCourse.isCoreCourse || course.isCoreCourse,
+            isBorrowed: true
+          };
+        }
+        
+        // ✅ CORRECT: Direct array push
+        coursesByLevel[level].push(finalCourse);
+      }
+      
+      // Sort courses by courseCode within each level
+      for (const level in coursesByLevel) {
+        if (Array.isArray(coursesByLevel[level])) {
+          coursesByLevel[level].sort((a, b) => 
+            (a.courseCode || "").localeCompare(b.courseCode || "")
+          );
+          
+          console.log(`  Level ${level}: ${coursesByLevel[level].length} unique courses`);
+          if (coursesByLevel[level].length > 0) {
+            console.log(`    Courses: ${coursesByLevel[level].map(c => c.courseCode).join(', ')}`);
+          }
+        }
+      }
+      
+      const totalCourses = Object.values(coursesByLevel).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
+      console.log(`📊 [KeyToCourses] Built ${totalCourses} courses across ${Object.keys(coursesByLevel).length} levels`);
+      
+      // ✅ FINAL VALIDATION: Ensure structure is correct
+      console.log('🔍 [KeyToCourses] Structure validation:');
+      for (const level in coursesByLevel) {
+        const value = coursesByLevel[level];
+        if (Array.isArray(value)) {
+          console.log(`  ✅ Level ${level}: Array with ${value.length} items`);
+        } else {
+          console.log(`  ❌ Level ${level}: NOT ARRAY (${typeof value})`);
+          // Fix it
+          if (value && typeof value === 'object' && !Array.isArray(value)) {
+            console.log(`    Fixing nested structure for level ${level}...`);
+            // If it's nested like {"100": [...]}, extract the array
+            if (value[level] && Array.isArray(value[level])) {
+              coursesByLevel[level] = value[level];
+              console.log(`    Fixed: Extracted ${coursesByLevel[level].length} courses`);
+            } else {
+              coursesByLevel[level] = [];
+            }
+          }
+        }
+      }
+      
+      return coursesByLevel;
+      
+    } catch (error) {
+      console.error('❌ Error in buildKeyToCoursesByLevel:', error);
       return {};
     }
-    
-    for (const result of results) {
-      if (!result || typeof result !== 'object') continue;
-      
-      const courseLevel = result.courseId?.level || result.level || "100";
-      
-      if (!coursesByLevel[courseLevel]) {
-        coursesByLevel[courseLevel] = new Map();
-      }
-      
-      const courseId = result.courseId?._id?.toString() || result.courseId;
-      const courseMap = coursesByLevel[courseLevel];
-      
-      if (courseId && !courseMap.has(courseId)) {
-        courseMap.set(courseId, {
-          courseCode: result.courseId?.courseCode || result.courseCode || 'N/A',
-          courseTitle: result.courseId?.title || result.courseTitle || 'N/A',
-          unitLoad: result.courseUnit || 1,
-          isElective: result.courseId?.type === "elective" || false,
-          department: result.departmentId?.name || result.department || 'N/A',
-          level: courseLevel
-        });
-      }
-    }
-    
-    // Convert Maps to arrays
-    const result = {};
-    for (const [level, courseMap] of Object.entries(coursesByLevel)) {
-      result[level] = Array.from(courseMap.values());
-    }
-    
-    return result;
   }
 
   /**
@@ -375,120 +467,118 @@ class SummaryListBuilder {
    * @param {Array|Object} listEntries - Array of list entries with level, or already grouped object
    * @returns {Object} Lists grouped by level
    */
-/**
- * Group student lists by level - FIXED VERSION
- */
-groupListsByLevel(listEntries) {
-  // Handle empty or null input
-  if (!listEntries) {
-    console.warn('groupListsByLevel: No data provided');
-    return {
+  groupListsByLevel(listEntries) {
+    // Handle empty or null input
+    if (!listEntries) {
+      console.warn('groupListsByLevel: No data provided');
+      return {
+        passList: {},
+        probationList: {},
+        withdrawalList: {},
+        terminationList: {},
+        carryoverStudents: {}
+      };
+    }
+
+    // Initialize result structure
+    const result = {
       passList: {},
       probationList: {},
       withdrawalList: {},
       terminationList: {},
       carryoverStudents: {}
     };
-  }
 
-  // Initialize result structure
-  const result = {
-    passList: {},
-    probationList: {},
-    withdrawalList: {},
-    terminationList: {},
-    carryoverStudents: {}
-  };
-
-  // Handle different input formats
-  if (Array.isArray(listEntries)) {
-    // Input is array of list entries
-    console.log(`groupListsByLevel: Processing ${listEntries.length} list entries`);
-    
-    for (const entry of listEntries) {
-      if (!entry || typeof entry !== 'object') {
-        console.warn('groupListsByLevel: Invalid entry', entry);
-        continue;
-      }
+    // Handle different input formats
+    if (Array.isArray(listEntries)) {
+      // Input is array of list entries
+      console.log(`groupListsByLevel: Processing ${listEntries.length} list entries`);
       
-      const level = entry.level || "100";
-      
-      // Initialize arrays for this level if not exists
-      if (!result.passList[level]) result.passList[level] = [];
-      if (!result.probationList[level]) result.probationList[level] = [];
-      if (!result.withdrawalList[level]) result.withdrawalList[level] = [];
-      if (!result.terminationList[level]) result.terminationList[level] = [];
-      if (!result.carryoverStudents[level]) result.carryoverStudents[level] = [];
-      
-      // Add entries to appropriate lists
-      if (entry.passList && entry.passList !== null) {
-        result.passList[level].push(entry.passList);
-      }
-      
-      if (entry.probationList && entry.probationList !== null) {
-        result.probationList[level].push(entry.probationList);
-      }
-      
-      if (entry.withdrawalList && entry.withdrawalList !== null) {
-        result.withdrawalList[level].push(entry.withdrawalList);
-      }
-      
-      if (entry.terminationList && entry.terminationList !== null) {
-        result.terminationList[level].push(entry.terminationList);
-      }
-      
-      if (entry.carryoverList && entry.carryoverList !== null) {
-        result.carryoverStudents[level].push(entry.carryoverList);
-      }
-    }
-  } else if (typeof listEntries === 'object') {
-    // Input might already be grouped
-    console.log('groupListsByLevel: Input is already an object');
-    
-    // Check if it has our expected structure
-    const expectedKeys = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
-    const hasAllKeys = expectedKeys.every(key => key in listEntries);
-    
-    if (hasAllKeys) {
-      // Already in correct structure, just return
-      return listEntries;
-    } else {
-      // Might be {level: [entries]} format
-      for (const [level, entries] of Object.entries(listEntries)) {
-        if (!Array.isArray(entries)) continue;
+      for (const entry of listEntries) {
+        if (!entry || typeof entry !== 'object') {
+          console.warn('groupListsByLevel: Invalid entry', entry);
+          continue;
+        }
         
-        // Initialize arrays for this level
-        result.passList[level] = [];
-        result.probationList[level] = [];
-        result.withdrawalList[level] = [];
-        result.terminationList[level] = [];
-        result.carryoverStudents[level] = [];
+        const level = entry.level || "100";
         
-        // Process each entry
-        for (const entry of entries) {
-          if (!entry || typeof entry !== 'object') continue;
+        // Initialize arrays for this level if not exists
+        if (!result.passList[level]) result.passList[level] = [];
+        if (!result.probationList[level]) result.probationList[level] = [];
+        if (!result.withdrawalList[level]) result.withdrawalList[level] = [];
+        if (!result.terminationList[level]) result.terminationList[level] = [];
+        if (!result.carryoverStudents[level]) result.carryoverStudents[level] = [];
+        
+        // Add entries to appropriate lists
+        if (entry.passList && entry.passList !== null) {
+          result.passList[level].push(entry.passList);
+        }
+        
+        if (entry.probationList && entry.probationList !== null) {
+          result.probationList[level].push(entry.probationList);
+        }
+        
+        if (entry.withdrawalList && entry.withdrawalList !== null) {
+          result.withdrawalList[level].push(entry.withdrawalList);
+        }
+        
+        if (entry.terminationList && entry.terminationList !== null) {
+          result.terminationList[level].push(entry.terminationList);
+        }
+        
+        if (entry.carryoverList && entry.carryoverList !== null) {
+          result.carryoverStudents[level].push(entry.carryoverList);
+        }
+      }
+    } else if (typeof listEntries === 'object') {
+      // Input might already be grouped
+      console.log('groupListsByLevel: Input is already an object');
+      
+      // Check if it has our expected structure
+      const expectedKeys = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
+      const hasAllKeys = expectedKeys.every(key => key in listEntries);
+      
+      if (hasAllKeys) {
+        // Already in correct structure, just return
+        return listEntries;
+      } else {
+        // Might be {level: [entries]} format
+        for (const [level, entries] of Object.entries(listEntries)) {
+          if (!Array.isArray(entries)) continue;
           
-          // Add based on entry type
-          if (entry.passList) result.passList[level].push(entry.passList);
-          if (entry.probationList) result.probationList[level].push(entry.probationList);
-          if (entry.withdrawalList) result.withdrawalList[level].push(entry.withdrawalList);
-          if (entry.terminationList) result.terminationList[level].push(entry.terminationList);
-          if (entry.carryoverList) result.carryoverStudents[level].push(entry.carryoverList);
+          // Initialize arrays for this level
+          result.passList[level] = [];
+          result.probationList[level] = [];
+          result.withdrawalList[level] = [];
+          result.terminationList[level] = [];
+          result.carryoverStudents[level] = [];
+          
+          // Process each entry
+          for (const entry of entries) {
+            if (!entry || typeof entry !== 'object') continue;
+            
+            // Add based on entry type
+            if (entry.passList) result.passList[level].push(entry.passList);
+            if (entry.probationList) result.probationList[level].push(entry.probationList);
+            if (entry.withdrawalList) result.withdrawalList[level].push(entry.withdrawalList);
+            if (entry.terminationList) result.terminationList[level].push(entry.terminationList);
+            if (entry.carryoverList) result.carryoverStudents[level].push(entry.carryoverList);
+          }
         }
       }
     }
+    
+    // Log what we found
+    console.log('groupListsByLevel Result:', {
+      totalLevels: Object.keys(result.passList).length,
+      passListCounts: Object.keys(result.passList).map(l => `${l}: ${result.passList[l].length}`),
+      probationListCounts: Object.keys(result.probationList).map(l => `${l}: ${result.probationList[l].length}`),
+      terminationListCounts: Object.keys(result.terminationList).map(l => `${l}: ${result.terminationList[l].length}`)
+    });
+    
+    return result;
   }
-  
-  // Log what we found
-  console.log('groupListsByLevel Result:', {
-    totalLevels: Object.keys(result.passList).length,
-    passListCounts: Object.keys(result.passList).map(l => `${l}: ${result.passList[l].length}`),
-    probationListCounts: Object.keys(result.probationList).map(l => `${l}: ${result.probationList[l].length}`),
-    terminationListCounts: Object.keys(result.terminationList).map(l => `${l}: ${result.terminationList[l].length}`)
-  });
-  
-  return result;
-}
+
   /**
    * Convert flat grouped structure to structured format
    * @param {Object} flatGroup - Object with levels as keys

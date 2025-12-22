@@ -802,3 +802,47 @@ function convertMapToObject(mapField) {
     
     return {};
 }
+
+// Add this helper function
+export function fixNestedKeyToCoursesStructure(data) {
+  console.log('🔧 [FIX] Checking keyToCourses structure...');
+  
+  if (!data || typeof data !== 'object') {
+    console.log('  No data to fix');
+    return {};
+  }
+  
+  const fixedData = {};
+  
+  for (const level in data) {
+    const value = data[level];
+    
+    if (Array.isArray(value)) {
+      // Already correct
+      fixedData[level] = value;
+      console.log(`  ✅ Level ${level}: Already correct array with ${value.length} items`);
+    } else if (value && typeof value === 'object') {
+      // Check if it's nested like {"100": [...]}
+      if (value[level] && Array.isArray(value[level])) {
+        // Extract the array from nested structure
+        fixedData[level] = value[level];
+        console.log(`  🔧 Level ${level}: Fixed nested structure, extracted ${value[level].length} items`);
+      } else {
+        // Try to find any array in the object
+        const subArrays = Object.values(value).filter(v => Array.isArray(v));
+        if (subArrays.length > 0) {
+          fixedData[level] = subArrays[0];
+          console.log(`  🔧 Level ${level}: Extracted first array found with ${subArrays[0].length} items`);
+        } else {
+          fixedData[level] = [];
+          console.log(`  ⚠️ Level ${level}: No array found, setting to empty`);
+        }
+      }
+    } else {
+      fixedData[level] = [];
+      console.log(`  ⚠️ Level ${level}: Invalid type (${typeof value}), setting to empty`);
+    }
+  }
+  
+  return fixedData;
+}

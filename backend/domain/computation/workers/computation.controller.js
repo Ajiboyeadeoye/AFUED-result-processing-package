@@ -821,6 +821,15 @@ async function finalizeComputation(
         buffers.listEntriesByLevel
     );
 
+    // DEBUG: Check groupedLists structure
+    console.log('🔍 [FINALIZE] Grouped lists structure:', Object.keys(groupedLists));
+    if (groupedLists.passList && groupedLists.passList['100']) {
+        console.log(`  Level 100 pass list: ${groupedLists.passList['100'].length} items`);
+    }
+    if (groupedLists.terminationList && groupedLists.terminationList['100']) {
+        console.log(`  Level 100 termination list: ${groupedLists.terminationList['100'].length} items`);
+    }
+
     // Calculate summary statistics with level-based organization
     const summaryStats = SummaryListBuilder.buildSummaryStatsByLevel(
         counters, 
@@ -891,23 +900,132 @@ async function finalizeComputation(
 
     // Prepare student lists by level
     const studentListsByLevel = {};
-    for (const [level] of Object.entries(groupedStudentSummaries)) {
+    
+    // Get all unique levels from groupedLists
+    const allLevels = new Set();
+    
+    // Collect levels from each list type in groupedLists
+    for (const listType of ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents']) {
+        const listData = groupedLists[listType];
+        if (listData && typeof listData === 'object') {
+            Object.keys(listData).forEach(level => allLevels.add(level));
+        }
+    }
+    
+    // Also include levels from student summaries
+    for (const level in groupedStudentSummaries) {
+        allLevels.add(level);
+    }
+    
+    console.log(`📊 [FINALIZE] All levels found:`, Array.from(allLevels));
+    
+    // Create structure for each level
+    for (const level of allLevels) {
         studentListsByLevel[level] = {
-            passList: groupedLists.passList[level] || [],
-            probationList: groupedLists.probationList[level] || [],
-            withdrawalList: groupedLists.withdrawalList[level] || [],
-            terminationList: groupedLists.terminationList[level] || [],
-            carryoverStudents: groupedLists.carryoverStudents[level] || []
+            passList: (groupedLists.passList && groupedLists.passList[level]) || [],
+            probationList: (groupedLists.probationList && groupedLists.probationList[level]) || [],
+            withdrawalList: (groupedLists.withdrawalList && groupedLists.withdrawalList[level]) || [],
+            terminationList: (groupedLists.terminationList && groupedLists.terminationList[level]) || [],
+            carryoverStudents: (groupedLists.carryoverStudents && groupedLists.carryoverStudents[level]) || []
         };
+        
+        console.log(`  Level ${level}:`);
+        console.log(`    Pass: ${studentListsByLevel[level].passList.length} students`);
+        console.log(`    Probation: ${studentListsByLevel[level].probationList.length} students`);
+        console.log(`    Termination: ${studentListsByLevel[level].terminationList.length} students`);
+        console.log(`    Carryover: ${studentListsByLevel[level].carryoverStudents.length} students`);
     }
 
-    // Prepare summary data for computation summary - UPDATED for level-based model
+    // ✅ FIX: Handle keyToCoursesByLevel - Fix nested structure
+    let rawKeyToCourses = {};
+    
+    if (buffers.keyToCoursesByLevel) {
+        console.log('✅ [FINALIZE] Found keyToCoursesByLevel in buffers');
+        rawKeyToCourses = buffers.keyToCoursesByLevel;
+        
+        // Debug the raw structure
+        console.log('🔍 [FINALIZE] Raw keyToCourses structure:');
+        console.log(JSON.stringify(rawKeyToCourses, null, 2).substring(0, 500));
+    } else if (buffers.allResults && Array.isArray(buffers.allResults)) {
+        // Build from results if not available
+        console.log('⚠️ [FINALIZE] Building keyToCoursesByLevel from results...');
+        rawKeyToCourses = await SummaryListBuilder.buildKeyToCoursesByLevel(buffers.allResults);
+    } else {
+        console.log('⚠️ [FINALIZE] No keyToCoursesByLevel data available');
+    }
+
+    // ✅ FIX: Process and fix nested structure
+    const fixedKeyToCourses = {};
+    
+    for (const level in rawKeyToCourses) {
+        let courses = rawKeyToCourses[level];
+        
+        console.log(`🔍 [FINALIZE] Processing level ${level}: ${typeof courses}`);
+        
+        // Check if it's nested like {"100": {"100": [...]}}
+        if (courses && typeof courses === 'object' && !Array.isArray(courses)) {
+            console.log(`  ⚠️ Level ${level} has nested object structure`);
+            
+            // Try to extract array from nested object
+            if (courses[level] && Array.isArray(courses[level])) {
+                // Case: {"100": {"100": [...]}}
+                courses = courses[level];
+                console.log(`  ✅ Extracted ${courses.length} courses from nested level ${level}`);
+            } else {
+                // Try to find any array in the object
+                const subArrays = Object.values(courses).filter(v => Array.isArray(v));
+                if (subArrays.length > 0) {
+                    courses = subArrays[0];
+                    console.log(`  ✅ Found array with ${courses.length} courses in nested object`);
+                } else {
+                    courses = [];
+                    console.log(`  ⚠️ No array found in nested object, using empty array`);
+                }
+            }
+        }
+        
+        // Ensure we have an array
+        if (Array.isArray(courses)) {
+            fixedKeyToCourses[level] = courses.map(course => ({
+                courseId: course.courseId || course._id,
+                courseCode: course.courseCode || 'N/A',
+                title: course.title || 'N/A',
+                unit: course.unit || 0,
+                level: course.level || parseInt(level),
+                type: course.type || 'core',
+                isCoreCourse: course.isCoreCourse || false,
+                isBorrowed: course.isBorrowed || false
+            }));
+        } else {
+            fixedKeyToCourses[level] = [];
+            console.log(`  ⚠️ Level ${level}: Not an array after processing, using empty array`);
+        }
+    }
+
+    // ✅ Convert to Map for Mongoose schema
+    const keyToCoursesMap = new Map();
+    for (const [level, courses] of Object.entries(fixedKeyToCourses)) {
+        if (Array.isArray(courses)) {
+            keyToCoursesMap.set(level, courses);
+        }
+    }
+
+    // Debug final structure
+    console.log('🔍 [FINALIZE] Final keyToCoursesByLevel structure:');
+    for (const [level, courses] of keyToCoursesMap.entries()) {
+        console.log(`  Level ${level}: ${courses.length} courses`);
+        if (courses.length > 0) {
+            console.log(`    First course: ${courses[0].courseCode} - ${courses[0].title}`);
+        }
+    }
+
+    // Prepare summary data for computation summary
     const summaryData = {
         ...summaryStats,
         
         // Level-based data
         studentSummariesByLevel: groupedStudentSummaries,
-        keyToCoursesByLevel: buffers.keyToCoursesByLevel,
+        keyToCoursesByLevel: Object.fromEntries(keyToCoursesMap), // Use fixed structure
         studentListsByLevel,
         carryoverStatsByLevel,
         summaryOfResultsByLevel,
@@ -987,6 +1105,8 @@ async function finalizeComputation(
     if (buffers.notificationQueue.length > 0) {
         await ReportService.sendStudentNotifications(buffers.notificationQueue);
     }
+    
+    console.log(`✅ [FINALIZE] Computation completed for ${department.name}`);
 }
 
 async function handleJobFailure(computationSummary, department, activeSemester, error) {

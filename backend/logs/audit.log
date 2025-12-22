@@ -2891,3 +2891,7 @@
 [2025-12-16T12:30:56.666Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/fees (GET) - failure
 [2025-12-16T12:30:56.698Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/activities (GET) - failure
 [2025-12-16T12:30:56.766Z] [student] 69289f63c3c2904e51b7564a - Forbidden: student tried to access restricted route at /afued/result/portal/student/quick-stats (GET) - failure
+[2025-12-20T08:11:02.903Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-20T08:11:02.976Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/unread-count (GET) - failure
+[2025-12-20T08:11:03.136Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/top-unread (GET) - failure
+[2025-12-20T08:11:03.178Z] [Anonymous] Anonymous - Authentication error: jwt expired at /afued/result/portal/notifications/unread-count (GET) - failure

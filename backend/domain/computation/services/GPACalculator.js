@@ -65,7 +65,7 @@ class GPACalculator {
       const courseUnit = result.courseUnit || result.courseId?.credits || result.courseId?.unit || 1;
       const creditPoint = this.calculateCreditPoints(point, courseUnit);
       const isCoreCourse = result.courseId?.isCoreCourse || result.courseId?.type === "core" || false;
-      
+
       totalPoints += (point * courseUnit);
       totalUnits += courseUnit;
       totalCreditPoints += creditPoint;
@@ -137,14 +137,14 @@ class GPACalculator {
 
       // Use the latest result for previous cumulative data
       if (previousResults.length > 0) {
-        const latestResult = previousResults.reduce((latest, current) => 
+        const latestResult = previousResults.reduce((latest, current) =>
           new Date(current.createdAt) > new Date(latest.createdAt) ? current : latest
         );
-        
+
         previousCumulativeTCP = latestResult.cumulativeTCP || 0;
         previousCumulativeTNU = latestResult.cumulativeTNU || 0;
         latestCGPA = latestResult.cgpa || 0;
-        
+
         // Sum all previous points/units for total calculation
         for (const result of previousResults) {
           totalPoints += result.totalPoints || 0;
@@ -241,9 +241,9 @@ class GPACalculator {
         studentId,
         isPreview: false
       })
-      .populate('semesterId', 'name session')
-      .sort({ createdAt: 1 })
-      .lean();
+        .populate('semesterId', 'name session')
+        .sort({ createdAt: 1 })
+        .lean();
 
       return semesterResults.map(result => ({
         session: result.session,
@@ -270,42 +270,32 @@ class GPACalculator {
     try {
       const failedResults = await Result.find({
         studentId,
-        semester: { $ne: currentSemesterId },
+        semester: currentSemesterId,  // ⭐ ONLY current semester!
         grade: 'F',
         deletedAt: null
       })
-      .populate('courseId', 'courseCode title unit level')
-      .lean();
+        .populate('courseId', 'courseCode title unit level')
+        .lean();
 
-      // Group by attempts
-      const outstandingCourses = [];
-      const courseAttempts = {};
+      // Process and return current semester failures
+      const outstandingCourses = failedResults.map(result => ({
+        courseId: result.courseId?._id,
+        courseCode: result.courseId?.courseCode,
+        courseTitle: result.courseId?.title,
+        unitLoad: result.courseId?.unit || 1,
+        score: result.score,  // Include score
+        grade: result.grade,
+        fromSemester: currentSemesterId,  // Current semester
+        isCurrentSemester: true,
+        attempts: 1
+      }));
 
-      for (const result of failedResults) {
-        const courseId = result.courseId?._id.toString();
-        
-        if (!courseAttempts[courseId]) {
-          courseAttempts[courseId] = {
-            courseId: result.courseId?._id,
-            courseCode: result.courseId?.courseCode,
-            courseTitle: result.courseId?.title,
-            unitLoad: result.courseId?.unit || 1,
-            fromSemester: result.semester,
-            attempts: 0
-          };
-        }
-        
-        courseAttempts[courseId].attempts++;
-      }
-
-      // Convert to array
-      for (const courseId in courseAttempts) {
-        outstandingCourses.push(courseAttempts[courseId]);
-      }
-
+      console.log(`Current semester outstanding courses for ${studentId}:`,
+        outstandingCourses.length);
       return outstandingCourses;
+
     } catch (error) {
-      console.error(`Error calculating outstanding courses for student ${studentId}:`, error);
+      console.error(`Error:`, error);
       return [];
     }
   }
@@ -325,7 +315,7 @@ class GPACalculator {
     for (const result of results) {
       const { grade } = this.calculateGradeAndPoints(result.score || 0);
       gradeDistribution[grade]++;
-      
+
       if (this.isPassingGrade(grade)) {
         passingCount++;
       } else {

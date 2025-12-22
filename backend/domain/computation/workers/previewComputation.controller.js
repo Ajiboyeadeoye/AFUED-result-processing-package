@@ -488,266 +488,312 @@ async function processPreviewStudentResults(
 // In previewComputation.controller.js - finalizePreviewComputation function
 
 async function finalizePreviewComputation(
-  computationSummary,
-  counters,
-  buffers,
-  gradeDistribution,
-  levelStats,
-  department,
-  activeSemester,
-  computedBy,
-  masterComputationId
-) {
-  // Re-fetch computation summary
-  computationSummary = await ComputationSummary.findById(computationSummary._id);
-
-  // Group data by level using SummaryListBuilder
-  const groupedStudentSummaries = SummaryListBuilder.groupStudentSummariesByLevel(
-    buffers.studentSummariesByLevel
-  );
-
-  const groupedLists = SummaryListBuilder.groupListsByLevel(
-    buffers.listEntriesByLevel
-  );
-
-  // DEBUG: Log what we have
-  console.log('🔍 DEBUG - Finalizing computation:');
-  console.log('  Grouped lists structure:', Object.keys(groupedLists));
-  console.log('  Pass list levels:', Object.keys(groupedLists.passList || {}));
-  console.log('  Termination list levels:', Object.keys(groupedLists.terminationList || {}));
-
-  // Calculate summary statistics with level-based organization
-  const summaryStats = SummaryListBuilder.buildSummaryStatsByLevel(
+    computationSummary,
     counters,
+    buffers,
     gradeDistribution,
-    levelStats
-  );
+    levelStats,
+    department,
+    activeSemester,
+    computedBy,
+    masterComputationId
+) {
+    // Re-fetch computation summary
+    computationSummary = await ComputationSummary.findById(computationSummary._id);
+    
+    // Group data by level using SummaryListBuilder
+    const groupedStudentSummaries = SummaryListBuilder.groupStudentSummariesByLevel(
+        buffers.studentSummariesByLevel
+    );
+    
+    const groupedLists = SummaryListBuilder.groupListsByLevel(
+        buffers.listEntriesByLevel
+    );
+    
+    // DEBUG: Check groupedLists structure
+    console.log('🔍 [PREVIEW] Grouped lists structure:', Object.keys(groupedLists));
+    if (groupedLists.passList && groupedLists.passList['100']) {
+        console.log(`  Level 100 pass list: ${groupedLists.passList['100'].length} items`);
+    }
+    if (groupedLists.terminationList && groupedLists.terminationList['100']) {
+        console.log(`  Level 100 termination list: ${groupedLists.terminationList['100'].length} items`);
+    }
+    
+    // Calculate summary statistics with level-based organization
+    const summaryStats = SummaryListBuilder.buildSummaryStatsByLevel(
+        counters, 
+        gradeDistribution, 
+        levelStats
+    );
+    
+    // Build summary of results by level
+    const summaryOfResultsByLevel = {};
+    for (const [level, stats] of Object.entries(levelStats)) {
+        if (stats.totalStudents > 0) {
+            const averageGPA = stats.totalGPA / stats.totalStudents;
+            summaryOfResultsByLevel[level] = {
+                totalStudents: stats.totalStudents,
+                studentsWithResults: stats.totalStudents,
+                
+                gpaStatistics: {
+                    average: parseFloat(averageGPA.toFixed(2)),
+                    highest: parseFloat(stats.highestGPA.toFixed(2)),
+                    lowest: parseFloat(stats.lowestGPA.toFixed(2)),
+                    standardDeviation: 0
+                },
+                
+                classDistribution: stats.gradeDistribution
+            };
+        }
+    }
+    
+    // Prepare student lists by level
+    const studentListsByLevel = {};
+    
+    // Get all unique levels from groupedLists
+    const allLevels = new Set();
+    
+    // Collect levels from each list type in groupedLists
+    for (const listType of ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents']) {
+        const listData = groupedLists[listType];
+        if (listData && typeof listData === 'object') {
+            Object.keys(listData).forEach(level => allLevels.add(level));
+        }
+    }
+    
+    // Also include levels from student summaries
+    for (const level in groupedStudentSummaries) {
+        allLevels.add(level);
+    }
+    
+    console.log(`📊 [PREVIEW] All levels found:`, Array.from(allLevels));
+    
+    // Create structure for each level
+    for (const level of allLevels) {
+        studentListsByLevel[level] = {
+            passList: (groupedLists.passList && groupedLists.passList[level]) || [],
+            probationList: (groupedLists.probationList && groupedLists.probationList[level]) || [],
+            withdrawalList: (groupedLists.withdrawalList && groupedLists.withdrawalList[level]) || [],
+            terminationList: (groupedLists.terminationList && groupedLists.terminationList[level]) || [],
+            carryoverStudents: (groupedLists.carryoverStudents && groupedLists.carryoverStudents[level]) || []
+        };
+        
+        console.log(`  Level ${level}:`);
+        console.log(`    Pass: ${studentListsByLevel[level].passList.length} students`);
+        console.log(`    Probation: ${studentListsByLevel[level].probationList.length} students`);
+        console.log(`    Termination: ${studentListsByLevel[level].terminationList.length} students`);
+        console.log(`    Carryover: ${studentListsByLevel[level].carryoverStudents.length} students`);
+    }
+    
+    // ✅ FIX: Handle keyToCoursesByLevel - Fix nested structure
+    let rawKeyToCourses = {};
+    
+    if (buffers.keyToCoursesByLevel) {
+        console.log('✅ [PREVIEW] Found keyToCoursesByLevel in buffers');
+        rawKeyToCourses = buffers.keyToCoursesByLevel;
+        
+        // Debug the raw structure
+        console.log('🔍 [PREVIEW] Raw keyToCourses structure (first 300 chars):');
+        const rawJson = JSON.stringify(rawKeyToCourses);
+        console.log(rawJson.substring(0, Math.min(300, rawJson.length)));
+    } else if (buffers.allResults && Array.isArray(buffers.allResults)) {
+        // Build from results if not available
+        console.log('⚠️ [PREVIEW] Building keyToCoursesByLevel from results...');
+        rawKeyToCourses = await SummaryListBuilder.buildKeyToCoursesByLevel(buffers.allResults);
+    } else {
+        console.log('⚠️ [PREVIEW] No keyToCoursesByLevel data available');
+    }
 
-  // Build summary of results by level
-  const summaryOfResultsByLevel = {};
-  for (const [level, stats] of Object.entries(levelStats)) {
-    if (stats.totalStudents > 0) {
-      const averageGPA = stats.totalGPA / stats.totalStudents;
-      summaryOfResultsByLevel[level] = {
-        totalStudents: stats.totalStudents,
-        studentsWithResults: stats.totalStudents,
+    // ✅ FIX: Process and fix nested structure
+    const fixedKeyToCourses = {};
+    
+    for (const level in rawKeyToCourses) {
+        let courses = rawKeyToCourses[level];
+        
+        console.log(`🔍 [PREVIEW] Processing level ${level}: ${typeof courses}`);
+        
+        // Check if it's nested like {"100": {"100": [...]}}
+        if (courses && typeof courses === 'object' && !Array.isArray(courses)) {
+            console.log(`  ⚠️ Level ${level} has nested object structure`);
+            
+            // Try to extract array from nested object
+            if (courses[level] && Array.isArray(courses[level])) {
+                // Case: {"100": {"100": [...]}}
+                courses = courses[level];
+                console.log(`  ✅ Extracted ${courses} courses from nested level ${level}`);
+            } else {
+                // Try to find any array in the object
+                const subArrays = Object.values(courses).filter(v => Array.isArray(v));
+                if (subArrays.length > 0) {
+                    courses = subArrays[0];
+                    console.log(`  ✅ Found array with ${courses.length} courses in nested object`);
+                } else {
+                    courses = [];
+                    console.log(`  ⚠️ No array found in nested object, using empty array`);
+                }
+            }
+        }
+        
+        // Ensure we have an array
+        if (Array.isArray(courses)) {
+            fixedKeyToCourses[level] = courses.map(course => ({
+                courseId: course.courseId || course._id,
+                courseCode: course.courseCode || 'N/A',
+                title: course.title || 'N/A',
+                unit: course.unit || 0,
+                level: course.level || parseInt(level),
+                type: course.type || 'core',
+                isCoreCourse: course.isCoreCourse || false,
+                isBorrowed: course.isBorrowed || false
+            }));
+        } else {
+            fixedKeyToCourses[level] = [];
+            console.log(`  ⚠️ Level ${level}: Not an array after processing, using empty array`);
+        }
+    }
 
-        gpaStatistics: {
-          average: parseFloat(averageGPA.toFixed(2)),
-          highest: parseFloat(stats.highestGPA.toFixed(2)),
-          lowest: parseFloat(stats.lowestGPA.toFixed(2)),
-          standardDeviation: 0
+    // ✅ Convert to Map for Mongoose schema
+    const keyToCoursesMap = new Map();
+    for (const [level, courses] of Object.entries(fixedKeyToCourses)) {
+        if (Array.isArray(courses)) {
+            keyToCoursesMap.set(level, courses);
+        }
+    }
+
+    // Debug final structure
+    console.log('🔍 [PREVIEW] Final keyToCoursesByLevel structure:');
+    let totalCourses = 0;
+    for (const [level, courses] of keyToCoursesMap.entries()) {
+        console.log(`  Level ${level}: ${courses.length} courses`);
+        totalCourses += courses.length;
+        if (courses.length > 0) {
+            console.log(`    First course: ${courses[0].courseCode} - ${courses[0].title}`);
+        }
+    }
+    console.log(`📊 [PREVIEW] Total courses: ${totalCourses}`);
+    
+    // Prepare carryover stats by level
+    const carryoverStatsByLevel = {};
+    for (const level of allLevels) {
+        const carryoverStudents = studentListsByLevel[level]?.carryoverStudents || [];
+        if (carryoverStudents.length > 0) {
+            carryoverStatsByLevel[level] = {
+                totalCarryovers: carryoverStudents.reduce((sum, student) => sum + (student.courses?.length || 0), 0),
+                affectedStudentsCount: carryoverStudents.length,
+                affectedStudents: carryoverStudents.slice(0, 100)
+            };
+        }
+    }
+    console.log(Object.fromEntries(keyToCoursesMap))
+    // Prepare summary data for preview computation summary
+    const summaryData = {
+        ...summaryStats,
+        
+        // Level-based data
+        studentSummariesByLevel: groupedStudentSummaries,
+        keyToCoursesByLevel: Object.fromEntries(keyToCoursesMap), // Use fixed structure
+        studentListsByLevel,
+        carryoverStatsByLevel,
+        summaryOfResultsByLevel,
+        
+        // Overall data
+        totalStudents: counters.totalStudents,
+        studentsWithResults: counters.studentsWithResults,
+        studentsProcessed: counters.studentsWithResults,
+        averageGPA: counters.studentsWithResults > 0 ? 
+                   parseFloat((counters.totalGPA / counters.studentsWithResults).toFixed(2)) : 0,
+        highestGPA: parseFloat(counters.highestGPA.toFixed(2)),
+        lowestGPA: parseFloat(counters.lowestGPA.toFixed(2)),
+        
+        // Grade distribution
+        gradeDistribution: {
+            firstClass: gradeDistribution.firstClass || 0,
+            secondClassUpper: gradeDistribution.secondClassUpper || 0,
+            secondClassLower: gradeDistribution.secondClassLower || 0,
+            thirdClass: gradeDistribution.thirdClass || 0,
+            fail: gradeDistribution.fail || 0
         },
-
-        classDistribution: stats.gradeDistribution
-      };
-    }
-  }
-
-  // CRITICAL FIX: Prepare student lists by level - CORRECTED
-  const studentListsByLevel = {};
-
-  // Process each level that has data in groupedLists
-  for (const [level, lists] of Object.entries(groupedLists)) {
-    if (!lists || typeof lists !== 'object') continue;
-
-    // Initialize for this level
-    studentListsByLevel[level] = {
-      passList: lists.passList?.[level] || [],
-      probationList: lists.probationList?.[level] || [],
-      withdrawalList: lists.withdrawalList?.[level] || [],
-      terminationList: lists.terminationList?.[level] || [],
-      carryoverStudents: lists.carryoverStudents?.[level] || []
+        
+        // Backward compatible data
+        passList: buffers.flatLists.passList.slice(0, 100),
+        probationList: buffers.flatLists.probationList.slice(0, 100),
+        withdrawalList: buffers.flatLists.withdrawalList.slice(0, 100),
+        terminationList: buffers.flatLists.terminationList.slice(0, 100),
+        carryoverStats: {
+            totalCarryovers: counters.totalCarryovers,
+            affectedStudentsCount: counters.affectedStudentsCount,
+            affectedStudents: buffers.flatLists.carryoverStudents.slice(0, 100)
+        },
+        
+        failedStudents: buffers.failedStudents,
+        additionalMetrics: {
+            levelStats
+        },
+        
+        // Preview-specific fields
+        isPreview: true,
+        purpose: "preview"
     };
-  }
-
-  // If studentListsByLevel is still empty, build from groupedLists directly
-  if (Object.keys(studentListsByLevel).length === 0) {
-    console.log('⚠️ Building studentListsByLevel from groupedLists directly');
-
-    // Check the structure of groupedLists
-    if (groupedLists.passList && typeof groupedLists.passList === 'object') {
-      for (const level in groupedLists.passList) {
-        if (!studentListsByLevel[level]) {
-          studentListsByLevel[level] = {
-            passList: [],
-            probationList: [],
-            withdrawalList: [],
-            terminationList: [],
-            carryoverStudents: []
-          };
+    
+    // Update computation summary (no student updates)
+    computationSummary.status = buffers.failedStudents.length > 0 ? "completed_with_errors" : "completed";
+    computationSummary.completedAt = new Date();
+    computationSummary.duration = Date.now() - computationSummary.startedAt.getTime();
+    
+    // Set level-based data - Convert objects to Maps
+    computationSummary.studentSummariesByLevel = new Map(Object.entries(groupedStudentSummaries));
+    computationSummary.keyToCoursesByLevel = keyToCoursesMap; // Use fixed Map
+    computationSummary.studentListsByLevel = new Map(Object.entries(studentListsByLevel));
+    computationSummary.carryoverStatsByLevel = new Map(Object.entries(carryoverStatsByLevel));
+    computationSummary.summaryOfResultsByLevel = new Map(Object.entries(summaryOfResultsByLevel));
+    
+    // Set overall summary data
+    computationSummary.totalStudents = counters.totalStudents;
+    computationSummary.studentsWithResults = counters.studentsWithResults;
+    computationSummary.studentsProcessed = counters.studentsWithResults;
+    computationSummary.averageGPA = summaryData.averageGPA;
+    computationSummary.highestGPA = summaryData.highestGPA;
+    computationSummary.lowestGPA = summaryData.lowestGPA;
+    computationSummary.gradeDistribution = summaryData.gradeDistribution;
+    
+    // Set backward compatible data
+    computationSummary.passList = summaryData.passList;
+    computationSummary.probationList = summaryData.probationList;
+    computationSummary.withdrawalList = summaryData.withdrawalList;
+    computationSummary.terminationList = summaryData.terminationList;
+    computationSummary.carryoverStats = summaryData.carryoverStats;
+    computationSummary.failedStudents = summaryData.failedStudents;
+    
+    // DEBUG: Verify before save
+    console.log('📤 [PREVIEW] FINAL CHECK before save:');
+    console.log(`  Total courses in keyToCourses: ${totalCourses}`);
+    
+    // ✅ Debug keyToCourses structure before save
+    const savedKeyToCoursesMap = computationSummary.keyToCoursesByLevel;
+    if (savedKeyToCoursesMap instanceof Map) {
+        for (const [level, courses] of savedKeyToCoursesMap.entries()) {
+            console.log(`  Level ${level} keyToCourses: ${courses?.length || 0} courses`);
+            if (courses?.length > 0) {
+                const firstCourse = courses[0];
+                console.log(`    Sample course: ${firstCourse.courseCode} - ${firstCourse.title}`);
+            }
         }
-        studentListsByLevel[level].passList = groupedLists.passList[level] || [];
-      }
     }
-
-    if (groupedLists.probationList && typeof groupedLists.probationList === 'object') {
-      for (const level in groupedLists.probationList) {
-        if (!studentListsByLevel[level]) {
-          studentListsByLevel[level] = {
-            passList: [],
-            probationList: [],
-            withdrawalList: [],
-            terminationList: [],
-            carryoverStudents: []
-          };
-        }
-        studentListsByLevel[level].probationList = groupedLists.probationList[level] || [];
-      }
+    
+    try {
+        await computationSummary.save();
+        console.log(`✅ [PREVIEW] Preview saved successfully for ${department.name} - ${activeSemester.name}`);
+        console.log(`✅ KeyToCourses saved: ${totalCourses} courses across ${keyToCoursesMap.size} levels`);
+    } catch (saveError) {
+        console.error('❌ [PREVIEW] Save error:', saveError.message);
+        console.error('❌ [PREVIEW] Save error details:', saveError.errors);
+        
+        // Debug the problematic data
+        console.log('❌ [PREVIEW] Problematic keyToCourses data structure:');
+        console.log(JSON.stringify(Object.fromEntries(keyToCoursesMap), null, 2));
+        
+        throw saveError;
     }
-
-    if (groupedLists.terminationList && typeof groupedLists.terminationList === 'object') {
-      for (const level in groupedLists.terminationList) {
-        if (!studentListsByLevel[level]) {
-          studentListsByLevel[level] = {
-            passList: [],
-            probationList: [],
-            withdrawalList: [],
-            terminationList: [],
-            carryoverStudents: []
-          };
-        }
-        studentListsByLevel[level].terminationList = groupedLists.terminationList[level] || [];
-      }
-    }
-
-    if (groupedLists.carryoverStudents && typeof groupedLists.carryoverStudents === 'object') {
-      for (const level in groupedLists.carryoverStudents) {
-        if (!studentListsByLevel[level]) {
-          studentListsByLevel[level] = {
-            passList: [],
-            probationList: [],
-            withdrawalList: [],
-            terminationList: [],
-            carryoverStudents: []
-          };
-        }
-        studentListsByLevel[level].carryoverStudents = groupedLists.carryoverStudents[level] || [];
-      }
-    }
-  }
-
-  // Prepare carryover stats by level
-  const carryoverStatsByLevel = {};
-  for (const [level, carryoverStudents] of Object.entries(groupedLists.carryoverStudents || {})) {
-    carryoverStatsByLevel[level] = {
-      totalCarryovers: carryoverStudents.reduce((sum, student) => sum + (student.courses?.length || 0), 0),
-      affectedStudentsCount: carryoverStudents.length,
-      affectedStudents: carryoverStudents.slice(0, 100).map(co => ({
-        studentId: co.studentId,
-        matricNumber: co.matricNumber,
-        name: co.name,
-        courses: co.courses,
-        notes: co.notes
-      }))
-    };
-  }
-
-  // DEBUG: Log what we're about to save
-  console.log('💾 Saving to computation summary:');
-  console.log('  studentListsByLevel keys:', Object.keys(studentListsByLevel));
-  if (studentListsByLevel['100']) {
-    console.log('  Level 100 pass list count:', studentListsByLevel['100'].passList?.length || 0);
-    console.log('  Level 100 termination list count:', studentListsByLevel['100'].terminationList?.length || 0);
-  }
-
-  // Prepare summary data for preview computation summary
-  const summaryData = {
-    ...summaryStats,
-
-    // Level-based data
-    studentSummariesByLevel: groupedStudentSummaries,
-    keyToCoursesByLevel: buffers.keyToCoursesByLevel,
-    studentListsByLevel,  // This should have data!
-    carryoverStatsByLevel,
-    summaryOfResultsByLevel,
-
-    // Overall data
-    totalStudents: counters.totalStudents,
-    studentsWithResults: counters.studentsWithResults,
-    studentsProcessed: counters.studentsWithResults,
-    averageGPA: counters.studentsWithResults > 0 ?
-      parseFloat((counters.totalGPA / counters.studentsWithResults).toFixed(2)) : 0,
-    highestGPA: parseFloat(counters.highestGPA.toFixed(2)),
-    lowestGPA: parseFloat(counters.lowestGPA.toFixed(2)),
-
-    // Grade distribution
-    gradeDistribution: {
-      firstClass: gradeDistribution.firstClass || 0,
-      secondClassUpper: gradeDistribution.secondClassUpper || 0,
-      secondClassLower: gradeDistribution.secondClassLower || 0,
-      thirdClass: gradeDistribution.thirdClass || 0,
-      fail: gradeDistribution.fail || 0
-    },
-
-    // Backward compatible data
-    passList: buffers.flatLists.passList.slice(0, 100),
-    probationList: buffers.flatLists.probationList.slice(0, 100),
-    withdrawalList: buffers.flatLists.withdrawalList.slice(0, 100),
-    terminationList: buffers.flatLists.terminationList.slice(0, 100),
-    carryoverStats: {
-      totalCarryovers: counters.totalCarryovers,
-      affectedStudentsCount: counters.affectedStudentsCount,
-      affectedStudents: buffers.flatLists.carryoverStudents.slice(0, 100).map(co => ({
-        studentId: co.studentId,
-        matricNumber: co.matricNumber,
-        name: co.name,
-        courses: co.courses,
-        notes: co.notes
-      }))
-    },
-
-    failedStudents: buffers.failedStudents,
-    additionalMetrics: {
-      levelStats
-    },
-
-    // Preview-specific fields
-    isPreview: true,
-    purpose: "preview"
-  };
-
-  // Update computation summary
-  computationSummary.status = buffers.failedStudents.length > 0 ? "completed_with_errors" : "completed";
-  computationSummary.completedAt = new Date();
-  computationSummary.duration = Date.now() - computationSummary.startedAt.getTime();
-
-  // Set level-based data - CORRECTED: Convert objects to Maps
-  computationSummary.studentSummariesByLevel = new Map(Object.entries(groupedStudentSummaries));
-  computationSummary.keyToCoursesByLevel = new Map(Object.entries(buffers.keyToCoursesByLevel));
-  computationSummary.studentListsByLevel = new Map(Object.entries(studentListsByLevel));  // This is critical!
-  computationSummary.carryoverStatsByLevel = new Map(Object.entries(carryoverStatsByLevel));
-  computationSummary.summaryOfResultsByLevel = new Map(Object.entries(summaryOfResultsByLevel));
-
-  // Set overall summary data
-  computationSummary.totalStudents = counters.totalStudents;
-  computationSummary.studentsWithResults = counters.studentsWithResults;
-  computationSummary.studentsProcessed = counters.studentsWithResults;
-  computationSummary.averageGPA = summaryData.averageGPA;
-  computationSummary.highestGPA = summaryData.highestGPA;
-  computationSummary.lowestGPA = summaryData.lowestGPA;
-  computationSummary.gradeDistribution = summaryData.gradeDistribution;
-
-  // Set backward compatible data
-  computationSummary.passList = summaryData.passList;
-  computationSummary.probationList = summaryData.probationList;
-  computationSummary.withdrawalList = summaryData.withdrawalList;
-  computationSummary.terminationList = summaryData.terminationList;
-  computationSummary.carryoverStats = summaryData.carryoverStats;
-  computationSummary.failedStudents = summaryData.failedStudents;
-
-  // DEBUG: Log before save
-  console.log('📤 Saving computation summary with:');
-  const listsMap = computationSummary.studentListsByLevel;
-  if (listsMap instanceof Map) {
-    for (const [level, lists] of listsMap.entries()) {
-      console.log(`  Level ${level}: Pass=${lists?.passList?.length || 0}, Termination=${lists?.terminationList?.length || 0}`);
-    }
-  }
-
-  await computationSummary.save();
-
-  console.log(`✅ Preview finalized for ${department.name} - ${activeSemester.name}`);
 }
 
 /**
