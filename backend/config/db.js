@@ -3,12 +3,13 @@ import mongoose from "mongoose";
 
 dotenv.config();
 
-const { MONGODB_URI2 } = process.env;
+const { MONGODB_URI2, MONGODB_URI1} = process.env;
 
 let isConnected = false;
 
 const connectToDB = async () => {
   try {
+
     if (isConnected) {
       return mongoose.connection;
     }
@@ -20,6 +21,9 @@ const connectToDB = async () => {
     });
 
     isConnected = true;
+
+
+    await mongoose.connect(MONGODB_URI);
 
     console.log("✅ Connected to MongoDB");
 
