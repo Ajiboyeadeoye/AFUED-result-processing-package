@@ -625,7 +625,7 @@ function escapeXml(unsafe) {
  * ------------------------------------------------------------ */
 const fetchData = async (payload, Model, options = {}) => {
   const overallStart = logWithTime(`🚀 Starting fetchData for ${Model.modelName}`);
-  
+
   // Build query from payload
   const {
     query,
@@ -636,13 +636,15 @@ const fetchData = async (payload, Model, options = {}) => {
     extraParams,
     currentPage,
   } = queryBuilder(payload, options);
-  
+
   // Determine if we need aggregation pipeline
-  const needsAggregation = shouldUseAggregationPipeline(query, options);
-  
+  // const needsAggregation = shouldUseAggregationPipeline(query, options);
+  const needsAggregation = !options.forceFind && shouldUseAggregationPipeline(query, options);
+
+
   let dataQuery;
   let queryBuildTime;
-  
+
   if (needsAggregation) {
     queryBuildTime = logWithTime(`🔄 Building aggregation pipeline`);
     dataQuery = await executeAggregationPipeline(Model, query, finalSort, options, {
@@ -662,7 +664,7 @@ const fetchData = async (payload, Model, options = {}) => {
     });
     logWithTime(`✅ Find query built`, queryBuildTime);
   }
-  
+
   // Execute query
   const queryStart = logWithTime(`📡 Executing database query`);
   let data;
@@ -673,17 +675,17 @@ const fetchData = async (payload, Model, options = {}) => {
     logWithTime(`❌ Database query failed`, queryStart);
     throw error;
   }
-  
+
   // Post-processing
   data = await postProcessData(data, options, extraParams);
-  
+
   // Pagination info
   let pagination = null;
   if (enablePagination && !extraParams.asFile) {
     const countStart = logWithTime(`🔢 Counting total documents`);
     const totalItems = await Model.countDocuments(query);
     logWithTime(`✅ Document count completed`, countStart);
-    
+
     pagination = {
       current_page: currentPage,
       limit: itemsPerPage,
@@ -691,14 +693,14 @@ const fetchData = async (payload, Model, options = {}) => {
       total_items: totalItems,
     };
   }
-  
+
   const totalTime = logWithTime(`🎉 fetchData completed for ${Model.modelName}`, overallStart);
-  
+
   // Performance summary
   if (ENABLE_PERFORMANCE_LOG) {
     logPerformanceSummary(Model.modelName, totalTime, data?.length || 0, enablePagination, needsAggregation, currentPage, itemsPerPage);
   }
-  
+
   return {
     data,
     pagination,
@@ -723,24 +725,24 @@ const fetchData = async (payload, Model, options = {}) => {
  */
 function shouldUseAggregationPipeline(query, options) {
   const { custom_fields = {}, additionalFilters = {} } = options;
-  
+
   // Check if we have any custom fields
   const hasCustomFields = Object.keys(custom_fields).length > 0;
   if (!hasCustomFields) return false;
-  
+
   // Check for nested filters in query or additionalFilters
   const hasNestedInQuery = hasNestedFilters(query, custom_fields);
   const hasNestedInAdditional = hasNestedFilters(additionalFilters, custom_fields);
-  
+
   // Check if custom fields contain nested paths
   const hasNestedCustomFields = Object.values(custom_fields).some(fieldDef => {
     const path = getPathFromFieldDef(fieldDef);
     return path && path.includes('.');
   });
-  
+
   // Check for $or conditions in query
   const hasOrConditions = query.$or && query.$or.length > 0;
-  
+
   // Use aggregation if any nested conditions exist
   return hasNestedInQuery || hasNestedInAdditional || hasNestedCustomFields || hasOrConditions;
 }
@@ -750,12 +752,12 @@ function shouldUseAggregationPipeline(query, options) {
  */
 function hasNestedFilters(filter, customFields = {}) {
   if (!filter || typeof filter !== 'object') return false;
-  
+
   for (const key in filter) {
     if (!filter.hasOwnProperty(key)) continue;
-    
+
     const value = filter[key];
-    
+
     // Check for $or or $and operators
     if (key === '$or' || key === '$and') {
       if (Array.isArray(value)) {
@@ -767,17 +769,17 @@ function hasNestedFilters(filter, customFields = {}) {
       }
       return true; // $or and $and always go to post-lookup
     }
-    
+
     // Check for nested paths
     if (key.includes('.')) {
       return true;
     }
-    
+
     // Check if field is in custom_fields (deferred match)
     if (customFields && customFields[key]) {
       return true;
     }
-    
+
     // Recursively check nested objects
     if (value && typeof value === 'object' && !Array.isArray(value) && !(value instanceof RegExp)) {
       if (hasNestedFilters(value, customFields)) {
@@ -785,7 +787,7 @@ function hasNestedFilters(filter, customFields = {}) {
       }
     }
   }
-  
+
   return false;
 }
 
@@ -794,11 +796,11 @@ function hasNestedFilters(filter, customFields = {}) {
  */
 function extractRootRefs(customFields) {
   const rootRefs = new Set();
-  
+
   Object.values(customFields || {}).forEach(fieldDef => {
     const path = getPathFromFieldDef(fieldDef);
     if (!path) return;
-    
+
     const parts = path.split('.');
     if (parts.length === 1) {
       rootRefs.add(path);
@@ -806,7 +808,7 @@ function extractRootRefs(customFields) {
       rootRefs.add(parts[0]);
     }
   });
-  
+
   return Array.from(rootRefs);
 }
 
@@ -815,14 +817,14 @@ function extractRootRefs(customFields) {
  */
 function extractNestedRefs(customFields) {
   const nestedRefs = new Set();
-  
+
   Object.values(customFields || {}).forEach(fieldDef => {
     const path = getPathFromFieldDef(fieldDef);
     if (path && path.includes('.') && path.split('.').length > 1) {
       nestedRefs.add(path);
     }
   });
-  
+
   return Array.from(nestedRefs);
 }
 
@@ -841,27 +843,27 @@ function extractNestedRefs(customFields) {
 function splitFiltersIntoRootAndDeferred(query, customFields = {}) {
   const rootMatch = { ...query };
   const deferredMatch = {};
-  
+
   // Remove $or/$and from root match (they always go to deferred)
   delete rootMatch.$or;
   delete rootMatch.$and;
-  
+
   // Identify fields that should be deferred
   for (const key in rootMatch) {
     if (!rootMatch.hasOwnProperty(key)) continue;
-    
+
     const shouldDefer = key.includes('.') || (customFields && customFields[key]);
-    
+
     if (shouldDefer) {
       deferredMatch[key] = rootMatch[key];
       delete rootMatch[key];
     }
   }
-  
+
   // Add $or/$and back to deferred match if they exist
   if (query.$or) deferredMatch.$or = query.$or;
   if (query.$and) deferredMatch.$and = query.$and;
-  
+
   return { rootMatch, deferredMatch };
 }
 
@@ -871,7 +873,7 @@ function splitFiltersIntoRootAndDeferred(query, customFields = {}) {
 function buildLookups(Model, rootRefs, nestedRefs) {
   const lookups = [];
   const processedRefs = new Set();
-  
+
   // Get actual collection names from models
   const getCollectionName = (modelName) => {
     try {
@@ -882,23 +884,23 @@ function buildLookups(Model, rootRefs, nestedRefs) {
       return modelName.toLowerCase() + 's';
     }
   };
-  
+
   // Process root references (like "student", "semester")
   for (const ref of rootRefs) {
     if (processedRefs.has(ref)) continue;
-    
+
     // Get schema information
     const schema = Model.schema;
     const schemaPath = schema.path(ref);
-    
+
     if (!schemaPath || !schemaPath.options || !schemaPath.options.ref) {
       console.warn(`Field "${ref}" is not a reference in ${Model.modelName}`);
       continue;
     }
-    
+
     const refModel = schemaPath.options.ref;
     const collectionName = getCollectionName(refModel);
-    
+
     lookups.push({
       $lookup: {
         from: collectionName,
@@ -907,31 +909,31 @@ function buildLookups(Model, rootRefs, nestedRefs) {
         as: ref,
       }
     });
-    
+
     lookups.push({
       $unwind: { path: `$${ref}`, preserveNullAndEmptyArrays: true }
     });
-    
+
     processedRefs.add(ref);
   }
-  
+
   // Process nested references (like "student._id")
   for (const nestedPath of nestedRefs) {
     const parts = nestedPath.split('.');
     if (parts.length < 2) continue;
-    
+
     const [rootRef, nestedRef] = parts;
-    
+
     // First, ensure the root document is populated
     if (!processedRefs.has(rootRef)) {
       // Check if rootRef is a reference in the main model
       const schema = Model.schema;
       const rootSchemaPath = schema.path(rootRef);
-      
+
       if (rootSchemaPath && rootSchemaPath.options && rootSchemaPath.options.ref) {
         const refModel = rootSchemaPath.options.ref;
         const collectionName = getCollectionName(refModel);
-        
+
         lookups.push({
           $lookup: {
             from: collectionName,
@@ -940,18 +942,18 @@ function buildLookups(Model, rootRefs, nestedRefs) {
             as: rootRef,
           }
         });
-        
+
         lookups.push({
           $unwind: { path: `$${rootRef}`, preserveNullAndEmptyArrays: true }
         });
-        
+
         processedRefs.add(rootRef);
       } else {
         console.warn(`Root reference "${rootRef}" not found in schema`);
         continue;
       }
     }
-    
+
     // Now handle the nested reference
     // Get the referenced model for rootRef
     const rootSchemaPath = Model.schema.path(rootRef);
@@ -959,23 +961,23 @@ function buildLookups(Model, rootRefs, nestedRefs) {
       console.warn(`Cannot find model for "${rootRef}"`);
       continue;
     }
-    
+
     const rootModelName = rootSchemaPath.options.ref;
-    
+
     try {
       const RootModel = mongoose.model(rootModelName);
       const nestedSchemaPath = RootModel.schema.path(nestedRef);
-      
+
       if (!nestedSchemaPath || !nestedSchemaPath.options || !nestedSchemaPath.options.ref) {
         console.warn(`"${nestedRef}" is not a reference in ${rootModelName}`);
         continue;
       }
-      
+
       const nestedRefModel = nestedSchemaPath.options.ref;
       const nestedCollectionName = getCollectionName(nestedRefModel);
-      
+
       const asField = `${rootRef}_${nestedRef}`;
-      
+
       lookups.push({
         $lookup: {
           from: nestedCollectionName,
@@ -984,26 +986,57 @@ function buildLookups(Model, rootRefs, nestedRefs) {
           as: asField,
         }
       });
-      
+
       lookups.push({
         $unwind: { path: `$${asField}`, preserveNullAndEmptyArrays: true }
       });
-      
+
     } catch (err) {
       console.error(`Error processing nested path "${nestedPath}":`, err.message);
     }
   }
-  
+
   return lookups;
 }
 /**
  * Resolve reference model and local field
  */
+// function resolveReference(Model, ref) {
+//   let refPath = Model.schema.path(ref);
+//   let refModel = refPath?.options?.ref;
+//   let localField = ref;
+
+//   // Handle shared _id references
+//   if (!refModel && ref === "_id") {
+//     const idPath = Model.schema.path("_id");
+//     if (idPath?.options?.ref) {
+//       return {
+//         refModel: idPath.options.ref,
+//         localField: "_id"
+//       };
+//     }
+//   }
+
+//   // Try alternative field patterns
+//   if (!refModel) {
+//     const altPaths = [`${ref}Id`, `${ref}_id`];
+//     for (const alt of altPaths) {
+//       const altPath = Model.schema.path(alt);
+//       if (altPath?.options?.ref) {
+//         refModel = altPath.options.ref;
+//         localField = alt;
+//         break;
+//       }
+//     }
+//   }
+
+//   return { refModel, localField };
+// }
 function resolveReference(Model, ref) {
   let refPath = Model.schema.path(ref);
   let refModel = refPath?.options?.ref;
   let localField = ref;
-  
+
   // Handle shared _id references
   if (!refModel && ref === "_id") {
     const idPath = Model.schema.path("_id");
@@ -1014,10 +1047,10 @@ function resolveReference(Model, ref) {
       };
     }
   }
-  
+
   // Try alternative field patterns
   if (!refModel) {
-    const altPaths = [`${ref}Id`, `${ref}_id`];
+    const altPaths = [`${ref}Id`, `${ref}_id`, `${ref}`];
     for (const alt of altPaths) {
       const altPath = Model.schema.path(alt);
       if (altPath?.options?.ref) {
@@ -1027,7 +1060,7 @@ function resolveReference(Model, ref) {
       }
     }
   }
-  
+
   return { refModel, localField };
 }
 
@@ -1044,7 +1077,7 @@ function getNestedModelName(Model, rootRef, nestedRef) {
       return nestedPath.options.ref;
     }
   }
-  
+
   // Fallback to capitalized version
   return capitalize(nestedRef);
 }
@@ -1056,13 +1089,13 @@ function buildPostLookupMatch(deferredMatch, customFields) {
   if (!deferredMatch || Object.keys(deferredMatch).length === 0) {
     return null;
   }
-  
+
   const matchStage = { ...deferredMatch };
-  
+
   // Transform custom field paths in deferred match
   for (const key in matchStage) {
     if (!matchStage.hasOwnProperty(key)) continue;
-    
+
     if (customFields && customFields[key]) {
       const path = getPathFromFieldDef(customFields[key]);
       if (path) {
@@ -1071,7 +1104,7 @@ function buildPostLookupMatch(deferredMatch, customFields) {
       }
     }
   }
-  
+
   return { $match: matchStage };
 }
 
@@ -1080,34 +1113,34 @@ function buildPostLookupMatch(deferredMatch, customFields) {
  */
 function buildAggregationPipeline(Model, query, sort, customFields, pagination) {
   const pipeline = [];
-  
+
   // Phase 1: Pre-lookup match
   const { rootMatch, deferredMatch } = splitFiltersIntoRootAndDeferred(query, customFields);
   if (Object.keys(rootMatch).length > 0) {
     pipeline.push({ $match: rootMatch });
   }
-  
+
   // Phase 2: Lookups
   const rootRefs = extractRootRefs(customFields);
   const nestedRefs = extractNestedRefs(customFields);
   const lookups = buildLookups(Model, rootRefs, nestedRefs);
   pipeline.push(...lookups);
-  
+
   // Phase 3: Post-lookup match
   const postMatch = buildPostLookupMatch(deferredMatch, customFields);
   if (postMatch) {
     pipeline.push(postMatch);
   }
-  
+
   // Phase 4: Sorting
   pipeline.push({ $sort: sort });
-  
+
   // Phase 5: Pagination
   if (pagination.enablePagination && !pagination.extraParams.asFile) {
     pipeline.push({ $skip: pagination.skip });
     pipeline.push({ $limit: pagination.itemsPerPage });
   }
-  
+
   return pipeline;
 }
 
@@ -1116,9 +1149,9 @@ function buildAggregationPipeline(Model, query, sort, customFields, pagination) 
  */
 async function executeAggregationPipeline(Model, query, sort, options, pagination) {
   const { custom_fields = {} } = options;
-  
+
   const pipeline = buildAggregationPipeline(Model, query, sort, custom_fields, pagination);
-  
+
   if (ENABLE_PERFORMANCE_LOG) {
     console.log('📊 Aggregation pipeline:', JSON.stringify(pipeline, null, 2));
   }
@@ -1131,20 +1164,20 @@ async function executeAggregationPipeline(Model, query, sort, options, paginatio
  */
 async function executeFindQuery(Model, query, sort, options, pagination) {
   let dataQuery = Model.find(query).sort(sort);
-  
+
   // Build populate configuration
   const populateConfig = buildPopulateConfig(Model, options);
-  
+
   // Apply populate
   for (const p of populateConfig) {
     dataQuery = dataQuery.populate(p);
   }
-  
+
   // Apply pagination
   if (pagination.enablePagination && !pagination.extraParams.asFile) {
     dataQuery = dataQuery.skip(pagination.skip).limit(pagination.itemsPerPage);
   }
-  
+
   return dataQuery;
 }
 
@@ -1153,7 +1186,7 @@ async function executeFindQuery(Model, query, sort, options, pagination) {
  */
 function buildPopulateConfig(Model, options) {
   const { populate = [], custom_fields = {}, autoPopulate = true } = options;
-  
+
   // Get nested populate paths from custom fields
   const nestedPopulatePaths = [];
   Object.values(custom_fields).forEach(fieldDef => {
@@ -1162,18 +1195,18 @@ function buildPopulateConfig(Model, options) {
       nestedPopulatePaths.push(path);
     }
   });
-  
+
   const nestedPopulate = buildNestedPopulate(Model, nestedPopulatePaths);
-  
+
   // Merge manual populate + nested populate
   const manualPopulate = [].concat(populate);
   const normalize = (p) => (typeof p === 'string' ? { path: p } : p || {});
-  
+
   // Add auto-populated fields
   if (autoPopulate !== false) {
     const schemaPaths = Model.schema.paths;
     const declaredPaths = new Set(manualPopulate.map(p => normalize(p).path));
-    
+
     for (const key in schemaPaths) {
       const path = schemaPaths[key];
       if (path.options?.ref && !declaredPaths.has(key)) {
@@ -1182,7 +1215,7 @@ function buildPopulateConfig(Model, options) {
       }
     }
   }
-  
+
   // Merge all populate configurations
   return mergePopulateConfigs(manualPopulate, nestedPopulate);
 }
@@ -1192,7 +1225,7 @@ function buildPopulateConfig(Model, options) {
  */
 function mergePopulateConfigs(manualPopulate, nestedPopulate) {
   const map = new Map();
-  
+
   // Add manual populate first (takes precedence)
   for (const m of manualPopulate) {
     const normalized = normalizePopulate(m);
@@ -1201,11 +1234,11 @@ function mergePopulateConfigs(manualPopulate, nestedPopulate) {
       populate: [].concat(normalized.populate || [])
     });
   }
-  
+
   // Merge nested populate
   for (const nRaw of nestedPopulate || []) {
     const normalized = normalizePopulate(nRaw);
-    
+
     if (!map.has(normalized.path)) {
       map.set(normalized.path, {
         ...normalized,
@@ -1214,18 +1247,18 @@ function mergePopulateConfigs(manualPopulate, nestedPopulate) {
     } else {
       const existing = map.get(normalized.path);
       existing.populate = existing.populate || [];
-      
+
       const nestedSubs = [].concat(normalized.populate || []);
       for (const sub of nestedSubs) {
         const subPath = normalizePopulate(sub).path;
         const exists = existing.populate.some(p => normalizePopulate(p).path === subPath);
         if (!exists) existing.populate.push(sub);
       }
-      
+
       map.set(normalized.path, existing);
     }
   }
-  
+
   return Array.from(map.values());
 }
 
@@ -1253,24 +1286,24 @@ async function executeDatabaseQuery(dataQuery) {
  */
 async function postProcessData(data, options, extraParams) {
   if (!Array.isArray(data) || data.length === 0) return data;
-  
+
   let processedData = [...data];
-  
+
   // Flatten custom fields
   if (options.custom_fields) {
     processedData = flattenCustomFields(processedData, options.custom_fields);
   }
-  
+
   // Apply transformations
   if (options.configMap) {
     processedData = await applyTransformations(processedData, options.configMap);
   }
-  
+
   // Remove excluded fields
   if (Array.isArray(extraParams?.excludeFields)) {
     processedData = removeExcludedFields(processedData, extraParams.excludeFields);
   }
-  
+
   return processedData;
 }
 
@@ -1280,10 +1313,10 @@ async function postProcessData(data, options, extraParams) {
 function flattenCustomFields(data, customFields) {
   return data.map(item => {
     const newItem = { ...item };
-    
+
     for (const [field, fieldDef] of Object.entries(customFields)) {
       let value;
-      
+
       if (typeof fieldDef === 'string') {
         value = getNestedValue(item, fieldDef);
       } else if (fieldDef && typeof fieldDef === 'object') {
@@ -1291,18 +1324,18 @@ function flattenCustomFields(data, customFields) {
         if (path) {
           value = getNestedValue(item, path);
         }
-        
+
         // Use fallback if value is undefined
         if (value === undefined && fieldDef.fallback) {
           value = item[fieldDef.fallback];
         }
       }
-      
+
       if (value !== undefined) {
         newItem[field] = value;
       }
     }
-    
+
     return newItem;
   });
 }
@@ -1349,7 +1382,14 @@ function logPerformanceSummary(modelName, totalTime, recordCount, paginationEnab
 export const fetchDataHelper = async (req, res, Model, options = {}) => {
   try {
 
-    const payload = req.method === 'GET' ? req.query : req.body;
+    // const payload = req.method === 'GET' ? req.query : req.body;
+    const rawPayload =
+      req.method === "GET"
+        ? req.query
+        : req.body;
+
+    const payload = rawPayload || {};
+
     const { returnType = 'response', ...fetchOptions } = options;
 
     // Get the data using the core fetcher
@@ -1357,7 +1397,7 @@ export const fetchDataHelper = async (req, res, Model, options = {}) => {
     const { data, pagination } = result;
 
     // Enhanced export handling
-    const extraParams = payload.extraParams || {};
+    const extraParams = payload?.extraParams || {};
     if (extraParams.asFile) {
       if (returnType === 'object') {
         throw new Error('File export is only available with returnType: "response"');

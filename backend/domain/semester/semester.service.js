@@ -199,7 +199,7 @@ const SemesterService = {
 
         return Semester.findByIdAndUpdate(
             semesterId,
-            { isLocked: true },
+            { isLocked: false },
             { new: true, session }
         );
     },

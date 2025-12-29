@@ -4,6 +4,7 @@ import createToken from "../../utils/createToken.js";
 import Admin from "../admin/admin.model.js";
 import lecturerModel from "../lecturer/lecturer.model.js";
 import studentModel from "../student/student.model.js";
+import departmentService from "../department/department.service.js";
 
 // import Admin from "../models/admin.model.js";
 
@@ -59,12 +60,12 @@ const authenticateAdmin = async (data) => {
 
     // ✅ Step 6: Return safe info
     return {
-        id: fetchedAdmin._id,
-        admin_id: fetchedAdmin.admin_id,
-        email: fetchedAdmin.email,
-        name: fetchedAdmin.name,
-        role: "admin",
-        access_token: token
+      id: fetchedAdmin._id,
+      admin_id: fetchedAdmin.admin_id,
+      email: fetchedAdmin.email,
+      name: fetchedAdmin.name,
+      role: "admin",
+      access_token: token
     };
   } catch (error) {
     console.error("❌ Admin authentication error:", error.message);
@@ -129,14 +130,19 @@ const authenticateLecturer = async (data) => {
     // 🎟️ Step 4: Create login token
     const tokenData = {
       _id: fetchedLecturer._id,
-      staff_id: fetchedLecturer.staff_id,
+      staff_id: fetchedLecturer.staffId,
       email: fetchedLecturer.email,
       role: fetchedUser.role || "lecturer",
+      department: fetchedLecturer.departmentId,
     };
 
     console.log("Creating token with data:", tokenData);
     const token = await createToken(tokenData);
 
+    const departmentName = await departmentService.getDepartmentById(
+      fetchedLecturer.departmentId,
+      { lean: true }
+    ).then(dep => dep?.name || null).catch(() => null);
     // 🧾 Step 5: Attach token (not persisted)
     fetchedUser.token = token;
 
@@ -148,6 +154,8 @@ const authenticateLecturer = async (data) => {
       name: fetchedUser.name,
       role: fetchedUser.role || "lecturer",
       access_token: token,
+      department: departmentName,
+
     };
   } catch (error) {
     console.error("❌ Lecturer authentication error:", error.message);
@@ -211,12 +219,19 @@ const authenticateStudent = async (data) => {
       throw new Error("Invalid password");
     }
 
+    const departmentName = await departmentService.getDepartmentById(
+      fetchedStudent.departmentId,
+      { lean: true }
+    ).then(dep => dep?.name || null).catch(() => null);
     // 🎟️ Step 4: Create login token
     const tokenData = {
       _id: fetchedStudent._id,
       matric_no: fetchedStudent.matricNumber,
       email: fetchedStudent.email,
       role: fetchedUser.role || "student",
+      department: departmentName,
+      level: fetchedUser.level,
+      faculty: fetchedUser.faculty,
     };
 
     console.log("Creating token with data:", tokenData);
@@ -267,13 +282,13 @@ const createNewUser = async (data) => {
       password: hashedPassword,
       role
     });
-    
+
     const createdUser = await newUser.save();
     return createdUser;
   } catch (error) {
     throw error;
   }
-  
+
 };
 // modelsMap can map roles to their respective Mongoose models
 const modelsMap = {
@@ -333,4 +348,4 @@ export const deleteStudent = async (req, res) => {
   return res.status(result.status).json(result);
 };
 
-export { createNewUser, authenticateAdmin, authenticateLecturer , authenticateStudent};
+export { createNewUser, authenticateAdmin, authenticateLecturer, authenticateStudent };

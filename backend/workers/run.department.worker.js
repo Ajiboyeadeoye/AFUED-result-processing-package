@@ -106,22 +106,22 @@ async function startWorker() {
       console.log("[Worker] Processing notification job:", job.attrs._id);
       const { target, recipientId, templateId, message, metadata } = job.attrs.data;
 
-      try {
-        // Call your existing notification controller
-        const result = await sendNotificationCore({
-          target,
-          recipientId,
-          templateId: null,
-          message,
-          metadata
-        });
-        console.log("[Worker] Notification sent successfully:", job.attrs._id);
-        return result;
-      } catch (err) {
-        console.error("[Worker] Notification job failed:", job.attrs._id, err.message);
-        // You can add retry logic here if needed
-        throw err;
-      }
+      // try {
+      //   // Call your existing notification controller
+      //   const result = await sendNotificationCore({
+      //     target,
+      //     recipientId,
+      //     templateId: null,
+      //     message,
+      //     metadata
+      //   });
+      //   console.log("[Worker] Notification sent successfully:", job.attrs._id);
+      //   return result;
+      // } catch (err) {
+      //   console.error("[Worker] Notification job failed:", job.attrs._id, err.message);
+      //   // You can add retry logic here if needed
+      //   throw err;
+      // }
     }
   );
 

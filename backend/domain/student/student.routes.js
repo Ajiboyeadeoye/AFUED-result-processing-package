@@ -17,7 +17,7 @@ import authenticate from "../../middlewares/authenticate.js";
 const router = express.Router();
 
 // 🧩 ADMIN ROUTES
-router.get("/", authenticate("admin"), getAllStudents);
+router.get("/", authenticate(["admin", "hod", "dean"]), getAllStudents);
 router.post("/", authenticate(["admin", "hod", "dean"]), createStudent);
 router.get("/profile", authenticate("student"), getMyProfile);
 router.get("/result/:semesterId", authenticate(["student", "admin", "lecturer"]), getStudentSemesterResult);

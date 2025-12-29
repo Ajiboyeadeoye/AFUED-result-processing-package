@@ -121,7 +121,8 @@ class StudentService {
             terminationStatus: 1,
             cgpa: 1,
             totalCarryovers: 1,
-            departmentId: 1
+            departmentId: 1,
+            suspension: 1
           }
         }
       ]);

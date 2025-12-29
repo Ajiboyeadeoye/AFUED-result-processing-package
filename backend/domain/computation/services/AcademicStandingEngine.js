@@ -1,73 +1,9 @@
 // computation/services/AcademicStandingEngine.js
 import { ACADEMIC_RULES, STUDENT_STATUS, REMARK_CATEGORIES } from "../utils/computationConstants.js";
 import studentSemseterResultModel from "../../student/student.semseterResult.model.js";
+import courseRegistrationModel from "../../course/courseRegistration.model.js";
 
 class AcademicStandingEngine {
-  /**
-   * Determine academic standing for a student
-   * @param {Object} student - Student object
-   * @param {number} semesterGPA - Current semester GPA
-   * @param {number} cgpa - Cumulative GPA
-   * @param {number} carryoverCount - Number of carryovers
-   * @param {string} currentSemesterId - Current semester ID
-   * @returns {Promise<Object>} Academic standing decision
-   */
-  async determineAcademicStanding(student, semesterGPA, cgpa, carryoverCount, currentSemesterId, isFinal = true) {
-    // For non-final computations, we don't actually change student statuses
-    if (!isFinal) {
-      return this._getPreviewStanding(student, semesterGPA, cgpa, carryoverCount);
-    }
-    
-    // Original logic for final computations
-    let probationStatus = student.probationStatus || STUDENT_STATUS.NONE;
-    let terminationStatus = student.terminationStatus || STUDENT_STATUS.NONE;
-    let remark = REMARK_CATEGORIES.GOOD;
-    let actionTaken = null;
-
-    // Check for termination due to excessive carryovers
-    if (carryoverCount >= ACADEMIC_RULES.CARRYOVER_LIMIT) {
-      return this._handleTermination(terminationStatus, remark, actionTaken, "terminated_carryover_limit");
-    }
-
-    // Check CGPA termination rule (if on probation and CGPA below threshold)
-    if (probationStatus === STUDENT_STATUS.PROBATION && cgpa < ACADEMIC_RULES.TERMINATION_THRESHOLD) {
-      const shouldTerminate = await this._checkConsecutiveProbation(
-        student._id,
-        currentSemesterId,
-        ACADEMIC_RULES.PROBATION_SEMESTER_LIMIT
-      );
-
-      if (shouldTerminate) {
-        return this._handleWithdrawal(terminationStatus, remark, actionTaken, "withdrawn_cgpa_low");
-      }
-    }
-
-    // Check for probation
-    if (semesterGPA < ACADEMIC_RULES.PROBATION_THRESHOLD && terminationStatus === STUDENT_STATUS.NONE) {
-      if (probationStatus === STUDENT_STATUS.NONE) {
-        probationStatus = STUDENT_STATUS.PROBATION;
-        actionTaken = "placed_on_probation";
-      }
-      remark = REMARK_CATEGORIES.PROBATION;
-    }
-    // Check for probation lifting
-    else if (probationStatus === STUDENT_STATUS.PROBATION && semesterGPA >= ACADEMIC_RULES.GOOD_GPA) {
-      probationStatus = STUDENT_STATUS.PROBATION_LIFTED;
-      actionTaken = "probation_lifted";
-      remark = REMARK_CATEGORIES.GOOD;
-    }
-    // Check for excellent performance
-    else if (semesterGPA >= ACADEMIC_RULES.EXCELLENT_GPA) {
-      remark = REMARK_CATEGORIES.EXCELLENT;
-    }
-
-    return {
-      probationStatus,
-      terminationStatus,
-      remark,
-      actionTaken
-    };
-  }
 
   /**
    * Optimized academic standing determination (without DB calls)
@@ -75,31 +11,32 @@ class AcademicStandingEngine {
    * @param {number} semesterGPA - Current semester GPA
    * @param {number} currentCGPA - Cumulative GPA
    * @param {number} totalCarryovers - Total carryovers
+   * @param {boolean} isFinal - Whether this is final computation
    * @returns {Object} Academic standing
    */
-  determineAcademicStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers, isFinal=true) {
+  async determineAcademicStanding(student, semesterGPA, currentCGPA, totalCarryovers, semesterId, isFinal = true) {
+    // Check non-registration first
+    const nonRegResult = await this._handleNonRegistration(student, semesterId, isFinal);
+    if (nonRegResult) {
+      console.log("nonRegResult")
+      return nonRegResult;
+    }
+
     // For non-final computations, just calculate the status without actions
     if (!isFinal) {
-      return this._getPreviewStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers);
+      return this._getPreviewStanding(student, semesterGPA, currentCGPA, totalCarryovers, semesterId);
     }
-    
-    // Original logic for final computations
+
+    // Rules based on refined requirements
     const rules = {
+      withdrawal: currentCGPA < 1.0 && student.level > 1,
       probation: currentCGPA < 1.5 || semesterGPA < 1.0,
-      withdrawn: currentCGPA < 1.0 && student.level > 1,
-      terminated: totalCarryovers > 8 || (currentCGPA < 0.5 && student.level > 2)
+      excellent: currentCGPA >= 4.0,
+      good: currentCGPA >= 3.0
     };
 
-    if (rules.terminated) {
-      return {
-        probationStatus: STUDENT_STATUS.NONE,
-        terminationStatus: STUDENT_STATUS.TERMINATED,
-        remark: REMARK_CATEGORIES.TERMINATED,
-        actionTaken: "terminated_carryover_limit"
-      };
-    }
-
-    if (rules.withdrawn) {
+    // Withdrawal has highest priority
+    if (rules.withdrawal) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
         terminationStatus: STUDENT_STATUS.WITHDRAWN,
@@ -108,6 +45,7 @@ class AcademicStandingEngine {
       };
     }
 
+    // Probation check
     if (rules.probation) {
       return {
         probationStatus: STUDENT_STATUS.PROBATION,
@@ -117,7 +55,8 @@ class AcademicStandingEngine {
       };
     }
 
-    if (currentCGPA >= 4.0) {
+    // Performance remarks
+    if (rules.excellent) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
         terminationStatus: STUDENT_STATUS.NONE,
@@ -126,7 +65,7 @@ class AcademicStandingEngine {
       };
     }
 
-    if (currentCGPA >= 3.0) {
+    if (rules.good) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
         terminationStatus: STUDENT_STATUS.NONE,
@@ -135,6 +74,7 @@ class AcademicStandingEngine {
       };
     }
 
+    // Default standing
     return {
       probationStatus: STUDENT_STATUS.NONE,
       terminationStatus: STUDENT_STATUS.NONE,
@@ -142,30 +82,23 @@ class AcademicStandingEngine {
       actionTaken: "none"
     };
   }
- /**
-   * Get preview standing without changing actual statuses
+
+  /**
+   * Get preview standing without changing actual statuses (optimized version)
    */
-  _getPreviewStandingOptimized(student, semesterGPA, currentCGPA, totalCarryovers) {
+  _getPreviewStanding(student, semesterGPA, currentCGPA, totalCarryovers) {
     const rules = {
+      withdrawal: currentCGPA < 1.0 && student.level > 100,
       probation: currentCGPA < 1.5 || semesterGPA < 1.0,
-      withdrawn: currentCGPA < 1.0 && student.level > 1,
-      terminated: totalCarryovers > 8 || (currentCGPA < 0.5 && student.level > 2)
+      excellent: currentCGPA >= 4.0,
+      good: currentCGPA >= 3.0
     };
 
-    if (rules.terminated) {
-      return {
-        probationStatus: STUDENT_STATUS.PROBATION, // Preview only, not actual
-        terminationStatus: STUDENT_STATUS.TERMINATED, // Preview only
-        remark: REMARK_CATEGORIES.TERMINATED,
-        actionTaken: "would_be_terminated_carryover_limit",
-        isPreview: true
-      };
-    }
 
-    if (rules.withdrawn) {
+    if (rules.withdrawal) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
-        terminationStatus: STUDENT_STATUS.WITHDRAWN, // Preview only
+        terminationStatus: STUDENT_STATUS.WITHDRAWN,
         remark: REMARK_CATEGORIES.WITHDRAWN,
         actionTaken: "would_be_withdrawn_cgpa_low",
         isPreview: true
@@ -173,16 +106,17 @@ class AcademicStandingEngine {
     }
 
     if (rules.probation) {
-      return {
-        probationStatus: STUDENT_STATUS.PROBATION, // Preview only
+      const data = {
+        probationStatus: STUDENT_STATUS.PROBATION,
         terminationStatus: STUDENT_STATUS.NONE,
         remark: REMARK_CATEGORIES.PROBATION,
         actionTaken: student.probationStatus === STUDENT_STATUS.NONE ? "would_be_placed_on_probation" : "probation_continued",
         isPreview: true
       };
+      return data
     }
 
-    if (currentCGPA >= 4.0) {
+    if (rules.excellent) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
         terminationStatus: STUDENT_STATUS.NONE,
@@ -192,7 +126,7 @@ class AcademicStandingEngine {
       };
     }
 
-    if (currentCGPA >= 3.0) {
+    if (rules.good) {
       return {
         probationStatus: STUDENT_STATUS.NONE,
         terminationStatus: STUDENT_STATUS.NONE,
@@ -211,14 +145,12 @@ class AcademicStandingEngine {
     };
   }
 
-
-
   /**
    * Check consecutive probation semesters
    * @param {string} studentId - Student ID
    * @param {string} currentSemesterId - Current semester ID
    * @param {number} limit - Probation semester limit
-   * @returns {Promise<boolean>} True if should be terminated
+   * @returns {Promise<boolean>} True if should be withdrawn
    */
   async _checkConsecutiveProbation(studentId, currentSemesterId, limit) {
     try {
@@ -239,23 +171,6 @@ class AcademicStandingEngine {
   }
 
   /**
-   * Handle termination case
-   * @param {string} terminationStatus - Current termination status
-   * @param {string} remark - Current remark
-   * @param {string} actionTaken - Action taken
-   * @param {string} action - Specific action
-   * @returns {Object} Updated standing
-   */
-  _handleTermination(terminationStatus, remark, actionTaken, action) {
-    return {
-      probationStatus: STUDENT_STATUS.NONE,
-      terminationStatus: STUDENT_STATUS.TERMINATED,
-      remark: REMARK_CATEGORIES.TERMINATED,
-      actionTaken: action
-    };
-  }
-
-  /**
    * Handle withdrawal case
    * @param {string} terminationStatus - Current termination status
    * @param {string} remark - Current remark
@@ -269,6 +184,74 @@ class AcademicStandingEngine {
       terminationStatus: STUDENT_STATUS.WITHDRAWN,
       remark: REMARK_CATEGORIES.WITHDRAWN,
       actionTaken: action
+    };
+  }
+
+  /**
+   * Check if student did not register for current semester
+   */
+  async _didNotRegister(studentId, currentSemesterId) {
+    const record = await courseRegistrationModel.exists({
+      student: studentId,
+      semester: currentSemesterId
+    });
+    return !record;
+  }
+
+  /**
+   * Handle non-registration cases
+   */
+  async _handleNonRegistration(student, currentSemesterId, isFinal) {
+    const didNotRegister = await this._didNotRegister(
+      student._id,
+      currentSemesterId
+    );
+
+    if (!didNotRegister) return null;
+
+    // Check existing suspension status
+    if (student.suspension?.status) {
+      // Second offense → terminate
+      if (student.suspension.reason === "NO_REGISTRATION") {
+        return {
+          probationStatus: STUDENT_STATUS.NONE,
+          terminationStatus: STUDENT_STATUS.TERMINATED,
+          remark: REMARK_CATEGORIES.TERMINATED,
+          actionTaken: isFinal
+            ? "terminated_non_registration"
+            : "would_be_terminated_non_registration",
+          isPreview: !isFinal,
+          reason: "No Registration Data"
+        };
+      }
+
+      // School-approved suspension → respect it
+      if (student.suspension.reason === "SCHOOL_APPROVED") {
+        return {
+          probationStatus: STUDENT_STATUS.NONE,
+          terminationStatus: STUDENT_STATUS.NONE,
+          remark: REMARK_CATEGORIES.SUSPENDED,
+          actionTaken: "school_approved_suspension_respected",
+          isPreview: !isFinal
+        };
+      }
+    }
+
+    // First offense → suspend
+    return {
+      probationStatus: STUDENT_STATUS.NONE,
+      terminationStatus: STUDENT_STATUS.NONE,
+      remark: REMARK_CATEGORIES.SUSPENDED,
+      reason: "Suspended due to no registration data",
+      actionTaken: isFinal
+        ? "suspended_no_registration"
+        : "would_be_suspended_no_registration",
+      suspension: {
+        status: true,
+        reason: "NO_REGISTRATION",
+        sinceSemesterId: currentSemesterId
+      },
+      isPreview: !isFinal
     };
   }
 

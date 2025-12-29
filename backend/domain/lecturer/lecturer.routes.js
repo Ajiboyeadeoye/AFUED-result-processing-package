@@ -15,9 +15,9 @@ import authenticate from "../../middlewares/authenticate.js";
 const router = express.Router();
 
 // 🧩 ADMIN ROUTES
-router.post("/", authenticate(["admin", "hod"]), createLecturer);
-router.get("/", authenticate(["admin", "hod"]), getAllLecturers);
-router.get("/hods", authenticate(["admin", "hod"]), getAllHODs);
+router.post("/", authenticate(["admin", "hod", "dean"]), createLecturer);
+router.get("/", authenticate(["admin", "hod", "dean"]), getAllLecturers);
+router.get("/hods", authenticate(["admin", "dean"]), getAllHODs);
 router.get("/deans", authenticate(["admin"]), getAllDeans);
 router.patch("/:id", authenticate(["admin", "hod"]), updateLecturer);
 

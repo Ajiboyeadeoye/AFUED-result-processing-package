@@ -9,6 +9,9 @@ import { dataMaps } from "../../config/dataMap.js";
 import studentModel from "./student.model.js";
 import mongoose from "mongoose";
 import studentSemseterResultModel from "./student.semseterResult.model.js";
+import courseService from "../course/course.service.js";
+import departmentService from "../department/department.service.js";
+import facultyService from "../faculty/faculty.service.js";
 
 
 /**
@@ -47,7 +50,7 @@ export const registerCourses = async (req, res) => {
     if (!student) return buildResponse(res, 404, "Student not found");
 
     // Ensure all course IDs are valid
-    const validCourses = await Course.find({ _id: { $in: courseIds } });
+    const validCourses = await courseService.findByIds(courseIds);
     if (validCourses.length !== courseIds.length)
       return buildResponse(res, 400, "One or more courses are invalid");
 
@@ -149,51 +152,58 @@ export const printTranscript = async (req, res) => {
 
 // 🧾 Get all students (Admin only)
 export const getAllStudents = async (req, res) => {
-      let additionalFilters = {};
-      if (req.user.role === 'hod') {
-        const departmnet = await departmentModel.findOne({ hod: req.user._id });
-        if (departmnet) {
-          additionalFilters.departmentId = departmnet._id;
-        }
+  let additionalFilters = {};
+
+  if (req.user.role === "hod") {
+    const department = await departmentService.getDepartmentByHod(req.user._id);
+    if (department) {
+      additionalFilters.departmentId = department._id;
+    }
+  }
+
+  if (req.user.role === "dean") {
+    const faculty = await facultyService.getFacultyByDean(req.user._id);
+    if (faculty) {
+      additionalFilters.facultyId = faculty._id;
+    }
+  }
+
+  return await fetchDataHelper(req, res, Student, {
+    configMap: dataMaps.Student,
+    autoPopulate: true,
+    models: { departmentModel, User },
+    populate: ["departmentId", "_id"],
+    custom_fields: {
+      name: {
+        path: "_id.name",
+        searchPath: "_id.name",
+        alias: "student_user_info",
+        as: "studentName"
+      },
+      email: {
+        path: "_id.email",
+        searchPath: "_id.email",
+        alias: "student_user_info",
+        as: "studentEmail"
+      },
+      departmentName: {
+        path: "departmentId.name",
+        searchPath: "departmentId.name",
+        alias: "student_dept_info",
+        as: "department"
+      },
+      departmentCode: {
+        path: "departmentId.code",
+        searchPath: "departmentId.code",
+        alias: "student_dept_info",
+        as: "departmentCode"
       }
-
-      return await fetchDataHelper(req, res, Student, {
-        configMap: dataMaps.Student,
-        autoPopulate: true,
-        models: { departmentModel, User },
-        populate: ["departmentId", "_id"],
-        custom_fields: {
-          // For User reference (_id field)
-          name: {
-            path: "_id.name",
-            searchPath: "_id.name",
-            alias: "student_user_info", 
-            as: "studentName"
-          },
-          email: {
-            path: "_id.email",
-            searchPath: "_id.email",
-            alias: "student_user_info",  // SAME alias (shares lookup)
-            as: "studentEmail"
-          },
-
-          // For Department reference (departmentId field)
-          departmentName: {
-            path: "departmentId.name",      // ✅ CORRECT: Use departmentId, not department
-            searchPath: "departmentId.name",
-            alias: "student_dept_info",     // UNIQUE alias
-            as: "department"
-          },
-          departmentCode: {
-            path: "departmentId.code",
-            searchPath: "departmentId.code",
-            alias: "student_dept_info",     // SAME alias (shares lookup)
-            as: "departmentCode"
-          }
-        },
-        additionalFilters
-      });
+    },
+    additionalFilters
+  });
 };
+
+
 
 // 🧍 Create a new student (Admin only)
 export const createStudent = async (req, res) => {
@@ -347,9 +357,9 @@ export const deleteStudent = async (req, res) => {
 
 export const getStudentSemesterResult = async (req, res) => {
   try {
-    const {  semesterId } = req.params;
+    const { semesterId } = req.params;
+    const studentId = req.user._id;
 
-    const studentId = req.user._id
     if (!studentId) {
       return buildResponse(res, 400, "Student ID is required");
     }
@@ -363,10 +373,7 @@ export const getStudentSemesterResult = async (req, res) => {
     let resolvedSemesterId = semesterId;
 
     // If semesterId is missing or invalid ObjectId
-    if (
-      !semesterId ||
-      !mongoose.Types.ObjectId.isValid(semesterId)
-    ) {
+    if (!semesterId || !mongoose.Types.ObjectId.isValid(semesterId)) {
       // Find the active semester for the student's department
       const activeSemester = await Semester.findOne({
         department: student.departmentId,
@@ -380,18 +387,81 @@ export const getStudentSemesterResult = async (req, res) => {
       resolvedSemesterId = activeSemester._id;
     }
 
-    // Fetch the student's semester result
+    // Fetch the student's semester result with proper population for borrowed courses
     const result = await studentSemseterResultModel.findOne({
       studentId,
       semesterId: resolvedSemesterId,
     })
-      .populate("courses.courseId")
+      .populate({
+        path: "courses.courseId",
+        populate: {
+          path: "borrowedId",
+          model: "Course",
+        }
+      })
       .populate("semesterId")
       .populate("departmentId")
       .lean();
 
     if (!result) {
       return buildResponse(res, 404, "Semester result not found");
+    }
+
+    // Process courses to handle borrowed courses
+    if (result.courses && result.courses.length > 0) {
+      result.courses = result.courses.map(courseEntry => {
+        if (!courseEntry.courseId) return courseEntry;
+
+        const course = courseEntry.courseId;
+        
+        // If this course borrows from another course, merge the data
+        if (course.borrowedId && typeof course.borrowedId === 'object') {
+          const borrowedCourse = course.borrowedId;
+          
+          // Create a merged course object with borrowed data
+          const effectiveCourse = {
+            // Keep original course metadata
+            _id: course._id,
+            borrowedId: borrowedCourse._id,
+            department: course.department,
+            status: course.status,
+            createdBy: course.createdBy,
+            prerequisites: course.prerequisites,
+            replacement_course_id: course.replacement_course_id,
+            type: course.type,
+            elective_category: course.elective_category,
+            scope: course.scope,
+            faculty: course.faculty,
+            
+            // Use borrowed course's academic data
+            courseCode: borrowedCourse.courseCode || course.courseCode,
+            title: borrowedCourse.title || course.title,
+            description: borrowedCourse.description || course.description,
+            unit: borrowedCourse.unit || course.unit,
+            level: borrowedCourse.level || course.level,
+            semester: borrowedCourse.semester || course.semester,
+            lecture_hours: borrowedCourse.lecture_hours || course.lecture_hours,
+            practical_hours: borrowedCourse.practical_hours || course.practical_hours,
+            
+            // Flag to indicate this is a borrowed course
+            isBorrowed: true,
+            borrowedFromCourseCode: borrowedCourse.courseCode,
+            borrowedFromTitle: borrowedCourse.title,
+          };
+
+          return {
+            ...courseEntry,
+            courseId: effectiveCourse
+          };
+        }
+
+        // If not borrowed, mark it as such for clarity
+        if (course.borrowedId === null) {
+          course.isBorrowed = false;
+        }
+
+        return courseEntry;
+      });
     }
 
     return buildResponse(res, 200, "Result fetched successfully", result);

@@ -14,7 +14,8 @@ import {
   getStudentRegistrations,
   getStudentsForCourse,
   getBorrowedCoursesFromMyDept,
-  getCourseRegistrationReport
+  getCourseRegistrationReport,
+  unassignCourse
 } from "./course.controller.js";
 
 import authenticate from "../../middlewares/authenticate.js";
@@ -65,6 +66,8 @@ router.post("/", authenticate(["hod", "admin"]), createCourse);
 
 /** 👨‍🏫 Assign course to lecturer */
 router.post("/:id/assign", authenticate(["hod", "admin"]), assignCourse);
+router.post("/:id/unassign", authenticate(["hod", "admin"]), unassignCourse);
+
 router.get(
   "/:courseId/results",
   async (req, res) => {

@@ -4,6 +4,7 @@ import studentModel from "../../student/student.model.js";
 import CarryoverCourse from "../../result/carryover.model.js";
 import studentSemseterResultModel from "../../student/student.semseterResult.model.js";
 import ComputationSummary from "../../result/computation.model.js";
+import SummaryListBuilder from "./SummaryListBuilder.js";
 
 class BulkWriter {
   constructor() {
@@ -35,11 +36,6 @@ class BulkWriter {
    * @param {Object} carryoverData - Carryover data
    */
   addCarryover(carryoverData) {
-    console.log(`Adding carryover to buffer:`, {
-      student: carryoverData.student,
-      course: carryoverData.course,
-      semester: carryoverData.semester
-    });
     this.carryoverBuffers.push(carryoverData);
   }
 
@@ -167,6 +163,9 @@ class BulkWriter {
       if (!summary) {
         throw new Error(`Computation summary ${summaryId} not found`);
       }
+
+      // Add department details
+      if(data.departmentDetails !== undefined) summary.departmentDetails = data.departmentDetails;
 
       // Update overall statistics
       if (data.totalStudents !== undefined) summary.totalStudents = data.totalStudents;

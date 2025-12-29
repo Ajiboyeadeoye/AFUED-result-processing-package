@@ -4,6 +4,7 @@ delete mongoose.connection.models['ComputationSummary'];
 delete mongoose.models['ComputationSummary'];
 // Define a subdocument schema
 const courseKeySchema = new mongoose.Schema({
+
   courseId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Course"
@@ -24,12 +25,16 @@ const computationSummarySchema = new mongoose.Schema({
   },
 
 
-// Then use it in your main schema
-keyToCoursesByLevel: {
-  type: Map,
-  of: [courseKeySchema],  // Use the subdocument schema
-  default: new Map()
-},
+  departmentDetails: {
+    type: mongoose.Schema.Types.Mixed, // Or define a proper schema
+    default: null
+  },
+  // Then use it in your main schema
+  keyToCoursesByLevel: {
+    type: Map,
+    of: [courseKeySchema],  // Use the subdocument schema
+    default: new Map()
+  },
   semester: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Semester",
@@ -174,6 +179,7 @@ keyToCoursesByLevel: {
         studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
         matricNumber: String,
         name: String,
+        gpa: Number,
         reason: String,
         remarks: String
       }],
@@ -181,6 +187,7 @@ keyToCoursesByLevel: {
         studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
         matricNumber: String,
         name: String,
+        gpa: Number,
         reason: String,
         remarks: String
       }]

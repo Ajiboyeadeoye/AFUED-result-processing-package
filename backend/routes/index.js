@@ -17,6 +17,8 @@ import adminRoutes from "../domain/admin/index.js"
 import announcementRoutes from "../domain/announcement/index.js";
 import computationRoutes from "../domain/computation/routes/computation.routes.js";
 import systemMonitorRoutes from "../domain/system/systemMonitor.js"
+import authRoutes from "../domain/auth/index.js"
+
 
 
 
@@ -37,5 +39,7 @@ router.use("/admin", adminRoutes)
 router.use("/announcements", announcementRoutes);
 router.use("/computation", computationRoutes)
 router.use('/system', systemMonitorRoutes);
+router.use('/auth', authRoutes);
+
 
 export default router;

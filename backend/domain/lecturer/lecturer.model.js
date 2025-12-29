@@ -21,6 +21,11 @@ const lecturerSchema = new mongoose.Schema(
       required: true
     },
 
+    departmentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Faculty",
+      required: true
+    },
     rank: {
       type: String,
       enum: [

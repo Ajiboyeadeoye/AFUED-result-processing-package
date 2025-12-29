@@ -23,6 +23,7 @@ import courseModel from "./course.model.js";
 import studentModel from "../student/student.model.js";
 import carryOverSchema from "../result/carryover.model.js";
 import CarryoverCourse from "../result/carryover.model.js";
+import departmentService from "../department/department.service.js";
 
 // =========================================================
 // 🧩 Utility Functions
@@ -54,7 +55,7 @@ export const createCourse = async (req, res) => {
 
     // 🛡 HOD restriction: can only create in their department
     if (req.user?.role === "hod") {
-      const hodDept = await departmentModel.findOne({ hod: req.user._id });
+      const hodDept = await departmentService.getDepartmentByHod(req.user._id)
       if (!hodDept) return buildResponse(res, 404, "Department not found for HOD", null, true);
       department = hodDept._id;
     }
@@ -106,7 +107,7 @@ export const createCourse = async (req, res) => {
     await newCourse.save();
 
     // Populate for response
-    return await getCourseById({ params: { courseId: newCourse._id } }, res);
+    await getCourseById({ params: { courseId: newCourse._id } }, res);
 
     // return buildResponse.success(res, "Course created successfully", newCourse);
 
@@ -122,7 +123,7 @@ export const getAllCourses = async (req, res) => {
     let department = null;
 
     if (isHod) {
-      department = await departmentModel.findOne({ hod: req.user?._id });
+      department = await departmentService.getDepartmentByHod(req.user._id)
       if (!department) {
         return buildResponse(res, 404, "Department not found for HOD", null, true);
       }
@@ -131,8 +132,8 @@ export const getAllCourses = async (req, res) => {
     // 🧠 Build filters incrementally
     const additionalFilters = {};
 
-    if (isHod&&!req.params.courseId) {
-      // additionalFilters.department = department._id;
+    if (isHod && !req.params.courseId) {
+      additionalFilters.department = department._id;
     }
 
     if (req.params.courseId) {
@@ -182,7 +183,7 @@ export const getBorrowedCoursesFromMyDept = async (req, res) => {
     }
 
     // 🔹 Get HOD's department
-    const hodDept = await departmentModel.findOne({ hod: req.user._id });
+    const hodDept = await departmentService.getDepartmentByHod(req.user._id)
     if (!hodDept) {
       return buildResponse(res, 404, "Department not found for HOD", null, true);
     }
@@ -260,7 +261,7 @@ export const getCourseById = async (req, res) => {
       // },
     };
 
-    const result = await fetchDataHelper(req, res, Course, fetchConfig);
+    await fetchDataHelper(req, res, Course, fetchConfig);
 
     // Optional: if you ever want single-object response
     // return res.status(200).json(buildResponse(res, 200, "Course fetched", result?.[0] || null));
@@ -311,36 +312,48 @@ export const deleteCourse = async (req, res) => {
 // =========================================================
 
 export const assignCourse = async (req, res) => {
+  let session = null;
   try {
-    // selectedCourseId is the course document user clicked (borrowed-copy or normal course)
-    const { course: selectedCourseId, staffId: lecturer } = req.body;
+    // Start a transaction session
+    session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Fetch the selected course (borrowed or normal)
-    const courseData = await Course.findById(selectedCourseId);
+    // selectedCourseId is the course document user clicked (borrowed-copy or normal course)
+    // assignToAll: optional parameter (default: true) - if true, assign to all related courses
+    const { course: selectedCourseId, staffId: lecturer, assignToAll = true } = req.body;
+
+    // Fetch the selected course (borrowed or normal) within transaction
+    const courseData = await Course.findById(selectedCourseId).session(session);
     if (!courseData) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 404, "Course not found", null, true);
     }
 
-    // Check if this is a borrowed copy
+    // Determine the original course ID
+    const originalCourseId = courseData.borrowedId || selectedCourseId;
     const isBorrowed = !!courseData.borrowedId;
 
-    // Get original course (for HOD check only)
-    const originalCourse = isBorrowed
-      ? await Course.findById(courseData.borrowedId)
-      : courseData;
-
+    // Get original course (for HOD check and finding borrowed copies)
+    const originalCourse = await Course.findById(originalCourseId).session(session);
     if (!originalCourse) {
+      await session.abortTransaction();
+      session.endSession();
       return buildResponse(res, 404, "Original course not found", null, true);
     }
 
     // HOD permission check: only HOD of original department can assign
     if (req.user?.role === "hod") {
-      const hodDept = await departmentModel.findOne({ hod: req.user._id });
+      const hodDept = await departmentModel.findOne({ hod: req.user._id }).session(session);
       if (!hodDept) {
+        await session.abortTransaction();
+        session.endSession();
         return buildResponse(res, 404, "Department not found for HOD", null, true);
       }
 
       if (originalCourse.department.toString() !== hodDept._id.toString()) {
+        await session.abortTransaction();
+        session.endSession();
         return buildResponse(
           res,
           403,
@@ -351,60 +364,328 @@ export const assignCourse = async (req, res) => {
       }
     }
 
-    // The department that controls this assignment is always the selected course's department
-    const assignmentDeptId = courseData.department;
-    if (!assignmentDeptId) {
-      return buildResponse(res, 400, "Department not found for course", null, true);
+    // Determine which courses to assign
+    let coursesToAssign = [];
+
+    if (assignToAll) {
+      // Find all related courses (original + all borrowed copies)
+      coursesToAssign = await Course.find({
+        $or: [
+          { _id: originalCourseId }, // The original course
+          { borrowedId: originalCourseId } // All borrowed copies
+        ]
+      }).session(session);
+    } else {
+      // Assign only to the selected course
+      coursesToAssign = [courseData];
     }
 
-    // Fetch active semester for the borrowing department (selected course's department)
-    const currentSemester = await Semester.findOne({
-      department: assignmentDeptId,
-      isActive: true,
-    });
+    if (coursesToAssign.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "No courses found to assign", null, true);
+    }
 
-    if (!currentSemester) {
+    // Collect all assignments to create
+    const assignmentsToCreate = [];
+
+    // Process each course to assign
+    for (const courseToAssign of coursesToAssign) {
+      const assignmentDeptId = courseToAssign.department;
+      if (!assignmentDeptId) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 400, `Department not found for course ${courseToAssign.courseCode}`, null, true);
+      }
+
+      // Fetch active semester for each department
+      const currentSemester = await Semester.findOne({
+        department: assignmentDeptId,
+        isActive: true,
+      }).session(session);
+
+      if (!currentSemester) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(
+          res,
+          404,
+          `No active semester for department of ${courseToAssign.courseCode}`,
+          null,
+          true
+        );
+      }
+
+      const { _id: semester, session: academicSession } = currentSemester;
+
+      // Check for existing assignment for this specific course in this semester/session
+      const existingAssignment = await CourseAssignment.findOne({
+        course: courseToAssign._id,
+        semester,
+        session: academicSession,
+        department: assignmentDeptId,
+      }).session(session);
+
+      // If assignment already exists, update it instead of creating new
+      if (existingAssignment) {
+        // Update the existing assignment
+        existingAssignment.lecturer = lecturer;
+        existingAssignment.assignedBy = req.user._id;
+        await existingAssignment.save({ session });
+        assignmentsToCreate.push(existingAssignment);
+      } else {
+        // Prepare new assignment
+        assignmentsToCreate.push({
+          course: courseToAssign._id,
+          lecturer,
+          semester,
+          session: academicSession,
+          department: assignmentDeptId,
+          assignedBy: req.user._id,
+        });
+      }
+    }
+
+    // Bulk create/update assignments
+    const createdAssignments = [];
+    for (const assignmentData of assignmentsToCreate) {
+      if (assignmentData._id) {
+        // This is an updated assignment
+        createdAssignments.push(assignmentData);
+      } else {
+        // This is a new assignment
+        const newAssignment = await CourseAssignment.create([assignmentData], { session });
+        createdAssignments.push(newAssignment[0]);
+      }
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    const message = assignToAll
+      ? `Course assigned successfully to ${createdAssignments.length} related courses`
+      : `Course assigned successfully to ${courseData.courseCode}`;
+
+    return buildResponse(res, 201, message, createdAssignments);
+
+  } catch (error) {
+    // Abort transaction on error
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+
+    console.error("assignCourse error:", error);
+
+    // Handle duplicate key error specifically
+    if (error.code === 11000) {
       return buildResponse(
         res,
-        404,
-        "No active semester for this department",
+        400,
+        "Duplicate assignment detected. Please try again.",
         null,
-        true
+        true,
+        error
       );
     }
 
-    const { _id: semester, session } = currentSemester;
-
-    // Prevent duplicate assignment: check by selected course id
-    const existing = await CourseAssignment.findOne({
-      course: selectedCourseId,
-      semester,
-      session,
-      department: assignmentDeptId,
-    });
-
-    if (existing) {
-      return buildResponse(res, 400, "Course already assigned for this session", null, true);
-    }
-
-    // Create assignment: store selected course id (borrowed or normal)
-    const newAssignment = await CourseAssignment.create({
-      course: selectedCourseId,
-      lecturer,
-      semester,
-      session,
-      department: assignmentDeptId, // department of the selected course
-      assignedBy: req.user._id,
-    });
-
-    return buildResponse(res, 201, "Course assigned successfully", newAssignment);
-
-  } catch (error) {
-    console.error("assignCourse error:", error);
     return buildResponse(res, 500, "Failed to assign course", null, true, error);
   }
 };
 
+export const unassignCourse = async (req, res) => {
+  let session = null;
+  try {
+    // Start a transaction session
+    session = await mongoose.startSession();
+    session.startTransaction();
+
+    // Get parameters - unassignAll defaults to true
+    // lecturer is optional - if provided, only remove that lecturer's assignment
+    const { course: selectedCourseId, staffId: lecturer, unassignAll = true } = req.body;
+
+    // Fetch the selected course (borrowed or normal) within transaction
+    const courseData = await Course.findById(selectedCourseId).session(session);
+    if (!courseData) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "Course not found", null, true);
+    }
+
+    // Determine the original course ID
+    const originalCourseId = courseData.borrowedId || selectedCourseId;
+    const isBorrowed = !!courseData.borrowedId;
+
+    // Get original course (for HOD check and finding borrowed copies)
+    const originalCourse = await Course.findById(originalCourseId).session(session);
+    if (!originalCourse) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "Original course not found", null, true);
+    }
+
+    // HOD permission check: only HOD of original department can unassign
+    if (req.user?.role === "hod") {
+      const hodDept = await departmentModel.findOne({ hod: req.user._id }).session(session);
+      if (!hodDept) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(res, 404, "Department not found for HOD", null, true);
+      }
+
+      if (originalCourse.department.toString() !== hodDept._id.toString()) {
+        await session.abortTransaction();
+        session.endSession();
+        return buildResponse(
+          res,
+          403,
+          "Only the HOD of the original department can unassign lecturers from this course",
+          null,
+          true
+        );
+      }
+    }
+
+    // Determine which courses to unassign
+    let coursesToUnassign = [];
+    
+    if (unassignAll) {
+      // Find all related courses (original + all borrowed copies)
+      coursesToUnassign = await Course.find({
+        $or: [
+          { _id: originalCourseId }, // The original course
+          { borrowedId: originalCourseId } // All borrowed copies
+        ]
+      }).session(session);
+    } else {
+      // Unassign only from the selected course
+      coursesToUnassign = [courseData];
+    }
+
+    if (coursesToUnassign.length === 0) {
+      await session.abortTransaction();
+      session.endSession();
+      return buildResponse(res, 404, "No courses found to unassign", null, true);
+    }
+
+    // Collect all assignment IDs to remove
+    const removedAssignments = [];
+    const failedUnassignments = [];
+
+    // Process each course to unassign
+    for (const courseToUnassign of coursesToUnassign) {
+      const assignmentDeptId = courseToUnassign.department;
+      if (!assignmentDeptId) {
+        failedUnassignments.push({
+          course: courseToUnassign.courseCode,
+          error: "Department not found"
+        });
+        continue;
+      }
+
+      // Fetch active semester for each department
+      const currentSemester = await Semester.findOne({
+        department: assignmentDeptId,
+        isActive: true,
+      }).session(session);
+
+      if (!currentSemester) {
+        failedUnassignments.push({
+          course: courseToUnassign.courseCode,
+          error: "No active semester for department"
+        });
+        continue;
+      }
+
+      const { _id: semester, session: academicSession } = currentSemester;
+
+      // Build the delete query conditionally
+      const deleteQuery = {
+        course: courseToUnassign._id,
+        semester,
+        session: academicSession,
+        department: assignmentDeptId,
+      };
+
+      // Only add lecturer to query if provided
+      if (lecturer) {
+        deleteQuery.lecturer = lecturer;
+      }
+
+      // Find and delete the assignment
+      const deletedAssignment = await CourseAssignment.findOneAndDelete(deleteQuery)
+        .session(session);
+
+      if (deletedAssignment) {
+        removedAssignments.push(deletedAssignment);
+      } else {
+        // Check if there's any assignment at all for this course
+        const anyAssignment = await CourseAssignment.findOne({
+          course: courseToUnassign._id,
+          semester,
+          session: academicSession,
+          department: assignmentDeptId,
+        }).session(session);
+
+        if (anyAssignment && lecturer) {
+          failedUnassignments.push({
+            course: courseToUnassign.courseCode,
+            error: `Assignment exists but lecturer mismatch. Expected: ${lecturer}, Found: ${anyAssignment.lecturer}`
+          });
+        } else if (!anyAssignment) {
+          failedUnassignments.push({
+            course: courseToUnassign.courseCode,
+            error: "No assignment found for this course"
+          });
+        } else {
+          failedUnassignments.push({
+            course: courseToUnassign.courseCode,
+            error: "No assignment found"
+          });
+        }
+      }
+    }
+
+    // Commit the transaction
+    await session.commitTransaction();
+    session.endSession();
+
+    const responseData = {
+      removedAssignments,
+      failedUnassignments,
+      totalRemoved: removedAssignments.length,
+      totalFailed: failedUnassignments.length,
+      lecturerProvided: !!lecturer
+    };
+
+    // Build response message based on results
+    let message = "";
+    if (removedAssignments.length === 0 && failedUnassignments.length > 0) {
+      message = "Failed to unassign from any courses";
+      return buildResponse(res, 404, message, responseData, failedUnassignments.length > 0);
+    } else if (failedUnassignments.length > 0) {
+      message = `Unassigned from ${removedAssignments.length} course(s), but failed for ${failedUnassignments.length} course(s)`;
+      return buildResponse(res, 207, message, responseData); // 207 Multi-Status
+    } else {
+      const lecturerText = lecturer ? `lecturer ${lecturer}` : "the assigned lecturer";
+      message = unassignAll 
+        ? `${lecturerText} unassigned successfully from ${removedAssignments.length} related courses`
+        : `${lecturerText} unassigned successfully from ${courseData.courseCode}`;
+      return buildResponse(res, 200, message, responseData);
+    }
+
+  } catch (error) {
+    // Abort transaction on error
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
+    
+    console.error("unassignCourse error:", error);
+    return buildResponse(res, 500, "Failed to unassign course", null, true, error);
+  }
+};
 
 
 
@@ -434,7 +715,7 @@ export const registerCourses = async (req, res) => {
       }
       semesterQuery.department = department;
     } else if (req.user.role === "hod") {
-      const dept = await departmentModel.findOne({ hod: req.user._id });
+      const dept = await departmentService.getDepartmentByHod(req.user._id)
       if (!dept) {
         return buildResponse(res, 404, "HOD department not found");
       }
@@ -731,6 +1012,7 @@ export const getLecturerCourses = async (req, res) => {
 
     // 4️⃣ Let fetchDataHelper do its magic ✨
     const result = await fetchDataHelper(req, res, courseAssignmentModel, {
+      forceFind: true,
       configMap: dataMaps.CourseAssignment,
       autoPopulate: true,
       models: { courseModel, lecturerModel },
@@ -738,16 +1020,26 @@ export const getLecturerCourses = async (req, res) => {
         lecturer: lecturerId,
         semester: { $in: activeSemesterIds }
       },
-populate: [
-  {
-    path: "course",
-    populate: {
-      path: "borrowedId",
-      select: "courseCode title unit level semester department"
-    }
-  },
-  "semester"
-]
+      populate: [
+        {
+          path: "course",
+          populate: [
+            {
+              path: "borrowedId",
+              select: "courseCode title unit level semester department",
+              populate: {
+                path: "department",
+                select: "name" // nested department inside borrowedId
+              }
+            },
+            {
+              path: "department",
+              select: "name" // top-level department on course
+            }
+          ]
+        },
+        "semester"
+      ]
 
     });
 
@@ -869,36 +1161,36 @@ export const getCourseRegistrationReport = async (req, res) => {
     // ===============================
     // 5️⃣ Semester trend (Line)
     // ===============================
-const semester_chart = await CourseRegistration.aggregate([
-  { $match: match_filter },
-  {
-    $lookup: {
-      from: "semesters",
-      localField: "semester",
-      foreignField: "_id",
-      as: "semester_info",
-    },
-  },
-  {
-    $unwind: {
-      path: "$semester_info",
-      preserveNullAndEmptyArrays: true,
-    },
-  },
-  {
-    $group: {
-      _id: { $ifNull: ["$semester_info.name", "Unknown"] },
-      total: { $sum: 1 },
-    },
-  },
-  {
-    $project: {
-      _id: 0,
-      semester: "$_id",
-      total: 1,
-    },
-  },
-]);
+    const semester_chart = await CourseRegistration.aggregate([
+      { $match: match_filter },
+      {
+        $lookup: {
+          from: "semesters",
+          localField: "semester",
+          foreignField: "_id",
+          as: "semester_info",
+        },
+      },
+      {
+        $unwind: {
+          path: "$semester_info",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $group: {
+          _id: { $ifNull: ["$semester_info.name", "Unknown"] },
+          total: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          semester: "$_id",
+          total: 1,
+        },
+      },
+    ]);
 
 
 

@@ -260,13 +260,40 @@ class GPACalculator {
     }
   }
 
+
+
+  /**
+   * Check if student is in termination or withdrawal status
+   * @param {Object} academicStanding - Academic standing object
+   * @returns {boolean} True if terminated or withdrawn
+   */
+  isStudentTerminatedOrWithdrawn(academicStanding) {
+    if (!academicStanding) return false;
+
+    const remark = String(academicStanding.remark || '').toUpperCase();
+    const status = String(academicStanding.status || '').toLowerCase();
+
+    return (
+      remark.includes('TERMINATED') ||
+      remark.includes('WITHDRAW') ||
+      status.includes('terminated') ||
+      status.includes('withdraw') ||
+      status.includes('withdrawal')
+    );
+  }
+
   /**
    * Calculate outstanding courses
    * @param {string} studentId - Student ID
    * @param {string} currentSemesterId - Current semester ID
    * @returns {Promise<Array>} Outstanding courses
    */
-  async calculateOutstandingCourses(studentId, currentSemesterId) {
+  async calculateOutstandingCourses(studentId, currentSemesterId,  academicStanding = null) {
+    // If academicStanding is provided and student is terminated/withdrawn, return empty array
+    if (academicStanding && this.isStudentTerminatedOrWithdrawn(academicStanding)) {
+      console.log(`Skipping outstanding courses for terminated/withdrawn student: ${studentId}`);
+      return [];
+    }
     try {
       const failedResults = await Result.find({
         studentId,
@@ -274,24 +301,69 @@ class GPACalculator {
         grade: 'F',
         deletedAt: null
       })
-        .populate('courseId', 'courseCode title unit level')
+        .populate({
+          path: 'courseId',
+          select: 'type isCoreCourse title courseCode unit level borrowedId department',
+          populate: {
+            path: 'borrowedId',
+            select: 'type isCoreCourse title courseCode unit level',
+          }
+        })
         .lean();
 
       // Process and return current semester failures
-      const outstandingCourses = failedResults.map(result => ({
-        courseId: result.courseId?._id,
-        courseCode: result.courseId?.courseCode,
-        courseTitle: result.courseId?.title,
-        unitLoad: result.courseId?.unit || 1,
-        score: result.score,  // Include score
-        grade: result.grade,
-        fromSemester: currentSemesterId,  // Current semester
-        isCurrentSemester: true,
-        attempts: 1
-      }));
+      const outstandingCourses = [];
 
-      console.log(`Current semester outstanding courses for ${studentId}:`,
-        outstandingCourses.length);
+      for (const result of failedResults) {
+        const course = result.courseId;
+        if (!course) continue;
+
+        // Process borrowed course - CORRECT LOGIC
+        let processedCourse;
+        if (course.borrowedId) {
+          // This is a borrowed course - use the original course data
+          processedCourse = {
+            _id: course.borrowedId._id || course._id,
+            courseCode: course.borrowedId.courseCode || course.courseCode,
+            title: course.borrowedId.title || course.title,
+            unit: course.borrowedId.unit || course.unit,
+            level: course.borrowedId.level || course.level,
+            type: course.borrowedId.type || course.type,
+            isCoreCourse: course.borrowedId.isCoreCourse || course.isCoreCourse,
+            isBorrowed: true,
+            originalCourseId: course._id,
+            originalCourseCode: course.courseCode
+          };
+        } else {
+          // This is a regular course
+          processedCourse = {
+            _id: course._id,
+            courseCode: course.courseCode,
+            title: course.title,
+            unit: course.unit,
+            level: course.level,
+            type: course.type,
+            isCoreCourse: course.isCoreCourse,
+            isBorrowed: false
+          };
+        }
+
+        outstandingCourses.push({
+          courseId: processedCourse._id,
+          courseCode: processedCourse.courseCode,
+          courseTitle: processedCourse.title,
+          unitLoad: processedCourse.unit || 1,
+          score: result.score,
+          grade: result.grade,
+          fromSemester: currentSemesterId,
+          isCurrentSemester: true,
+          attempts: 1,
+          // Additional fields for clarity
+          isBorrowed: processedCourse.isBorrowed || false,
+          originalCourseCode: processedCourse.isBorrowed ? course.courseCode : null
+        });
+      }
+
       return outstandingCourses;
 
     } catch (error) {
@@ -299,7 +371,6 @@ class GPACalculator {
       return [];
     }
   }
-
   /**
    * Get passing and failing grade counts
    * @param {Array} results - Student results

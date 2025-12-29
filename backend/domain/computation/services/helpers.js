@@ -4,6 +4,33 @@ import CarryoverCourse from "../../result/carryover.model.js";
 import ComputationSummary from "../../result/computation.model.js";
 import Semester from "../../semester/semester.model.js";
 import studentModel from "../../student/student.model.js";
+// IMPORTANT: Import Faculty model to register it
+import "../../faculty/faculty.model.js";
+import mongoose from "mongoose";
+import SemesterService from "../../semester/semester.service.js";
+
+// Alternative: Register Faculty model manually if import doesn't work
+if (!mongoose.models.Faculty) {
+  console.log("⚠️ Faculty model not registered, registering manually...");
+  
+  // Define the schema
+  const facultySchema = new mongoose.Schema({
+    name: { type: String, required: true, unique: true, trim: true },
+    code: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      uppercase: true,
+    },
+    dean: { type: mongoose.Schema.Types.ObjectId, ref: "Lecturer", default: null },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+  }, { timestamps: true });
+  
+  // Register the model
+  mongoose.model("Faculty", facultySchema);
+}
+
 
 /**
  * Get detailed computation summary with student lists
@@ -845,4 +872,190 @@ export function fixNestedKeyToCoursesStructure(data) {
   }
   
   return fixedData;
+}
+
+/**
+ * Get department leadership details (Dean and HOD)
+ */
+export async function getDepartmentLeadershipDetails(departmentId, semesterId) {
+  try {
+    console.log(`🔍 Fetching department leadership details for department: ${departmentId}`);
+    
+    // Get MongoDB connection
+    const db = mongoose.connection.db;
+    if (!db) {
+      throw new Error('MongoDB connection not available');
+    }
+    
+    // 1. Get department using raw query
+    const department = await db.collection('departments').findOne({ 
+      _id: new mongoose.Types.ObjectId(departmentId) 
+    });
+    
+    if (!department) {
+      console.error(`❌ Department not found: ${departmentId}`);
+      return getDefaultDepartmentDetails();
+    }
+    
+    console.log(`✅ Found department: ${department.name}`);
+    
+    // 2. Get active semester
+    const activeSemester = await SemesterService.getActiveDepartmentSemester(departmentId);
+    console.log(`✅ Active semester: ${activeSemester?.name || 'Not found'}`);
+    
+    // 3. Get faculty using raw query
+    let faculty = null;
+    if (department.faculty) {
+      faculty = await db.collection('faculties').findOne({ 
+        _id: new mongoose.Types.ObjectId(department.faculty) 
+      });
+      console.log(`✅ Found faculty: ${faculty?.name || 'Unknown'}`);
+    }
+    
+    // 4. Get HOD details using raw queries
+    let hodDetails = null;
+    if (department.hod) {
+      const hodLecturer = await db.collection('lecturers').findOne({ 
+        _id: new mongoose.Types.ObjectId(department.hod) 
+      });
+      
+      if (hodLecturer) {
+        // Get user details for HOD
+        const hodUser = await db.collection('users').findOne({ 
+          _id: new mongoose.Types.ObjectId(hodLecturer._id) 
+        });
+        
+        hodDetails = {
+          name: hodUser?.name || hodLecturer.name || 'Prof. Jane Smith',
+          title: 'Head of Department',
+          rank: hodLecturer.rank || 'Professor',
+          staffId: hodLecturer.staffId || '',
+          signature: hodLecturer.signature || '',
+          isHOD: hodLecturer.isHOD || true
+        };
+        console.log(`✅ Found HOD: ${hodDetails.name}`);
+      }
+    }
+    
+    // 5. Get Dean details using raw queries
+    let deanDetails = null;
+    if (faculty && faculty.dean) {
+      const deanLecturer = await db.collection('lecturers').findOne({ 
+        _id: new mongoose.Types.ObjectId(faculty.dean) 
+      });
+      
+      if (deanLecturer) {
+        // Get user details for Dean
+        const deanUser = await db.collection('users').findOne({ 
+          _id: new mongoose.Types.ObjectId(deanLecturer._id) 
+        });
+        
+        deanDetails = {
+          name: deanUser?.name || deanLecturer.name || 'Dr. John Doe',
+          title: 'Dean',
+          rank: deanLecturer.rank || 'Professor',
+          staffId: deanLecturer.staffId || '',
+          signature: deanLecturer.signature || '',
+          isDean: deanLecturer.isDean || true
+        };
+        console.log(`✅ Found Dean: ${deanDetails.name}`);
+      }
+    }
+    
+    // 6. Build department details
+    const departmentDetails = buildDepartmentDetails(
+      department,
+      faculty,
+      hodDetails,
+      deanDetails,
+      activeSemester
+    );
+    
+    console.log(`✅ Department details built successfully for ${department.name}`);
+    return departmentDetails;
+    
+  } catch (error) {
+    console.error('❌ Error in getDepartmentLeadershipDetails:', error.message);
+    console.error('Stack:', error.stack);
+    
+    return getDefaultDepartmentDetails();
+  }
+}
+
+/**
+ * Build department details with dean and HOD information
+ * @param {Object} department - Department object
+ * @param {Object} faculty - Faculty object
+ * @param {Object} hodDetails - HOD details object
+ * @param {Object} deanDetails - Dean details object
+ * @param {Object} activeSemester - Current semester
+ * @returns {Object} Department details
+ */
+function buildDepartmentDetails(department, faculty, hodDetails, deanDetails, activeSemester) {
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  
+  return {
+    name: department?.name || '',
+    code: department?.code || '',
+    faculty: {
+      name: faculty?.name || '',
+      code: faculty?.code || ''
+    },
+    dean: deanDetails || getDefaultDean(),
+    hod: hodDetails || getDefaultHOD(),
+    academicYear: activeSemester?.academicYear || `${currentYear}/${nextYear}`,
+    semester: activeSemester?.name || '',
+    generatedDate: new Date().toISOString()
+  };
+}
+
+/**
+ * Get default department details
+ */
+function getDefaultDepartmentDetails() {
+  const currentYear = new Date().getFullYear();
+  const nextYear = currentYear + 1;
+  
+  return {
+    name: '',
+    code: '',
+    faculty: {
+      name: '',
+      code: ''
+    },
+    dean: getDefaultDean(),
+    hod: getDefaultHOD(),
+    academicYear: `${currentYear}/${nextYear}`,
+    semester: '',
+    generatedDate: new Date().toISOString()
+  };
+}
+
+/**
+ * Get default Dean details
+ */
+function getDefaultDean() {
+  return {
+    name: 'Dr. John Doe',
+    title: 'Dean',
+    rank: 'Professor',
+    staffId: '',
+    signature: '',
+    isDean: true
+  };
+}
+
+/**
+ * Get default HOD details
+ */
+function getDefaultHOD() {
+  return {
+    name: 'Prof. Jane Smith',
+    title: 'Head of Department',
+    rank: 'Professor',
+    staffId: '',
+    signature: '',
+    isHOD: true
+  };
 }

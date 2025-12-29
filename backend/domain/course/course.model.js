@@ -15,23 +15,30 @@ const courseSchema = new mongoose.Schema({
   type: {
     type: String,
     enum: ["core", "elective"],
-    required: true,
-  },
-
-  // ELECTIVE SUBCATEGORY
-  elective_category: {
-    type: String,
-    enum: ["required", "optional", null],
-    default: null,
-    validate: {
-      validator: function (v) {
-        if (this.type === "core") return v === null;
-        if (this.type === "elective") return ["required", "optional"].includes(v);
-        return true;
-      },
-      message: props => `${props.value} is not valid for elective_category.`,
+    required: function () {
+      return this.borrowedId === null;
     },
   },
+
+
+  elective_category: {
+    type: String,
+    enum: ["required", "optional"],
+    default: function () {
+      if (this.borrowedId !== null) return undefined;
+      return this.type === "elective" ? "optional" : undefined;
+    },
+    validate: {
+      validator: function (v) {
+        if (this.borrowedId !== null) return true;
+        if (this.type === "core") return v === undefined;
+        return true;
+      },
+      message: "elective_category is only applicable to elective courses.",
+    },
+  },
+
+
 
   // SCOPE (always allowed)
   scope: {

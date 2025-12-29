@@ -52,10 +52,11 @@ class MasterSheetHtmlRenderer {
     }
     
 .preview-watermark {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='40' font-weight='bold' fill='%23ff0000' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 200 150)'%3EPREVIEW%3C/text%3E%3Ctext x='50%25' y='60%25' font-family='Arial' font-size='20' fill='%23ff0000' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 200 150)'%3ENOT FOR OFFICIAL USE%3C/text%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300' viewBox='0 0 400 300'%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='40' font-weight='bold' fill='%23990000' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 200 150)' opacity='0.7'%3EPREVIEW%3C/text%3E%3Ctext x='50%25' y='60%25' font-family='Arial' font-size='20' fill='%23990000' text-anchor='middle' dominant-baseline='middle' transform='rotate(-45 200 150)' opacity='0.7'%3ENOT FOR OFFICIAL USE%3C/text%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 60% auto;
+  opacity: 0.2;
 }
 
 .final-watermark {
@@ -99,7 +100,7 @@ class MasterSheetHtmlRenderer {
     .header-cell {
       padding: 4mm 0 3mm 0;
       border-bottom: 1.5pt solid #000;
-      text-align: cente;
+      text-align: center;
       vertical-align: top;
     }
     
@@ -124,6 +125,7 @@ class MasterSheetHtmlRenderer {
     
     .header-text-container {
       margin: 0 30mm;
+      text-align: left
     }
     
     .header-institution {
@@ -238,7 +240,7 @@ class MasterSheetHtmlRenderer {
     
     .course-header-table th {
       font-weight: bold;
-      text-align: cente;
+      text-align: center;
       vertical-align: middle;
       padding: 1mm;
       border: 0.75pt solid #000;
@@ -261,8 +263,8 @@ class MasterSheetHtmlRenderer {
       padding-left: 1.5mm;
     }
     
-    .text-cente {
-      text-align: cente;
+    .text-center {
+      text-align: center;
     }
     
     .text-right {
@@ -286,7 +288,7 @@ class MasterSheetHtmlRenderer {
     .no-data {
       color: #666;
       font-style: italic;
-      text-align: cente;
+      text-align: center;
       padding: 4mm;
     }
     
@@ -304,16 +306,16 @@ class MasterSheetHtmlRenderer {
     .summary-table td {
       padding: 2mm 1.5mm;
       border: 0.75pt solid #000;
-      text-align: left;
+      text-align: center;
     }
     
     .summary-table .numeric {
-      text-align: right;
+      text-align: center;
       padding-right: 1.5mm;
     }
     
     /* ================= SIGNATURES ================= */
-    .signatures-container {
+    .signatures-container { 
       display: flex;
       justify-content: space-between;
       margin-top: 15mm;
@@ -321,7 +323,7 @@ class MasterSheetHtmlRenderer {
     
     .signature-block {
       width: 45%;
-      text-align: cente;
+      text-align: center;
     }
     
     .signature-line {
@@ -346,7 +348,7 @@ class MasterSheetHtmlRenderer {
       width: 100%;
       border-collapse: collapse;
       margin: 3mm 0 5mm 0;
-      font-size: 10pt;
+      font-size: 12pt;
     }
     
     .key-table th {
@@ -358,7 +360,7 @@ class MasterSheetHtmlRenderer {
       border-top: none;
       border-left: none;
       border-right: none;
-      font-size: 10pt;
+      font-size: 12pt;
       text-decoration: underline;
     }
     
@@ -367,6 +369,7 @@ class MasterSheetHtmlRenderer {
       border: none;
       text-align: left;
       vertical-align: middle;
+      font-size: 12pt;
     }
     
     .key-table tr:last-child td {
@@ -384,7 +387,7 @@ class MasterSheetHtmlRenderer {
       padding-top: 3mm;
       border-top: 0.5pt solid #ccc;
       font-size: 8pt;
-      text-align: cente;
+      text-align: center;
       vertical-align: top;
     }
     
@@ -436,7 +439,7 @@ class MasterSheetHtmlRenderer {
     .list-nil {
       color: #666;
       font-style: italic;
-      text-align: cente;
+      text-align: center;
       padding: 2mm;
       border: 0.75pt solid #000;
     }
@@ -492,7 +495,7 @@ class MasterSheetHtmlRenderer {
           
           <div class="header-meta">
             <div>Batch: ${shortBatchId}</div>
-            <div>Page ${pageNum}</div>
+            <!--<div>Page ${pageNum}</div>-->
             ${isPreview ? '<div style="color: red; font-weight: bold;">PREVIEW</div>' : ''}
           </div>
         </div>
@@ -583,14 +586,14 @@ class MasterSheetHtmlRenderer {
     const rowsHTML = list.map((s, i) => {
       const studentData = this.getStudentData(s.studentId?.$oid || s.studentId, summary, level);
       const failedCourses = studentData?.courseResults?.filter(cr => cr.status === 'failed') || [];
-
       return `
       <tr>
         <td class="numeric">${i + 1}</td>
         <td class="text-bold text-left">${s.matricNumber || '-'}</td>
         <td class="text-left">${s.name || '-'}</td>
-        <td class="text-left">${s.remarks || s.reason || '-'}</td>
-        <td class="text-left">${failedCourses.length > 0 ? failedCourses.map(c => c.courseCode).join(', ') : 'None'}</td>
+        <!--<td class="numeric text-bold">${s.gpa ? s.gpa.toFixed(2) : '-'}</td>-->
+        <!--<td class="text-left">${failedCourses.length > 0 ? failedCourses.map(c => c.courseCode).join(', ') : 'None'}</td>-->
+        <td>${s.reason || 'None'}</td>
       </tr>
     `}).join('');
 
@@ -603,8 +606,8 @@ class MasterSheetHtmlRenderer {
                 <th width="5%">S/N</th>
                 <th width="18%">MATRIC NO.</th>
                 <th width="30%">NAME</th>
+                <!--<th width="10%">GPA</th>-->
                 <th width="27%">REMARKS</th>
-                <th width="20%">FAILED COURSES</th>
               </tr>
             </thead>
             <tbody>
@@ -632,7 +635,7 @@ class MasterSheetHtmlRenderer {
         <td class="numeric">${i + 1}</td>
         <td class="text-bold text-left">${s.matricNumber || '-'}</td>
         <td class="text-left">${s.name || '-'}</td>
-        <td class="text-left">${s.remarks || s.reason || '-'}</td>
+        <td class="numeric text-bold">${s.gpa ? s.gpa.toFixed(2) : '-'}</td>
         <td class="text-left">${failedCourses.length > 0 ? failedCourses.map(c => c.courseCode).join(', ') : 'None'}</td>
       </tr>
     `}).join('');
@@ -646,8 +649,8 @@ class MasterSheetHtmlRenderer {
                 <th width="5%">S/N</th>
                 <th width="18%">MATRIC NO.</th>
                 <th width="30%">NAME</th>
+                <th width="10%">GPA</th>
                 <th width="27%">REMARKS</th>
-                <th width="20%">FAILED COURSES</th>
               </tr>
             </thead>
             <tbody>
@@ -675,7 +678,7 @@ class MasterSheetHtmlRenderer {
         <td class="numeric">${i + 1}</td>
         <td class="text-bold text-left">${s.matricNumber || '-'}</td>
         <td class="text-left">${s.name || '-'}</td>
-        <td class="text-left">${s.remarks || s.reason || '-'}</td>
+        <td class="numeric text-bold">${s.gpa ? s.gpa.toFixed(2) : '-'}</td>
         <td class="text-left">${failedCourses.length > 0 ? failedCourses.map(c => c.courseCode).join(', ') : 'None'}</td>
       </tr>
     `}).join('');
@@ -689,8 +692,8 @@ class MasterSheetHtmlRenderer {
                 <th width="5%">S/N</th>
                 <th width="18%">MATRIC NO.</th>
                 <th width="30%">NAME</th>
+                <th width="10%">GPA</th>
                 <th width="27%">REMARKS</th>
-                <th width="20%">FAILED COURSES</th>
               </tr>
             </thead>
             <tbody>
@@ -706,7 +709,7 @@ class MasterSheetHtmlRenderer {
     const csoStudents = students.filter(s => s.outstandingCourses && s.outstandingCourses.length > 0);
 
     if (csoStudents.length === 0) {
-      return this.renderEmptySection("COURSES TILL OUTSTANDING (CSO)", "No students with outstanding courses");
+      return this.renderEmptySection("Repeat/Outstanding List", "No students with outstanding courses");
     }
 
     const rowsHTML = csoStudents.map((s, i) => {
@@ -727,7 +730,7 @@ class MasterSheetHtmlRenderer {
     <!-- Section Title -->
     <tr class="section-title-row">
       <td class="section-title-cell">
-        <div class="section-title">COURSES TILL OUTSTANDING (CSO)</div>
+        <div class="section-title">Repeat/Outstanding List</div>
       </td>
     </tr>
     
@@ -918,16 +921,16 @@ class MasterSheetHtmlRenderer {
           <div class="signatures-container">
             <div class="signature-block">
               <div class="signature-line"></div>
-              <div class="signature-name">${config.hod.name}</div>
+              <div class="signature-name">${summary.departmentDetails.hod.name}</div>
               <div class="signature-title">${config.hod.title}</div>
               <div class="signature-title">Head of Department</div>
             </div>
             
             <div class="signature-block">
               <div class="signature-line"></div>
-              <div class="signature-name">${config.dean.name}</div>
-              <div class="signature-title">${config.dean.title}</div>
-              <div class="signature-title">Dean, ${config.faculty}</div>
+              <div class="signature-name">${summary.departmentDetails.dean.name}</div>
+              <div class="signature-title">Faculty Dean</div>
+              <!--<div class="signature-title">Dean, ${config.faculty}</div>-->
             </div>
           </div>
         </div>
@@ -954,39 +957,39 @@ class MasterSheetHtmlRenderer {
           <tbody>
             <tr>
               <td class="text-bold" width="30%">First Class</td>
-              <td class="numeric" width="20%">${s.classDistribution?.firstClass || 0}</td>
+              <td class="text-center" width="20%">${s.classDistribution?.firstClass || 0}</td>
               <td class="text-bold" width="30%">Average GPA</td>
-              <td class="numeric" width="20%">${stats.average ? stats.average.toFixed(2) : '-'}</td>
+              <td class="text-center" width="20%">${stats.average ? stats.average.toFixed(2) : '-'}</td>
             </tr>
             <tr>
               <td class="text-bold">Second Class Upper</td>
-              <td class="numeric">${s.classDistribution?.secondClassUpper || 0}</td>
+              <td class="text-center">${s.classDistribution?.secondClassUpper || 0}</td>
               <td class="text-bold">Highest GPA</td>
-              <td class="numeric">${stats.highest ? stats.highest.toFixed(2) : '-'}</td>
+              <td class="text-center">${stats.highest ? stats.highest.toFixed(2) : '-'}</td>
             </tr>
             <tr>
               <td class="text-bold">Second Class Lower</td>
-              <td class="numeric">${s.classDistribution?.secondClassLower || 0}</td>
+              <td class="text-center">${s.classDistribution?.secondClassLower || 0}</td>
               <td class="text-bold">Lowest GPA</td>
-              <td class="numeric">${stats.lowest ? stats.lowest.toFixed(2) : '-'}</td>
+              <td class="text-center">${stats.lowest ? stats.lowest.toFixed(2) : '-'}</td>
             </tr>
             <tr>
               <td class="text-bold">Third Class</td>
-              <td class="numeric">${s.classDistribution?.thirdClass || 0}</td>
+              <td class="text-center">${s.classDistribution?.thirdClass || 0}</td>
               <td class="text-bold">Students with Results</td>
-              <td class="numeric">${s.studentsWithResults || s.totalStudents || 0}</td>
+              <td class="text-center">${s.studentsWithResults || s.totalStudents || 0}</td>
             </tr>
             <tr>
               <td class="text-bold">Fail</td>
-              <td class="numeric">${s.classDistribution?.fail || 0}</td>
+              <td class="text-center">${s.classDistribution?.fail || 0}</td>
               <td class="text-bold">Pass Rate</td>
-              <td class="numeric">${passRate}%</td>
+              <td class="text-center">${passRate}%</td>
             </tr>
             <tr>
               <td class="text-bold">Total Students</td>
-              <td class="numeric text-bold">${totalStudents}</td>
+              <td class="text-center text-bold">${totalStudents}</td>
               <td class="text-bold">Total Processed</td>
-              <td class="numeric text-bold">${totalStudents}</td>
+              <td class="text-center text-bold">${totalStudents}</td>
             </tr>
           </tbody>
         </table>`;
@@ -1072,14 +1075,14 @@ class MasterSheetHtmlRenderer {
   </tbody>`;
   }
 
-  getStudentData(studentId, summary, level) {
-    const students = summary.studentSummariesByLevel[level] || [];
-    return students.find(s =>
-      (s.studentId?.$oid === studentId) ||
-      (s.studentId === studentId) ||
-      (s._id?.$oid === studentId)
-    );
-  }
+getStudentData(studentId, summary, level) {
+  const students = summary.studentSummariesByLevel[level] || [];
+
+  return students.find(s =>
+    String(s.studentId?.$oid || s.studentId) === String(studentId)
+  );
+}
+
 
   getDegreeClass(gpa) {
     if (gpa >= 4.50) return "First Class";

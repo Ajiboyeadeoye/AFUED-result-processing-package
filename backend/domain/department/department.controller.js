@@ -468,9 +468,9 @@ export const createDepartment = async (req, res) => {
     });
 
     const newDepartment = await getDepartmentById({ params: { departmentId: department._id } }, res);
-    console.log("newDepartment:", newDepartment);
+    // console.log("newDepartment:", newDepartment);
 
-    return buildResponse(res, 201, "Department created successfully", newDepartment);
+    // return buildResponse(res, 201, "Department created successfully", newDepartment);
   } catch (error) {
     console.error("createDepartment error:", error);
     return buildResponse(res, 500, "Failed to create department", null, true, error);

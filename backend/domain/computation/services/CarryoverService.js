@@ -164,14 +164,7 @@ async processFailedCourses(failedCourses, studentId, semesterId, departmentId, c
   const carryoverBuffers = [];
 
   for (const failedCourse of failedCourses) {
-    // DEBUG: Log failed course details
-    console.log(`Processing failed course for student ${studentId}:`, {
-      courseId: failedCourse.courseId,
-      resultId: failedCourse.resultId,
-      grade: failedCourse.grade,
-      score: failedCourse.score,
-      courseType: failedCourse.courseType
-    });
+
 
     // Check if it's a core course (only process core courses as carryovers)
     const courseIsCore = await ResultService.isCoreCourse(failedCourse.courseId);

@@ -259,11 +259,7 @@ export const sendNotification = async (req, res) => {
 export const getNotifications = async (req, res) => {
   try {
     const user_id = req.user._id;
-    // 2️⃣ Mark all as read
-    await Notification.updateMany(
-      { recipient_id: user_id, is_read: false },
-      { $set: { is_read: true } }
-    );
+
 
     // 1️⃣ Fetch all notifications for this user
     const notifications = await fetchDataHelper(req, res, Notification, {
@@ -272,7 +268,11 @@ export const getNotifications = async (req, res) => {
       models: {},
       additionalFilters: { recipient_id: user_id },
     });
-
+    // 2️⃣ Mark all as read
+    await Notification.updateMany(
+      { recipient_id: user_id, is_read: false },
+      { $set: { is_read: true } }
+    );
 
     // 3️⃣ Return notifications
     res.status(200).json({ success: true, data: notifications });
@@ -286,17 +286,17 @@ export const getTopUnread = async (req, res) => {
   try {
     const user_id = req.user._id;
     // 2️⃣ Mark all as read
-    await Notification.updateMany(
-      { recipient_id: user_id, is_read: false },
-      { $set: { is_read: true } }
-    );
+    // await Notification.updateMany(
+    //   { recipient_id: user_id, is_read: false },
+    //   { $set: { is_read: true } }
+    // );
 
     // 1️⃣ Fetch all notifications for this user
     const notifications = await fetchDataHelper(req, res, Notification, {
       configMap: dataMaps.Notifications,
       autoPopulate: true,
       models: {},
-      additionalFilters: { recipient_id: user_id },
+      additionalFilters: { recipient_id: user_id, is_read: false },
       maxLimit: 3
     });
 
@@ -317,7 +317,7 @@ export const getUnreadNotificationCount = async (req, res) => {
     // Count unread notifications for this user
     const unreadCount = await Notification.countDocuments({
       recipient_id: user_id,
-      // is_read: false,
+      is_read: false,
     });
 
     // console.log("Notification Count fetched")

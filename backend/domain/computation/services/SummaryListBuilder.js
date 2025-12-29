@@ -15,7 +15,7 @@ class SummaryListBuilder {
    */
   buildStudentSummary(student, gpaData, cgpaData, academicStanding, outstandingCourses = [], academicHistory = []) {
     const studentLevel = student.level || "100";
-    
+
     return {
       level: studentLevel,
       summary: {
@@ -23,14 +23,14 @@ class SummaryListBuilder {
         matricNumber: student.matricNumber,
         name: student.name,
         level: studentLevel,
-        
+
         // Current semester performance (MMS1)
         currentSemester: {
           tcp: gpaData.totalCreditPoints || 0,
           tnu: gpaData.totalUnits || 0,
           gpa: gpaData.semesterGPA || 0
         },
-        
+
         // Previous performance (MMS2 Previous column)
         previousPerformance: {
           cumulativeTCP: cgpaData.previousCumulativeTCP || 0,
@@ -38,23 +38,23 @@ class SummaryListBuilder {
           cumulativeGPA: cgpaData.cgpa || 0,
           previousSemesterGPA: student.gpa || 0
         },
-        
+
         // Cumulative performance (MMS2 Cumulative column)
         cumulativePerformance: {
           totalTCP: cgpaData.cumulativeTCP || 0,
           totalTNU: cgpaData.cumulativeTNU || 0,
           cgpa: cgpaData.cgpa || 0
         },
-        
+
         // Course-by-course results for MMS1
         courseResults: gpaData.courseResults || [],
-        
+
         // Outstanding courses for master sheet
         outstandingCourses: outstandingCourses,
-        
+
         // Academic status
         academicStatus: this.mapRemarkToStatus(academicStanding.remark),
-        
+
         // For MMS2 tracking
         academicHistory: academicHistory
       }
@@ -70,7 +70,8 @@ class SummaryListBuilder {
    * @param {Array} failedCourses - Failed courses
    * @returns {Object} Lists organized by level
    */
-  addStudentToLists(student, academicStanding, semesterGPA, carryoverCount, failedCourses = []) {
+
+  addStudentToLists(student, academicStanding, semesterGPA, cgpa, carryoverCount, failedCourses = []) {
     const studentLevel = student.level || "100";
     const lists = {
       level: studentLevel,
@@ -85,7 +86,10 @@ class SummaryListBuilder {
       studentId: student._id,
       matricNumber: student.matricNumber,
       name: student.name,
-      gpa: semesterGPA
+      level: studentLevel,
+      gpa: semesterGPA,      // Semester GPA
+      cgpa: cgpa,            // ADDED: Cumulative GPA
+      department: student.department?.name || student.department
     };
 
     // Determine which lists to add to
@@ -93,9 +97,9 @@ class SummaryListBuilder {
       case REMARK_CATEGORIES.EXCELLENT:
       case REMARK_CATEGORIES.GOOD:
         if (carryoverCount === 0) {
-          lists.passList = { 
-            ...studentListEntry, 
-            remark: academicStanding.remark 
+          lists.passList = {
+            ...studentListEntry,
+            remark: academicStanding.remark
           };
         }
         break;
@@ -104,7 +108,8 @@ class SummaryListBuilder {
         lists.probationList = {
           ...studentListEntry,
           remarks: academicStanding.actionTaken || "Placed on academic probation",
-          previousStatus: student.probationStatus
+          previousStatus: student.probationStatus,
+          // ✅ Now includes both gpa and cgpa from studentListEntry
         };
         break;
 
@@ -113,14 +118,14 @@ class SummaryListBuilder {
           ...studentListEntry,
           reason: "Poor academic performance",
           remarks: academicStanding.actionTaken || "Withdrawn due to low CGPA",
-          cgpa: student.cgpa
+          // ✅ Now uses cgpa from studentListEntry (calculated CGPA)
         };
         break;
 
       case REMARK_CATEGORIES.TERMINATED:
         lists.terminationList = {
           ...studentListEntry,
-          reason: "Excessive carryovers or poor performance",
+          reason: academicStanding.reason || "Excessive carryovers or poor performance",
           remarks: academicStanding.actionTaken || "Terminated due to academic standing",
           totalCarryovers: carryoverCount
         };
@@ -130,17 +135,15 @@ class SummaryListBuilder {
     // Add to carryover list if applicable
     if (carryoverCount > 0) {
       lists.carryoverList = {
-        studentId: student._id,
-        matricNumber: student.matricNumber,
-        name: student.name,
+        ...studentListEntry,
         courses: failedCourses.map(fc => ({
           courseId: fc.courseId,
           courseCode: fc.courseCode || 'N/A',
           grade: fc.grade || 'F',
           score: fc.score || 0
         })),
-        notes: `Failed ${carryoverCount} course(s)`,
-        level: studentLevel
+        carryoverCount: carryoverCount,
+        notes: `Failed ${carryoverCount} course(s)`
       };
     }
 
@@ -170,24 +173,24 @@ class SummaryListBuilder {
 
     // Build level-wise summary
     const summaryOfResultsByLevel = new Map();
-    
+
     if (levelStats && typeof levelStats === 'object') {
       Object.keys(levelStats).forEach(level => {
         const levelData = levelStats[level];
         if (levelData && levelData.totalStudents > 0) {
           levelData.averageGPA = levelData.totalGPA / levelData.totalStudents;
-          
+
           summaryOfResultsByLevel.set(level, {
             totalStudents: levelData.totalStudents,
             studentsWithResults: levelData.studentsWithResults || levelData.totalStudents,
-            
+
             gpaStatistics: {
               average: parseFloat(levelData.averageGPA.toFixed(2)),
               highest: parseFloat(levelData.highestGPA.toFixed(2)),
               lowest: parseFloat(levelData.lowestGPA.toFixed(2)),
               standardDeviation: 0 // Can be calculated if needed
             },
-            
+
             classDistribution: levelData.gradeDistribution || {
               firstClass: 0,
               secondClassUpper: 0,
@@ -247,7 +250,7 @@ class SummaryListBuilder {
     }
   }
 
-// In SummaryListBuilder.js - FIXED buildKeyToCoursesByLevel
+  // In SummaryListBuilder.js - FIXED buildKeyToCoursesByLevel
 
   /**
    * Build key to courses from results, organized by level - FIXED VERSION
@@ -257,28 +260,28 @@ class SummaryListBuilder {
   async buildKeyToCoursesByLevel(results) {
     try {
       console.log(`📊 [KeyToCourses] Building from ${results?.length || 0} results`);
-      
+
       if (!Array.isArray(results) || results.length === 0) {
         console.warn('buildKeyToCoursesByLevel: No results or not an array');
         return {};
       }
-      
+
       const coursesByLevel = {};
       const uniqueCourses = new Map(); // Track unique courses by level
-      
+
       for (const result of results) {
         if (!result || typeof result !== 'object') {
           console.warn('Skipping invalid result:', result);
           continue;
         }
-        
+
         // Get course data from result
         const course = result.courseId;
         if (!course) {
           console.warn('Result missing courseId:', result);
           continue;
         }
-        
+
         // Get level from student or course
         let level;
         if (result.studentId && typeof result.studentId === 'object' && result.studentId.level) {
@@ -290,23 +293,23 @@ class SummaryListBuilder {
         } else {
           level = "100"; // Default
         }
-        
+
         // ✅ CRITICAL FIX: Initialize courses array for this level
         if (!coursesByLevel[level]) {
           coursesByLevel[level] = [];  // ✅ Direct array, not nested object
           uniqueCourses.set(level, new Set());
         }
-        
+
         // Create unique key for this course
         const courseKey = course._id?.toString() || JSON.stringify(course);
         const levelUniqueSet = uniqueCourses.get(level);
-        
+
         // Skip if we've already added this course for this level
         if (levelUniqueSet.has(courseKey)) {
           continue;
         }
         levelUniqueSet.add(courseKey);
-        
+
         // Handle borrowed courses
         let finalCourse = {
           courseId: course._id,
@@ -318,7 +321,7 @@ class SummaryListBuilder {
           isCoreCourse: course.isCoreCourse || false,
           isBorrowed: false
         };
-        
+
         // If course has borrowedId and it's populated, use the original course data
         if (course.borrowedId && typeof course.borrowedId === 'object') {
           const originalCourse = course.borrowedId;
@@ -333,28 +336,28 @@ class SummaryListBuilder {
             isBorrowed: true
           };
         }
-        
+
         // ✅ CORRECT: Direct array push
         coursesByLevel[level].push(finalCourse);
       }
-      
+
       // Sort courses by courseCode within each level
       for (const level in coursesByLevel) {
         if (Array.isArray(coursesByLevel[level])) {
-          coursesByLevel[level].sort((a, b) => 
+          coursesByLevel[level].sort((a, b) =>
             (a.courseCode || "").localeCompare(b.courseCode || "")
           );
-          
+
           console.log(`  Level ${level}: ${coursesByLevel[level].length} unique courses`);
           if (coursesByLevel[level].length > 0) {
             console.log(`    Courses: ${coursesByLevel[level].map(c => c.courseCode).join(', ')}`);
           }
         }
       }
-      
+
       const totalCourses = Object.values(coursesByLevel).reduce((sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0), 0);
       console.log(`📊 [KeyToCourses] Built ${totalCourses} courses across ${Object.keys(coursesByLevel).length} levels`);
-      
+
       // ✅ FINAL VALIDATION: Ensure structure is correct
       console.log('🔍 [KeyToCourses] Structure validation:');
       for (const level in coursesByLevel) {
@@ -376,9 +379,9 @@ class SummaryListBuilder {
           }
         }
       }
-      
+
       return coursesByLevel;
-      
+
     } catch (error) {
       console.error('❌ Error in buildKeyToCoursesByLevel:', error);
       return {};
@@ -400,13 +403,13 @@ class SummaryListBuilder {
     // If it's already in the correct grouped format {level: [{level, summary}]}
     if (typeof studentSummariesData === 'object' && !Array.isArray(studentSummariesData)) {
       const result = {};
-      
+
       for (const [level, items] of Object.entries(studentSummariesData)) {
         if (!Array.isArray(items)) {
           result[level] = [];
           continue;
         }
-        
+
         // Extract just the summary part from each wrapper object 
         result[level] = items.map(item => {
           if (item && typeof item === 'object') {
@@ -420,19 +423,19 @@ class SummaryListBuilder {
           return item;
         }).filter(item => item); // Remove null/undefined items
       }
-      
+
       return result;
     }
 
     // If it's an array, group by level
     if (Array.isArray(studentSummariesData)) {
       const grouped = {};
-      
+
       for (const item of studentSummariesData) {
         if (!item || typeof item !== 'object') continue;
-        
+
         let level, summary;
-        
+
         // Handle wrapper object structure: {level: "100", summary: {...}}
         if (item.level && item.summary) {
           level = item.level;
@@ -446,14 +449,14 @@ class SummaryListBuilder {
           level = "100";
           summary = item;
         }
-        
+
         if (!grouped[level]) {
           grouped[level] = [];
         }
-        
+
         grouped[level].push(summary);
       }
-      
+
       return grouped;
     }
 
@@ -493,39 +496,39 @@ class SummaryListBuilder {
     if (Array.isArray(listEntries)) {
       // Input is array of list entries
       console.log(`groupListsByLevel: Processing ${listEntries.length} list entries`);
-      
+
       for (const entry of listEntries) {
         if (!entry || typeof entry !== 'object') {
           console.warn('groupListsByLevel: Invalid entry', entry);
           continue;
         }
-        
+
         const level = entry.level || "100";
-        
+
         // Initialize arrays for this level if not exists
         if (!result.passList[level]) result.passList[level] = [];
         if (!result.probationList[level]) result.probationList[level] = [];
         if (!result.withdrawalList[level]) result.withdrawalList[level] = [];
         if (!result.terminationList[level]) result.terminationList[level] = [];
         if (!result.carryoverStudents[level]) result.carryoverStudents[level] = [];
-        
+
         // Add entries to appropriate lists
         if (entry.passList && entry.passList !== null) {
           result.passList[level].push(entry.passList);
         }
-        
+
         if (entry.probationList && entry.probationList !== null) {
           result.probationList[level].push(entry.probationList);
         }
-        
+
         if (entry.withdrawalList && entry.withdrawalList !== null) {
           result.withdrawalList[level].push(entry.withdrawalList);
         }
-        
+
         if (entry.terminationList && entry.terminationList !== null) {
           result.terminationList[level].push(entry.terminationList);
         }
-        
+
         if (entry.carryoverList && entry.carryoverList !== null) {
           result.carryoverStudents[level].push(entry.carryoverList);
         }
@@ -533,11 +536,11 @@ class SummaryListBuilder {
     } else if (typeof listEntries === 'object') {
       // Input might already be grouped
       console.log('groupListsByLevel: Input is already an object');
-      
+
       // Check if it has our expected structure
       const expectedKeys = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
       const hasAllKeys = expectedKeys.every(key => key in listEntries);
-      
+
       if (hasAllKeys) {
         // Already in correct structure, just return
         return listEntries;
@@ -545,18 +548,18 @@ class SummaryListBuilder {
         // Might be {level: [entries]} format
         for (const [level, entries] of Object.entries(listEntries)) {
           if (!Array.isArray(entries)) continue;
-          
+
           // Initialize arrays for this level
           result.passList[level] = [];
           result.probationList[level] = [];
           result.withdrawalList[level] = [];
           result.terminationList[level] = [];
           result.carryoverStudents[level] = [];
-          
+
           // Process each entry
           for (const entry of entries) {
             if (!entry || typeof entry !== 'object') continue;
-            
+
             // Add based on entry type
             if (entry.passList) result.passList[level].push(entry.passList);
             if (entry.probationList) result.probationList[level].push(entry.probationList);
@@ -567,7 +570,7 @@ class SummaryListBuilder {
         }
       }
     }
-    
+
     // Log what we found
     console.log('groupListsByLevel Result:', {
       totalLevels: Object.keys(result.passList).length,
@@ -575,7 +578,7 @@ class SummaryListBuilder {
       probationListCounts: Object.keys(result.probationList).map(l => `${l}: ${result.probationList[l].length}`),
       terminationListCounts: Object.keys(result.terminationList).map(l => `${l}: ${result.terminationList[l].length}`)
     });
-    
+
     return result;
   }
 
@@ -592,21 +595,21 @@ class SummaryListBuilder {
       terminationList: {},
       carryoverStudents: {}
     };
-    
+
     for (const [level, entries] of Object.entries(flatGroup)) {
       if (!Array.isArray(entries)) continue;
-      
+
       // Initialize all list types for this level
       structured.passList[level] = [];
       structured.probationList[level] = [];
       structured.withdrawalList[level] = [];
       structured.terminationList[level] = [];
       structured.carryoverStudents[level] = [];
-      
+
       // Categorize each entry
       for (const entry of entries) {
         if (!entry || typeof entry !== 'object') continue;
-        
+
         // Determine which list this entry belongs to
         if (entry.remark === 'excellent' || entry.remark === 'good' || entry.gpa >= 1.5) {
           structured.passList[level].push(entry);
@@ -617,15 +620,55 @@ class SummaryListBuilder {
         } else if (entry.remark === 'terminated') {
           structured.terminationList[level].push(entry);
         }
-        
+
         // Check for carryover list
         if (entry.carryoverCount > 0 || entry.courses) {
           structured.carryoverStudents[level].push(entry);
         }
       }
     }
-    
+
     return structured;
+  }
+  /** Build department details with dean and HOD information
+   * @param {Object} department - Department object
+   * @param {Object} faculty - Faculty object (populated with dean)
+   * @param {Object} hodLecturer - Lecturer object for HOD
+   * @param {Object} deanLecturer - Lecturer object for Dean
+   * @param {Object} activeSemester - Current semester
+   * @returns {Object} Department details
+   */
+  buildDepartmentDetails(department, faculty, hodLecturer, deanLecturer, activeSemester) {
+    const currentYear = new Date().getFullYear();
+    const nextYear = currentYear + 1;
+
+    return {
+      name: department?.name || '',
+      code: department?.code || '',
+      faculty: {
+        name: faculty?.name || '',
+        code: faculty?.code || ''
+      },
+      dean: {
+        name: deanLecturer?._id?.name || deanLecturer?.name || 'Dr. John Doe',
+        title: 'Dean',
+        rank: deanLecturer?.rank || 'Professor',
+        staffId: deanLecturer?.staffId || '',
+        signature: deanLecturer?.signature || '',
+        isDean: deanLecturer?.isDean || true
+      },
+      hod: {
+        name: hodLecturer?._id?.name || hodLecturer?.name || 'Prof. Jane Smith',
+        title: 'Head of Department',
+        rank: hodLecturer?.rank || 'Professor',
+        staffId: hodLecturer?.staffId || '',
+        signature: hodLecturer?.signature || '',
+        isHOD: hodLecturer?.isHOD || true
+      },
+      academicYear: activeSemester?.academicYear || `${currentYear}/${nextYear}`,
+      semester: activeSemester?.name || '',
+      generatedDate: new Date().toISOString()
+    };
   }
 
   /**
@@ -635,12 +678,12 @@ class SummaryListBuilder {
    * @param {Object|Map} keyToCoursesByLevel - Key to courses grouped by level
    * @returns {Object} Master sheet data organized by level
    */
-  buildMasterSheetDataByLevel(studentSummariesByLevel, summaryStats, keyToCoursesByLevel) {
+  buildMasterSheetDataByLevel(studentSummariesByLevel, summaryStats, keyToCoursesByLevel, departmentDetails = {}) {
     try {
       // Convert Map to object if necessary
       const studentSummaries = this._convertToObject(studentSummariesByLevel);
       const keyToCourses = this._convertToObject(keyToCoursesByLevel);
-      
+
       // Validate inputs
       if (!studentSummaries || typeof studentSummaries !== 'object') {
         console.error('buildMasterSheetDataByLevel: Invalid studentSummariesByLevel:', studentSummariesByLevel);
@@ -649,7 +692,7 @@ class SummaryListBuilder {
           overallSummary: summaryStats || {}
         };
       }
-      
+
       const masterSheetDataByLevel = new Map();
       const levels = Object.keys(studentSummaries);
 
@@ -657,7 +700,7 @@ class SummaryListBuilder {
       for (const level of levels) {
         const studentSummariesForLevel = studentSummaries[level];
         const coursesForLevel = keyToCourses[level] || [];
-        
+
         if (!Array.isArray(studentSummariesForLevel)) {
           console.warn(`buildMasterSheetDataByLevel: Invalid student summaries for level ${level}:`, studentSummariesForLevel);
           continue;
@@ -665,16 +708,16 @@ class SummaryListBuilder {
 
         // Pass List
         const passList = this._buildPassList(studentSummariesForLevel);
-        
+
         // Courses Still Outstanding
         const outstandingCoursesList = this._buildOutstandingCoursesList(studentSummariesForLevel);
-        
+
         // Probation List
         const probationList = this._buildProbationList(studentSummariesForLevel);
-        
+
         // Withdrawal List
         const withdrawalList = this._buildWithdrawalList(studentSummariesForLevel);
-        
+
         // Termination List
         const terminationList = this._buildTerminationList(studentSummariesForLevel);
 
@@ -684,7 +727,7 @@ class SummaryListBuilder {
 
         // MMS1 Format for this level
         const mms1 = this._buildMMS1(studentSummariesForLevel, coursesForLevel);
-        
+
         // MMS2 Format for this level
         const mms2 = this._buildMMS2(studentSummariesForLevel);
 
@@ -703,13 +746,21 @@ class SummaryListBuilder {
 
       return {
         masterSheetDataByLevel: Object.fromEntries(masterSheetDataByLevel),
-        overallSummary: summaryStats || {}
+        overallSummary: summaryStats || {},
+        // ADD DEPARTMENT DETAILS HERE:
+        departmentDetails: departmentDetails || this._getDefaultDepartmentDetails()
       };
+
     } catch (error) {
       console.error('Error in buildMasterSheetDataByLevel:', error);
       return {
         masterSheetDataByLevel: {},
-        overallSummary: summaryStats || {}
+        overallSummary: summaryStats || {},
+        departmentDetails: {
+          name: '',
+          dean: { name: '', title: 'Dean' },
+          hod: { name: '', title: 'Head of Department' }
+        }
       };
     }
   }
@@ -719,15 +770,15 @@ class SummaryListBuilder {
    */
   _convertToObject(input) {
     if (!input) return {};
-    
+
     if (input instanceof Map) {
       return Object.fromEntries(input);
     }
-    
+
     if (typeof input === 'object' && !Array.isArray(input)) {
       return input;
     }
-    
+
     console.warn('_convertToObject: Invalid input type', typeof input);
     return {};
   }
@@ -737,7 +788,7 @@ class SummaryListBuilder {
    */
   _buildPassList(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries
       .filter(s => s && s.academicStatus === "good" && s.currentSemester?.gpa >= 1.5)
       .map((s, index) => ({
@@ -753,14 +804,14 @@ class SummaryListBuilder {
    */
   _buildOutstandingCoursesList(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries
       .filter(s => s && s.outstandingCourses && s.outstandingCourses.length > 0)
       .map((s, index) => ({
         s_n: index + 1,
         matricNo: s.matricNumber || 'N/A',
         name: s.name || 'N/A',
-        courses: Array.isArray(s.outstandingCourses) 
+        courses: Array.isArray(s.outstandingCourses)
           ? s.outstandingCourses.map(c => c.courseCode || c.courseId || 'N/A').filter(Boolean)
           : []
       }));
@@ -771,7 +822,7 @@ class SummaryListBuilder {
    */
   _buildProbationList(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries
       .filter(s => s && s.academicStatus === "probation")
       .map((s, index) => ({
@@ -788,7 +839,7 @@ class SummaryListBuilder {
    */
   _buildWithdrawalList(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries
       .filter(s => s && s.academicStatus === "withdrawal")
       .map((s, index) => ({
@@ -805,7 +856,7 @@ class SummaryListBuilder {
    */
   _buildTerminationList(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries
       .filter(s => s && s.academicStatus === "terminated")
       .map((s, index) => ({
@@ -847,7 +898,7 @@ class SummaryListBuilder {
     if (!Array.isArray(studentSummaries) || !Array.isArray(keyToCourses)) {
       return [];
     }
-    
+
     return studentSummaries.map((student, index) => {
       const courses = keyToCourses.map(course => {
         const studentCourse = student.courseResults?.find(cr => cr.courseCode === course.courseCode);
@@ -885,7 +936,7 @@ class SummaryListBuilder {
    */
   _buildMMS2(studentSummaries) {
     if (!Array.isArray(studentSummaries)) return [];
-    
+
     return studentSummaries.map((student, index) => ({
       s_n: index + 1,
       matricNo: student.matricNumber || 'N/A',
@@ -920,19 +971,19 @@ class SummaryListBuilder {
       thirdClass: 0,
       fail: 0
     };
-    
+
     if (!Array.isArray(studentSummaries)) {
       console.warn('calculateGradeDistribution: studentSummaries is not an array:', studentSummaries);
       return distribution;
     }
-    
+
     for (const student of studentSummaries) {
       if (!student || typeof student !== 'object') continue;
-      
+
       try {
         const gpa = student.currentSemester?.gpa || student.gpa || 0;
         const classification = GPACalculator.getGradeClassification(gpa);
-        
+
         if (distribution[classification] !== undefined) {
           distribution[classification]++;
         } else {
@@ -943,7 +994,7 @@ class SummaryListBuilder {
         distribution.fail++;
       }
     }
-    
+
     return distribution;
   }
 
@@ -960,21 +1011,21 @@ class SummaryListBuilder {
       terminationList: [],
       carryoverStudents: []
     };
-    
+
     if (!groupedLists || typeof groupedLists !== 'object') {
       console.warn('buildBackwardCompatibleLists: groupedLists is invalid:', groupedLists);
       return flatLists;
     }
-    
+
     // Helper function to safely flatten arrays
     const flattenArray = (arr) => {
       if (!arr || !Array.isArray(arr)) return [];
       return arr.filter(item => item !== null && item !== undefined);
     };
-    
+
     // Flatten all lists with safety checks
     const listTypes = ['passList', 'probationList', 'withdrawalList', 'terminationList', 'carryoverStudents'];
-    
+
     for (const listType of listTypes) {
       if (groupedLists[listType] && typeof groupedLists[listType] === 'object') {
         for (const level in groupedLists[listType]) {
@@ -985,7 +1036,7 @@ class SummaryListBuilder {
         }
       }
     }
-    
+
     return flatLists;
   }
 }

@@ -9,6 +9,8 @@ import departmentModel from "../department/department.model.js";
 import { deleteUser } from "../user/user.controller.js";
 import { hashData } from "../../utils/hashData.js";
 import lecturerModel from "./lecturer.model.js";
+import departmentService from "../department/department.service.js";
+import facultyService from "../faculty/faculty.service.js";
 
 /**
  * 🧑‍🏫 Create Lecturer (Admin only)
@@ -40,7 +42,7 @@ export const createLecturer = async (req, res) => {
       if (userFromMiddleware?.role === "hod") {
         const hodId = userFromMiddleware._id;
 
-        const department = await departmentModel.findOne({ hod: hodId });
+        const department = await departmentService.getDepartmentByHod(req.user._id)
 
         if (!department) {
           return buildResponse(res, 404, "Department not found for HOD", null, true);
@@ -126,13 +128,32 @@ export const createLecturer = async (req, res) => {
  * 📋 Get All Lecturers (Admin / HOD)
  */
 export const getAllLecturers = async (req, res) => {
+  let additionalFilters = {};
+
+  if (req.user.role === "hod") {
+    const department = await departmentService.getDepartmentByHod(req.user._id);
+    if (department) {
+      additionalFilters.departmentId = department._id;
+    }
+  }
+
+  if (req.user.role === "dean") {
+    const faculty = await facultyService.getFacultyByDean(req.user._id);
+    if (faculty) {
+      additionalFilters.facultyId = faculty._id;
+    }
+  }
+
   return fetchDataHelper(req, res, Lecturer, {
     configMap: dataMaps.Lecturer,
     autoPopulate: true,
     models: { departmentModel, User },
     populate: ["departmentId", "_id"],
+    additionalFilters
   });
 };
+
+
 
 
 /**
@@ -269,13 +290,13 @@ export const getAllDeans = async (req, res) => {
     models: { departmentModel, User },
     populate: [
       {
-      path: "_id",
-      select: "email name",
+        path: "_id",
+        select: "email name",
 
-    },  {
-      path: "departmentId",
-      select: "name",
-    }],
+      }, {
+        path: "departmentId",
+        select: "name",
+      }],
     additionalFilters: {
       isDean: true
     }
@@ -288,13 +309,13 @@ export const getAllHODs = async (req, res) => {
     models: { departmentModel, User },
     populate: [
       {
-      path: "_id",
-      select: "email name",
+        path: "_id",
+        select: "email name",
 
-    },  {
-      path: "departmentId",
-      select: "name",
-    }],
+      }, {
+        path: "departmentId",
+        select: "name",
+      }],
     // custom_fields: {  email: '_id.email'},
     additionalFilters: {
       isHOD: true

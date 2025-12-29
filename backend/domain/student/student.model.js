@@ -19,6 +19,11 @@ const studentSchema = new mongoose.Schema(
       ref: "Department",
       required: true,
     },
+    facultyId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Faculty",
+      required: true,
+    },
 
     level: {
       type: String,
@@ -63,6 +68,20 @@ const studentSchema = new mongoose.Schema(
       enum: ["none", "withdrawn", "terminated", "expelled"],
       default: "none"
     },
+    suspension: {
+      status: { type: Boolean, default: false },
+      reason: {
+        type: String,
+        enum: ["NO_REGISTRATION", "SCHOOL_APPROVED"],
+        default: null
+      },
+      sinceSemesterId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Semester",
+        default: null
+      }
+    }
+
   },
   { timestamps: true }
 );

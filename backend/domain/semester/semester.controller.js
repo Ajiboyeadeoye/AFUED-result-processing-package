@@ -6,6 +6,7 @@ import { AcademicSemester } from "./semester.academicModel.js";
 import departmentModel from "../department/department.model.js";
 import studentModel from "../student/student.model.js";
 import SemesterService from "./semester.service.js";
+import departmentService from "../department/department.service.js";
 
 // Type-safe constants
 const VALID_SEMESTERS = ["first", "second", "summer"];
@@ -210,7 +211,7 @@ export const toggleRegistration = async (req, res) => {
 
     // ---------------- HOD / DEAN LOGIC ----------------
     if (userRole === "hod" || userRole === "dean") {
-      const dept = await departmentModel.findOne({ hod: req.user._id });
+      const dept = await departmentService.getDepartmentByHod(req.user._id)
 
       if (!dept) {
         return buildResponse(res, 400, "No department assigned to user", null, true);
@@ -283,7 +284,7 @@ export const toggleResultPublication = async (req, res) => {
 
     // ---------------- HOD / DEAN LOGIC ----------------
     if (userRole === "hod" || userRole === "dean") {
-      const dept = await departmentModel.findOne({ hod: req.user._id });
+      const dept = await departmentService.getDepartmentByHod(req.user._id)
 
       if (!dept) {
         return buildResponse(res, 400, "No department assigned to this user", null, true);
@@ -344,7 +345,7 @@ export const getActiveSemester = async (req, res) => {
 
     // ------------------- HOD/DEAN -------------------
     if (req.user.role === "hod" || req.user.role === "dean") {
-      const userDept = await departmentModel.findOne({ hod: req.user._id });
+      const userDept = await departmentService.getDepartmentByHod(req.user._id)
 
       if (!userDept) {
         return buildResponse(res, 400, "Department not found for this user", null, true);
@@ -449,7 +450,7 @@ export const updateLevelSettings = async (req, res) => {
 
     // 🔹 HOD/Dean — auto detect their department
     if (userRole === "hod" || userRole === "dean") {
-      const userDept = await departmentModel.findOne({ hod: req.user._id });
+      const userDept = await departmentService.getDepartmentByHod(req.user._id)
 
       if (!userDept) {
         return buildResponse(res, 403, "No department assigned to this HOD/Dean", null, true);

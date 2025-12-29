@@ -23,14 +23,14 @@ const router = express.Router();
  */
 router.post(
   "/",
-  authenticate("admin"),
+  authenticate(["admin", "dean"]),
   createDepartment
 );
 
 // Get all departments in a faculty
 router.get(
   "/",
-  authenticate("admin"),
+  authenticate(["admin", "dean"]),
   getAllDepartment
 );
 
@@ -43,7 +43,7 @@ router.get(
 /**
  * 🔍 Get a single department by ID
  */
-router.get("/:departmentId", authenticate(), getDepartmentById);
+router.get("/:departmentId", authenticate(["admin", "dean"]), getDepartmentById);
 
 /**
  * ✏️ Update a department (Admin only)
@@ -77,7 +77,7 @@ router.patch(
  */
 router.patch(
   "/:departmentId/remove-hod",
-  authenticate(["admin", "superuser", "dean"]),
+  authenticate(["admin", "dean"]),
   removeHOD
 );
 

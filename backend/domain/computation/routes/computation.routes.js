@@ -11,7 +11,7 @@ import {
   calculateSemesterGPA,
   // calculateStudentCGPA,
   // calculateStudentCGPAr
-} from "../workers/computation.controller.js";
+} from "../workers copy2/computation.controller.js";
 import authenticate from "../../../middlewares/authenticate.js";
 import { getHodComputationDetails, getHodComputationHistory, getHodComputationSemesters, getHodComputationSummary } from "../services/helpers.js";
 
@@ -19,6 +19,7 @@ import ComputationSummary from "../../result/computation.model.js";
 import MasterSheetHtmlRenderer from "../services/master-sheet/MasterSheetHtmlRenderer.js";
 import Semester from "../../semester/semester.model.js";
 import departmentModel from "../../department/department.model.js";
+import departmentService from "../../department/department.service.js";
 
 const router = express.Router();
 
@@ -103,7 +104,7 @@ router.get("/summary/:summaryId/:level", async (req, res) => {
 
 
 // GET all computations with filtering and pagination
-router.get('/', async (req, res) => {
+router.get('/', authenticate(["hod", "admin"]), async (req, res) => {
   try {
     const {
       page = 1,
@@ -118,14 +119,13 @@ router.get('/', async (req, res) => {
     } = req.query;
 
     const skip = (page - 1) * limit;
-    
-    // Build query
+    const department = await departmentService.getDepartmentByHod(req.user._id)
     const query = {};
     
     if (status) query.status = status;
     if (purpose) query.purpose = purpose;
     if (semesterId) query.semester = semesterId;
-    if (departmentId) query.department = departmentId;
+    if (departmentId) {query.department = departmentId}else if(department){query.department = department._id};
     
     if (search) {
       query.$or = [

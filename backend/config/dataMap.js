@@ -398,6 +398,26 @@ export const dataMaps = {
 
       return await models.CourseRegistration.countDocuments(filter);
     },
+    pending_result_uploads: async (doc, models) => {
+      const courseId = doc.course?._id || doc.course;
+      const semesterId = doc.semester?._id || doc.semester;
+
+      if (!courseId || !semesterId) return 0;
+
+      // Count how many students are registered for this course in this semester
+      const registeredCount = await models.CourseRegistration.countDocuments({
+        courses: courseId,
+        semester: semesterId,
+      });
+
+      // Count how many of those students have not uploaded their results
+      const pendingCount = await models.Result.countDocuments({
+        courseId: courseId,
+        semester: semesterId,
+      });
+
+      return registeredCount-pendingCount;
+    },
   }
 
   ,
