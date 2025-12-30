@@ -135,10 +135,12 @@ export class RemitaProvider {
     }
 
     return {
-      transactionRef: ref,
-      providerStatus: data.status,
-      status: data.status === "00" ? "SUCCEEDED" : "FAILED",
-      raw: data,
+        transactionRef: ref,
+        status: data.status === "00" ? "SUCCEEDED" : "FAILED",
+        raw: {
+            providerStatus: data.status,
+            payload: data,
+        },
     };
   }
 }
