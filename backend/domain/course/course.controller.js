@@ -25,7 +25,6 @@ import carryOverSchema from "../result/carryover.model.js";
 import CarryoverCourse from "../result/carryover.model.js";
 import departmentService from "../department/department.service.js";
 
-import { CourseRestrictionService } from "../payment/courseRestriction.service.js";
 // =========================================================
 // 🧩 Utility Functions
 // =========================================================
@@ -698,54 +697,6 @@ export const unassignCourse = async (req, res) => {
 export const registerCourses = async (req, res) => {
   try {
     const { courses: selectedCourseIds } = req.body;
-
-    // =============================================
-    // ✅ PAYMENT RESTRICTION CHECK - ADD THIS SECTION
-    // =============================================
-    
-    // Only check payment for students
-    if (req.user.role === "student") {
-      try {
-        const restrictionService = new CourseRestrictionService();
-        
-        // Check if student has paid school fees
-        const schoolFeesPaid = await restrictionService.hasPaidSchoolFees(req.user._id);
-        
-        if (!schoolFeesPaid) {
-          return buildResponse.error(
-            res,
-            "Course registration requires payment of school fees",
-            403,
-            {
-              restrictionType: "PAYMENT_REQUIRED",
-              requiredPayment: "SCHOOL_FEES",
-              message: "Please pay your school fees to register for courses",
-              suggestedAction: "Make school fees payment through the payment portal",
-              feeType: "SCHOOL_FEES"
-            }
-          );
-        }
-        
-        // Optional: Check if student has paid other mandatory fees
-        const mandatoryFeesCheck = await restrictionService.hasPaidAllMandatoryFees(req.user._id);
-        
-        if (!mandatoryFeesCheck.paid && mandatoryFeesCheck.missingFee) {
-          // You can choose to allow registration with warning or block it
-          // For now, we'll just log it as a warning
-          console.warn(`Student ${req.user._id} missing ${mandatoryFeesCheck.missingFee}:`, mandatoryFeesCheck.message);
-        }
-        
-      } catch (paymentError) {
-        console.error("Payment restriction check error:", paymentError);
-        // If payment check fails, decide whether to allow or block
-        // For safety, we'll allow registration but log the error
-        console.warn("Payment check failed, allowing registration for now");
-      }
-    }
-    // =============================================
-    // END OF PAYMENT RESTRICTION CHECK
-    // =============================================
-
 
     // 1️⃣ GET STUDENT
     const student = await studentModel.findById(req.user._id).lean();
