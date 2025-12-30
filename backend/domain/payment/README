@@ -1,0 +1,169 @@
+
+Payment Module
+A flexible payment processing system supporting multiple payment providers (Paystack, Remita) for university fee payments.
+
+Features
+✅ Multi-provider support: Paystack and Remita integration
+
+✅ Department & Level-based fees: Fees configured per department, level, and academic session
+
+✅ Payment verification middleware: Protect routes based on payment status
+
+✅ Webhook support: Real-time payment status updates
+
+✅ Transaction tracking: Full audit trail for all payments
+
+✅ Fee structure management: Admin configurable payment amounts
+
+Quick Start
+1. Installation
+bash
+npm install
+2. Environment Variables
+Create .env file:
+
+env
+# Paystack
+PAYSTACK_SECRET_KEY=sk_test_xxx
+PAYSTACK_PUBLIC_KEY=pk_test_xxx
+
+# Remita
+REMITA_API_KEY=your_remita_key
+REMITA_MERCHANT_ID=your_merchant_id
+REMITA_SERVICE_TYPE_ID=your_service_type
+
+# App
+APP_URL=http://localhost:3000
+MONGODB_URI=mongodb://localhost:27017/yourdb
+3. Setup Fee Structure (Admin)
+javascript
+// Example: Create course registration fee for Level 100 Computer Science
+POST /api/payments/fees
+{
+  "purpose": "COURSE_REGISTRATION",
+  "department": "department_id",
+  "level": 100,
+  "session": "2023/2024",
+  "amount": 5000,
+  "currency": "NGN"
+}
+API Endpoints
+Student Routes (/api/payments)
+Method	Endpoint	Description
+GET	/expected-amount?purpose=COURSE_REGISTRATION	Get expected payment amount
+POST	/initialize	Initialize payment
+GET	/status/:transactionRef	Check payment status
+GET	/history	Get payment history
+GET	/providers	Get available providers
+GET	/callback	Payment callback (public)
+Admin Routes (/api/admin/payments)
+Method	Endpoint	Description
+GET	/fees	Get all fee structures
+POST	/fees	Create fee structure
+PUT	/fees/:id	Update fee structure
+DELETE	/fees/:id	Delete fee structure
+Webhooks (Public)
+Method	Endpoint	Description
+POST	/webhook/PAYSTACK	Paystack webhook
+POST	/webhook/REMITA	Remita webhook
+Usage Examples
+1. Student Payment Flow
+javascript
+// 1. Get expected amount
+GET /api/payments/expected-amount?purpose=COURSE_REGISTRATION
+
+// 2. Initialize payment
+POST /api/payments/initialize
+{
+  "purpose": "COURSE_REGISTRATION",
+  "provider": "PAYSTACK" // or "REMITA"
+}
+
+// Response: Redirect user to providerResponse.authorizationUrl
+2. Protect Routes with Payment Middleware
+javascript
+import { paymentGuard } from '../middlewares/paymentGuard.js';
+
+// Protect course registration route
+router.post(
+  '/courses/register',
+  paymentGuard({ 
+    purpose: 'COURSE_REGISTRATION',
+    requireSession: true,
+    requireSemester: true 
+  }),
+  courseController.registerCourses
+);
+3. Check Payment Status in Frontend
+javascript
+// Poll payment status
+const checkStatus = async (transactionRef) => {
+  const response = await fetch(`/api/payments/status/${transactionRef}`);
+  const { data } = await response.json();
+  
+  if (data.status === 'SUCCESSFUL') {
+    // Proceed with registration
+  }
+};
+Models
+1. Payment Model
+Tracks all payment transactions
+
+Links to student, department, and academic session
+
+Stores provider details and payment status
+
+2. PaymentFee Model
+Defines fee amounts per purpose, department, level, and session
+
+Admin configurable
+
+3. Semester Model
+Provides current academic context
+
+Used to determine valid payment periods
+
+Payment Providers
+Paystack
+Supports NGN, USD, GHS, ZAR
+
+Multiple channels: card, bank, USSD, QR
+
+Webhook support with signature verification
+
+Remita
+Nigerian-focused payment platform
+
+RRR (Remita Retrieval Reference) based
+
+Bank and online payment support
+
+Testing
+bash
+# Test with Paystack test credentials
+PAYSTACK_SECRET_KEY=sk_test_xxx
+PAYSTACK_PUBLIC_KEY=pk_test_xxx
+
+# Use test email: test@example.com
+# Use test card: 408 408 408 408 4081 (any future date, any CVV)
+Deployment Notes
+Webhook URLs: Configure in provider dashboards
+
+SSL Required: Webhooks require HTTPS
+
+Logging: Enable detailed logging for troubleshooting
+
+Database Indexes: Ensure indexes on frequently queried fields
+
+Cron Jobs: Consider adding cleanup job for expired payments
+
+Support
+For issues:
+
+Check payment logs in console
+
+Verify provider credentials
+
+Confirm fee structure exists for student's department/level
+
+Ensure webhook URLs are correctly configured
