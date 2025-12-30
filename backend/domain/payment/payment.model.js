@@ -1,53 +1,53 @@
+// domain/payment/payment.model.js
 import mongoose from "mongoose";
 
 const { Schema } = mongoose;
 
 const paymentSchema = new Schema(
   {
-    // Who paid
-    payer: {
+    student: {
       type: Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Student",
       required: true,
       index: true,
     },
 
-    // What the payment is for
     purpose: {
       type: String,
       enum: [
         "COURSE_REGISTRATION",
         "EXAM_REGISTRATION",
-        "RESULT_ACCESS",
         "SCHOOL_FEES",
         "TRANSCRIPT",
         "ADMISSION",
-        "CERTIFICATE",
         "OTHER",
       ],
       required: true,
       index: true,
     },
 
-    // Academic context (nullable, validated at schema level)
     session: {
-      type: Schema.Types.ObjectId,
-      ref: "AcademicSession",
-      default: null,
+      type: String,
+      required: true,
+      match: /^\d{4}\/\d{4}$/,
       index: true,
     },
 
     semester: {
-      type: Schema.Types.ObjectId,
-      ref: "Semester",
-      default: null,
+      type: String,
+      enum: ["first", "second", "summer"],
       index: true,
     },
 
-    // Amount info
-    amount: {
+    expectedAmount: {
       type: Number,
       required: true,
+      min: 0,
+    },
+
+    paidAmount: {
+      type: Number,
+      default: 0,
       min: 0,
     },
 
@@ -56,11 +56,17 @@ const paymentSchema = new Schema(
       default: "NGN",
     },
 
-    // Provider
     provider: {
       type: String,
-      enum: ["REMITA", "STRIPE", "PAYSTACK", "MANUAL"],
+      enum: ["REMITA", "PAYSTACK"],
+      default: "REMITA",
+      index: true,
+    },
+
+    transactionRef: {
+      type: String,
       required: true,
+      unique: true,
       index: true,
     },
 
@@ -69,19 +75,10 @@ const paymentSchema = new Schema(
       index: true,
     },
 
-    // Internal transaction reference
-    transactionRef: {
-      type: String,
-      required: true,
-      unique: true,
-      index: true,
-    },
-
-    // Payment lifecycle status
     status: {
       type: String,
-      enum: ["CREATED", "PENDING", "SUCCEEDED", "FAILED", "REFUNDED"],
-      default: "CREATED",
+      enum: ["PENDING", "SUCCESSFUL", "FAILED"],
+      default: "PENDING",
       index: true,
     },
 
@@ -90,10 +87,30 @@ const paymentSchema = new Schema(
       default: null,
     },
 
-    // Flexible extra data
-    metadata: {
+    studentLevel: {
+      type: Number,
+      required: true,
+    },
+
+    studentDepartment: {
+      type: Schema.Types.ObjectId,
+      ref: "Department",
+      required: true,
+    },
+
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
+
+    verifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    errorDetails: {
       type: Schema.Types.Mixed,
-      default: {},
+      default: null,
     },
   },
   {
@@ -101,65 +118,25 @@ const paymentSchema = new Schema(
   }
 );
 
-//
-// 🔐 SCHEMA-LEVEL VALIDATION (SAFE & CORRECT)
-//
-
-paymentSchema.pre("validate", function (next) {
-  const sessionRequiredFor = [
-    "COURSE_REGISTRATION",
-    "EXAM_REGISTRATION",
-    "RESULT_ACCESS",
-    "SCHOOL_FEES",
-  ];
-
-  const semesterRequiredFor = [
-    "COURSE_REGISTRATION",
-    "EXAM_REGISTRATION",
-    "RESULT_ACCESS",
-  ];
-
-  if (sessionRequiredFor.includes(this.purpose) && !this.session) {
-    return next(
-      new Error(`Session is required for ${this.purpose} payment`)
-    );
-  }
-
-  if (semesterRequiredFor.includes(this.purpose) && !this.semester) {
-    return next(
-      new Error(`Semester is required for ${this.purpose} payment`)
-    );
-  }
-
-  next();
-});
-
-//
-// 🚫 PREVENT DUPLICATE SUCCESSFUL PAYMENTS
-// (Allows retries, blocks double success)
-//
-
+// Prevent duplicate successful payments
 paymentSchema.index(
-  { payer: 1, purpose: 1, session: 1, semester: 1 },
-  {
+  { student: 1, purpose: 1, session: 1, semester: 1 },
+  { 
     unique: true,
-    partialFilterExpression: { status: "SUCCEEDED" },
+    partialFilterExpression: { status: "SUCCESSFUL" }
   }
 );
 
-//
-// 🧠 HELPERS
-//
-
-paymentSchema.statics.generateTransactionRef = function (prefix = "AFUED") {
-  return `${prefix}-${Date.now()}-${Math.random()
-    .toString(36)
-    .substring(2, 10)
-    .toUpperCase()}`;
+// Generate transaction reference
+paymentSchema.statics.generateTransactionRef = function () {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
+  return `PAY-${timestamp}-${random}`;
 };
 
+// Check if payment is successful
 paymentSchema.methods.isSuccessful = function () {
-  return this.status === "SUCCEEDED";
+  return this.status === "SUCCESSFUL";
 };
 
 export default mongoose.models.Payment ||

@@ -3,7 +3,7 @@ import buildResponse from "../utils/responseBuilder.js";
 import { auditLogger } from "../middlewares/auditLogger.js"; // <-- Import the logger
 
 // System-wide authorized roles
-const AUTHORIZED_ROLES = [, "admin", "hod", "lecturer", "student", "dean", "pro"];
+const AUTHORIZED_ROLES = ["admin", "hod", "lecturer", "student", "dean", "pro"];
 
 const authenticate = (roles = []) => {
   const allowedRoles = Array.isArray(roles) ? roles : roles ? [roles] : [];

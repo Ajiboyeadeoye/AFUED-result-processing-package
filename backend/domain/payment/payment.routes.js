@@ -1,114 +1,38 @@
+// routes/payment.routes.js
 import express from "express";
-import authenticate from "../../middlewares/authenticate.js";
-import paymentGuard from "../../middlewares/paymentGuard.js";
-
-import {
-  createPayment,
-  verifyPayment,
-  paymentWebhook,
-  getMyPayments,
-} from "./payment.controller.js";
+import { PaymentController } from "../controllers/payment.controller.js";
+import { authenticateStudent } from "../middleware/auth.js";
 
 const router = express.Router();
 
-/**
- * ==============================
- * PAYMENT INITIALIZATION
- * ==============================
- * Student creates a payment
- */
-router.post(
-  "/create",
-  authenticate(["student"]),
-  createPayment
-);
+// All routes require student authentication
+router.use(authenticateStudent);
 
-/**
- * ==============================
- * PAYMENT VERIFICATION (Polling)
- * ==============================
- * Used after redirect from provider
- */
-router.get(
-  "/verify/:transactionRef",
-  authenticate(["student", "admin"]),
-  verifyPayment
-);
+// Get expected payment amount
+router.get("/expected-amount", PaymentController.getExpectedAmount);
 
-/**
- * ==============================
- * PAYMENT WEBHOOKS
- * ==============================
- * Provider callbacks (NO AUTH)
- * Example:
- *  POST /api/payments/webhook/remita
- *  POST /api/payments/webhook/paystack
- */
-router.post(
-  "/webhook/:provider",
-  express.json(),
-  paymentWebhook
-);
+// Initialize payment
+router.post("/initialize", PaymentController.initializePayment);
 
-/**
- * ==============================
- * PAYMENT HISTORY
- * ==============================
- * Logged-in student payments
- */
-router.get(
-  "/my-payments",
-  authenticate(["student"]),
-  getMyPayments
-);
+// Check payment status
+router.get("/status/:transactionRef", PaymentController.checkPaymentStatus);
 
-/**
- * ==============================
- * GUARDED ROUTES EXAMPLES
- * ==============================
- * Use these in other modules (NOT payment module)
- */
+// Cancel pending payment
+router.delete("/cancel/:transactionRef", PaymentController.cancelPayment);
 
-/**
- * Example: Course registration (requires payment)
- */
-// router.post(
-//   "/course-registration",
-//   authenticate(["student"]),
-//   paymentGuard({
-//     purpose: "COURSE_REGISTRATION",
-//     requireSession: true,
-//     requireSemester: true,
-//   }),
-//   courseRegistrationController
-// );
+// Get payment history
+router.get("/history", PaymentController.getPaymentHistory);
 
-/**
- * Example: Result access
- */
-// router.get(
-//   "/results",
-//   authenticate(["student"]),
-//   paymentGuard({
-//     purpose: "RESULT_ACCESS",
-//     requireSession: true,
-//     requireSemester: true,
-//   }),
-//   viewResultController
-// );
+// Get available providers
+router.get("/providers", PaymentController.getProviders);
 
-/**
- * Example: Transcript download (no session/semester)
- */
-// router.get(
-//   "/transcript",
-//   authenticate(["student"]),
-//   paymentGuard({
-//     purpose: "TRANSCRIPT",
-//     requireSession: false,
-//     requireSemester: false,
-//   }),
-//   downloadTranscriptController
-// );
+// Verify payment (polling)
+router.get("/verify/:transactionRef", PaymentController.verifyPayment);
+
+// Payment callback (public route - no auth required)
+router.get("/callback", (req, res) => PaymentController.paymentCallback(req, res));
+
+// Webhook endpoints (public routes - no auth required)
+router.post("/webhook/:provider", (req, res) => PaymentController.handleWebhook(req, res));
 
 export default router;

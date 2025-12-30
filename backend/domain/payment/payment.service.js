@@ -1,157 +1,251 @@
 // domain/payment/payment.service.js
 import Payment from "./payment.model.js";
+import PaymentFee from "./payment-fee.model.js";
 import RemitaProvider from "./providers/remita.provider.js";
-// import StripeProvider from "./providers/stripe.provider.js";
+import PaystackProvider from "./providers/paystack.provider.js";
 
 const providers = {
   REMITA: new RemitaProvider(),
-  // STRIPE: new StripeProvider(),
+  PAYSTACK: new PaystackProvider(),
 };
 
 export class PaymentService {
   /**
-   * Create a payment and initialize with provider
+   * Get available payment providers
    */
-  static async createPayment({
-    student,
-    purpose,
-    amount,
-    provider = "REMITA",
-    session,
-    semester,
-    metadata = {},
-  }) {
-    if (!providers[provider]) {
-      throw new Error(`Unsupported payment provider: ${provider}`);
-    }
+  static getAvailableProviders() {
+    return Object.keys(providers).map(providerKey => ({
+      code: providerKey,
+      name: providerKey === 'PAYSTACK' ? 'Paystack' : 'Remita',
+      isActive: true,
+    }));
+  }
 
-    // Create payment record
-    const payment = await Payment.create({
-      payer: student._id,
+  /**
+   * Get expected payment amount for a student
+   */
+  static async getExpectedAmount({ student, purpose, session }) {
+    const { level, department } = student;
+    
+    const feeStructure = await PaymentFee.findOne({
       purpose,
-      amount,
-      provider,
+      department: department._id,
+      level,
       session,
-      semester,
-      status: "CREATED",
-      transactionRef: Payment.generateTransactionRef(),
-      metadata,
+      isActive: true,
     });
 
-    // Initialize payment with provider
-    const providerResponse = await providers[provider].initialize(
-      payment,
-      student
-    );
-
-    // Update payment with provider response
-    payment.status = "PENDING";
-    payment.providerPaymentId = providerResponse.transactionRef;
-    await payment.save();
+    if (!feeStructure) {
+      throw new Error(`No fee structure found for ${purpose} - Level ${level} - ${session}`);
+    }
 
     return {
-      payment,
-      providerResponse,
+      amount: feeStructure.amount,
+      currency: feeStructure.currency,
+      description: feeStructure.description,
+      feeStructure,
     };
   }
 
   /**
-   * Verify payment status (manual verification / polling)
+   * Create and initialize payment
+   */
+  static async createPayment({ student, purpose, session, semester, provider = "REMITA" }) {
+    try {
+      // Get expected amount
+      const expectedAmount = await this.getExpectedAmount({
+        student,
+        purpose,
+        session,
+      });
+
+      // Check for existing successful payment
+      const existingPayment = await Payment.findOne({
+        student: student._id,
+        purpose,
+        session,
+        semester,
+        status: "SUCCESSFUL",
+      });
+
+      if (existingPayment) {
+        throw new Error(`You have already paid for ${purpose} in ${session} ${semester}`);
+      }
+
+      // Create payment record
+      const payment = await Payment.create({
+        student: student._id,
+        purpose,
+        session,
+        semester,
+        expectedAmount: expectedAmount.amount,
+        paidAmount: 0, // Will be updated after payment
+        currency: expectedAmount.currency,
+        provider,
+        status: "PENDING",
+        transactionRef: Payment.generateTransactionRef(),
+        studentLevel: student.level,
+        studentDepartment: student.department._id,
+      });
+
+      // Initialize with provider
+      const providerInstance = providers[provider];
+      if (!providerInstance) {
+        throw new Error(`Unsupported payment provider: ${provider}`);
+      }
+
+      const providerResponse = await providerInstance.initialize({
+        payment,
+        student,
+        amount: expectedAmount.amount,
+      });
+
+      // Update payment with provider info
+      payment.providerPaymentId = providerResponse.providerPaymentId;
+      await payment.save();
+
+      return {
+        payment,
+        providerResponse,
+      };
+    } catch (error) {
+      console.error("Payment creation error:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Verify payment (called after payment callback)
    */
   static async verifyPayment(transactionRef) {
-    const payment = await Payment.findOne({ transactionRef });
+    try {
+      const payment = await Payment.findOne({ transactionRef })
+        .populate("student")
+        .populate("studentDepartment");
 
-    if (!payment) {
-      throw new Error("Payment not found");
+      if (!payment) {
+        throw new Error("Payment not found");
+      }
+
+      const provider = providers[payment.provider];
+      const verification = await provider.verify(payment);
+
+      // Update payment based on provider response
+      if (verification.status === "SUCCESSFUL") {
+        payment.status = "SUCCESSFUL";
+        payment.paidAmount = verification.amount || payment.expectedAmount;
+        payment.paidAt = new Date();
+        payment.isVerified = true;
+        payment.verifiedAt = new Date();
+      } else if (verification.status === "FAILED") {
+        payment.status = "FAILED";
+        payment.errorDetails = verification.errorDetails;
+      } else {
+        payment.status = "PENDING";
+      }
+
+      await payment.save();
+      return payment;
+    } catch (error) {
+      console.error("Payment verification error:", error);
+      throw error;
     }
-
-    const provider = providers[payment.provider];
-    if (!provider) {
-      throw new Error(`Provider not found: ${payment.provider}`);
-    }
-
-    const verification = await provider.verify(payment);
-
-    if (verification.status === "SUCCEEDED") {
-      payment.status = "SUCCEEDED";
-      payment.paidAt = new Date();
-    } else if (verification.status === "FAILED") {
-      payment.status = "FAILED";
-    }
-
-    payment.metadata = {
-      ...payment.metadata,
-      verification: verification.raw || {},
-    };
-
-    await payment.save();
-
-    return payment;
   }
 
   /**
    * Handle provider webhooks
    */
-  static async handleWebhook(providerName, data) {
-    const provider = providers[providerName];
-    if (!provider) {
-      throw new Error(`Unsupported provider webhook: ${providerName}`);
+  static async handleWebhook(providerName, webhookData) {
+    try {
+      const provider = providers[providerName];
+      if (!provider) {
+        throw new Error(`Unsupported provider: ${providerName}`);
+      }
+
+      const result = await provider.handleWebhook(webhookData);
+
+      // Find payment by reference
+      const payment = await Payment.findOne({
+        $or: [
+          { transactionRef: result.transactionRef },
+          { providerPaymentId: result.providerPaymentId },
+        ],
+      });
+
+      if (!payment) {
+        throw new Error("Payment not found for webhook");
+      }
+
+      // Update payment status
+      if (result.status === "SUCCESSFUL") {
+        payment.status = "SUCCESSFUL";
+        payment.paidAmount = result.amount || payment.expectedAmount;
+        payment.paidAt = new Date();
+        payment.isVerified = true;
+        payment.verifiedAt = new Date();
+      } else if (result.status === "FAILED") {
+        payment.status = "FAILED";
+      }
+
+      await payment.save();
+      return payment;
+    } catch (error) {
+      console.error("Webhook handling error:", error);
+      throw error;
     }
-
-    const result = await provider.handleWebhook(data);
-
-    const payment = await Payment.findOne({
-      transactionRef: result.transactionRef,
-    });
-
-    if (!payment) {
-      throw new Error("Payment not found for webhook");
-    }
-
-    if (result.status === "SUCCEEDED") {
-      payment.status = "SUCCEEDED";
-      payment.paidAt = new Date();
-    } else if (result.status === "FAILED") {
-      payment.status = "FAILED";
-    }
-
-    payment.metadata = {
-      ...payment.metadata,
-      webhook: result.raw || {},
-    };
-
-    await payment.save();
-
-    return payment;
   }
 
   /**
-   * Core method for middleware
-   * ✔ Universal payment verification
+   * Check if student has paid (used by middleware)
    */
-  static async hasPaid({
-    studentId,
-    purpose,
-    session,
-    semester,
-  }) {
-    return Payment.exists({
-      payer: studentId,
+  static async hasPaid({ studentId, purpose, session, semester }) {
+    const payment = await Payment.findOne({
+      student: studentId,
       purpose,
       session,
       semester,
-      status: "SUCCEEDED",
+      status: "SUCCESSFUL",
     });
+
+    return !!payment;
   }
 
   /**
-   * Fetch student payments (dashboard, history)
+   * Get student payment history
    */
   static async getStudentPayments(studentId, filters = {}) {
     return Payment.find({
-      payer: studentId,
+      student: studentId,
       ...filters,
-    }).sort({ createdAt: -1 });
+    })
+      .populate("studentDepartment")
+      .sort({ createdAt: -1 });
+  }
+
+  /**
+   * Get payment by transaction reference
+   */
+  static async getPaymentByRef(transactionRef) {
+    return Payment.findOne({ transactionRef })
+      .populate("student")
+      .populate("studentDepartment");
+  }
+
+  /**
+   * Cancel/abandon a pending payment
+   */
+  static async cancelPayment(transactionRef) {
+    const payment = await Payment.findOne({ transactionRef, status: "PENDING" });
+    
+    if (!payment) {
+      throw new Error("Pending payment not found");
+    }
+
+    payment.status = "FAILED";
+    payment.errorDetails = { message: "Payment cancelled by user" };
+    await payment.save();
+
+    return payment;
   }
 }
 
