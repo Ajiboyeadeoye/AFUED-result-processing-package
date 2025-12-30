@@ -1,132 +1,114 @@
-// domain/payment/payment.routes.js
-import express from 'express';
-import bodyParser from 'body-parser';
+import express from "express";
+import authenticate from "../../middlewares/authenticate.js";
+import paymentGuard from "../../middlewares/paymentGuard.js";
+
 import {
-  createPaymentIntent,
-  stripeWebhook,
-  getAllPayments,
+  createPayment,
+  verifyPayment,
+  paymentWebhook,
   getMyPayments,
-  getAFUEDServices,
-  verifyRemitaPayment,
-  remitaWebhook,
-  getPaymentById,
-  // New functions
-  getStudentPaymentSummary,
-  checkCourseEligibility,
-  batchCheckPermissions,
-  checkExamEligibility,
-  getPaymentRestrictions,
-  checkFeePayment
-} from './payment.controller.js';
-import authenticate from '../../../middlewares/authenticate.js';
-import { auditLogger } from '../../../middlewares/auditLogger.js';
+} from "./payment.controller.js";
 
 const router = express.Router();
 
-// 🎯 AFUED Payment Services (Public)
-router.get('/services', getAFUEDServices);
-
-// 🚀 Create payment intent (student)
+/**
+ * ==============================
+ * PAYMENT INITIALIZATION
+ * ==============================
+ * Student creates a payment
+ */
 router.post(
-  '/create-intent',
-  authenticate(['student']),
-  auditLogger('Initialized a payment'),
+  "/create",
+  authenticate(["student"]),
+  createPayment
+);
+
+/**
+ * ==============================
+ * PAYMENT VERIFICATION (Polling)
+ * ==============================
+ * Used after redirect from provider
+ */
+router.get(
+  "/verify/:transactionRef",
+  authenticate(["student", "admin"]),
+  verifyPayment
+);
+
+/**
+ * ==============================
+ * PAYMENT WEBHOOKS
+ * ==============================
+ * Provider callbacks (NO AUTH)
+ * Example:
+ *  POST /api/payments/webhook/remita
+ *  POST /api/payments/webhook/paystack
+ */
+router.post(
+  "/webhook/:provider",
   express.json(),
-  createPaymentIntent
+  paymentWebhook
 );
 
-// 🔍 Get payment by ID
+/**
+ * ==============================
+ * PAYMENT HISTORY
+ * ==============================
+ * Logged-in student payments
+ */
 router.get(
-  '/:paymentId',
-  authenticate(['student', 'admin', 'superuser', 'hod', 'finance']),
-  auditLogger('Viewed payment details'),
-  getPaymentById
-);
-
-// 📱 Verify Remita payment
-router.get(
-  '/remita/verify/:transactionRef',
-  authenticate(['student', 'admin', 'superuser', 'finance']),
-  auditLogger('Verified Remita payment'),
-  verifyRemitaPayment
-);
-
-// 🧾 Student can fetch their own payment history
-router.get(
-  '/my-payments',
-  authenticate(['student']),
-  auditLogger('Viewed payment history'),
+  "/my-payments",
+  authenticate(["student"]),
   getMyPayments
 );
 
-// 📊 Student payment summary
-router.get(
-  '/summary',
-  authenticate(['student', 'admin', 'hod', 'finance']),
-  auditLogger('Viewed payment summary'),
-  getStudentPaymentSummary
-);
+/**
+ * ==============================
+ * GUARDED ROUTES EXAMPLES
+ * ==============================
+ * Use these in other modules (NOT payment module)
+ */
 
-// ✅ Check course registration eligibility
-router.post(
-  '/check-course-eligibility',
-  authenticate(['student']),
-  auditLogger('Checked course eligibility'),
-  checkCourseEligibility
-);
+/**
+ * Example: Course registration (requires payment)
+ */
+// router.post(
+//   "/course-registration",
+//   authenticate(["student"]),
+//   paymentGuard({
+//     purpose: "COURSE_REGISTRATION",
+//     requireSession: true,
+//     requireSemester: true,
+//   }),
+//   courseRegistrationController
+// );
 
-// 📝 Check exam registration eligibility
-router.post(
-  '/check-exam-eligibility',
-  authenticate(['student']),
-  auditLogger('Checked exam eligibility'),
-  checkExamEligibility
-);
+/**
+ * Example: Result access
+ */
+// router.get(
+//   "/results",
+//   authenticate(["student"]),
+//   paymentGuard({
+//     purpose: "RESULT_ACCESS",
+//     requireSession: true,
+//     requireSemester: true,
+//   }),
+//   viewResultController
+// );
 
-// 📋 Batch check permissions for multiple activities
-router.post(
-  '/check-permissions',
-  authenticate(['student', 'admin']),
-  auditLogger('Checked permissions'),
-  batchCheckPermissions
-);
-
-// 🚫 Get payment restrictions
-router.get(
-  '/restrictions',
-  authenticate(['student', 'admin', 'hod', 'finance']),
-  auditLogger('Viewed payment restrictions'),
-  getPaymentRestrictions
-);
-
-// 💰 Check specific fee payment status
-router.post(
-  '/check-fee-payment',
-  authenticate(['student', 'admin', 'finance']),
-  auditLogger('Checked fee payment status'),
-  checkFeePayment
-);
-
-// 🧠 Admin/staff can fetch all payments
-router.get(
-  '/all',
-  authenticate(['admin', 'superuser', 'hod', 'finance']),
-  auditLogger('Fetched all payment records'),
-  getAllPayments
-);
-
-// ⚡ Stripe webhook route — raw body required
-router.post(
-  '/webhook/stripe',
-  bodyParser.raw({ type: 'application/json' }),
-  stripeWebhook
-);
-
-// ⚡ Remita webhook route
-router.post(
-  '/webhook/remita',
-  express.json(),
-  remitaWebhook
-);
+/**
+ * Example: Transcript download (no session/semester)
+ */
+// router.get(
+//   "/transcript",
+//   authenticate(["student"]),
+//   paymentGuard({
+//     purpose: "TRANSCRIPT",
+//     requireSession: false,
+//     requireSemester: false,
+//   }),
+//   downloadTranscriptController
+// );
 
 export default router;

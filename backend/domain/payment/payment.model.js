@@ -1,175 +1,166 @@
 import mongoose from "mongoose";
 
-const paymentSchema = new mongoose.Schema(
+const { Schema } = mongoose;
+
+const paymentSchema = new Schema(
   {
-    // Payer Information
-    payer: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "User", 
-      required: true 
+    // Who paid
+    payer: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
     },
-    
-    // Payment Details
-    amount: { 
-      type: Number, 
-      required: true 
-    },
-    currency: { 
-      type: String, 
-      default: "NGN" 
-    },
-    
-    // AFUED Service Types
-    feeType: {
+
+    // What the payment is for
+    purpose: {
       type: String,
       enum: [
-        "RESULT_PROCESSING",      // New
-        "ADMISSION_FORM",         // New
-        "SCHOOL_FEES",            // Enhanced
-        "TRANSCRIPT",             // New
-        "CERTIFICATE",            // New
-        "POST_UTME",              // Existing
-        "ACCEPTANCE",             // Existing
-        "OTHER"                   // Existing
+        "COURSE_REGISTRATION",
+        "EXAM_REGISTRATION",
+        "RESULT_ACCESS",
+        "SCHOOL_FEES",
+        "TRANSCRIPT",
+        "ADMISSION",
+        "CERTIFICATE",
+        "OTHER",
       ],
-      default: "OTHER",
+      required: true,
+      index: true,
     },
-    
-    description: String,
-    
-    // Payment Status (Enhanced)
-    status: {
+
+    // Academic context (nullable, validated at schema level)
+    session: {
+      type: Schema.Types.ObjectId,
+      ref: "AcademicSession",
+      default: null,
+      index: true,
+    },
+
+    semester: {
+      type: Schema.Types.ObjectId,
+      ref: "Semester",
+      default: null,
+      index: true,
+    },
+
+    // Amount info
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
+    currency: {
       type: String,
-      enum: [
-        "CREATED",           // Payment created
-        "PENDING",           // Waiting for payment
-        "PROCESSING",        // Payment being processed
-        "SUCCEEDED",         // Payment successful
-        "FAILED",            // Payment failed
-        "REFUNDED",          // Payment refunded
-        "EXPIRED",           // Payment expired
-        "REQUIRES_ACTION"    // 3D Secure or additional action
-      ],
-      default: "CREATED",
+      default: "NGN",
     },
-    
-    // Payment Provider
-    provider: { 
-      type: String, 
-      enum: ["STRIPE", "REMITA", "PAYSTACK", "MANUAL"],
-      default: "STRIPE" 
+
+    // Provider
+    provider: {
+      type: String,
+      enum: ["REMITA", "STRIPE", "PAYSTACK", "MANUAL"],
+      required: true,
+      index: true,
     },
-    
-    // Provider-specific IDs
-    providerPaymentId: String,     // Stripe: payment_intent_id, Remita: transaction_ref
-    
-    // Remita-specific Fields
-    remita: {
-      transactionRef: String,      // Remita transaction reference
-      rrr: String,                 // Remita Retrieval Reference
-      merchantId: String,
-      serviceTypeId: String,
-      paymentUrl: String,          // URL to redirect user for payment
-      verificationResponse: mongoose.Schema.Types.Mixed
+
+    providerPaymentId: {
+      type: String,
+      index: true,
     },
-    
-    // Stripe-specific Fields
-    stripe: {
-      paymentIntentId: String,
-      clientSecret: String,
-      chargeId: String,
-      receiptUrl: String
-    },
-    
-    // Student Information (for easy access)
-    studentInfo: {
-      matricNumber: String,
-      fullName: String,
-      email: String,
-      phone: String,
-      department: String,
-      level: String,
-      session: String
-    },
-    
-    // AFUED Context
-    academicSession: String,
-    semester: String,
-    
-    // Transaction Reference
+
+    // Internal transaction reference
     transactionRef: {
       type: String,
-      unique: true
+      required: true,
+      unique: true,
+      index: true,
     },
-    
-    // Metadata
-    metadata: {
-      type: mongoose.Schema.Types.Mixed,
-      default: {}
+
+    // Payment lifecycle status
+    status: {
+      type: String,
+      enum: ["CREATED", "PENDING", "SUCCEEDED", "FAILED", "REFUNDED"],
+      default: "CREATED",
+      index: true,
     },
-    
-    // Timestamps
-    paidAt: Date,
-    expiresAt: {
+
+    paidAt: {
       type: Date,
-      default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
-    }
+      default: null,
+    },
+
+    // Flexible extra data
+    metadata: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+  }
 );
 
-// Indexes for performance
-paymentSchema.index({ payer: 1, status: 1 });
-paymentSchema.index({ transactionRef: 1 });
-paymentSchema.index({ "remita.transactionRef": 1 });
-paymentSchema.index({ "stripe.paymentIntentId": 1 });
-paymentSchema.index({ status: 1, expiresAt: 1 });
-paymentSchema.index({ feeType: 1, createdAt: -1 });
+//
+// 🔐 SCHEMA-LEVEL VALIDATION (SAFE & CORRECT)
+//
 
-// Static method to generate transaction reference
-paymentSchema.statics.generateTransactionRef = function(prefix = "AFUED") {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9).toUpperCase();
-  return `${prefix}-${timestamp}-${random}`;
+paymentSchema.pre("validate", function (next) {
+  const sessionRequiredFor = [
+    "COURSE_REGISTRATION",
+    "EXAM_REGISTRATION",
+    "RESULT_ACCESS",
+    "SCHOOL_FEES",
+  ];
+
+  const semesterRequiredFor = [
+    "COURSE_REGISTRATION",
+    "EXAM_REGISTRATION",
+    "RESULT_ACCESS",
+  ];
+
+  if (sessionRequiredFor.includes(this.purpose) && !this.session) {
+    return next(
+      new Error(`Session is required for ${this.purpose} payment`)
+    );
+  }
+
+  if (semesterRequiredFor.includes(this.purpose) && !this.semester) {
+    return next(
+      new Error(`Semester is required for ${this.purpose} payment`)
+    );
+  }
+
+  next();
+});
+
+//
+// 🚫 PREVENT DUPLICATE SUCCESSFUL PAYMENTS
+// (Allows retries, blocks double success)
+//
+
+paymentSchema.index(
+  { payer: 1, purpose: 1, session: 1, semester: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: "SUCCEEDED" },
+  }
+);
+
+//
+// 🧠 HELPERS
+//
+
+paymentSchema.statics.generateTransactionRef = function (prefix = "AFUED") {
+  return `${prefix}-${Date.now()}-${Math.random()
+    .toString(36)
+    .substring(2, 10)
+    .toUpperCase()}`;
 };
 
-// Instance method to check if payment is expired
-paymentSchema.methods.isExpired = function() {
-  return this.expiresAt < new Date();
+paymentSchema.methods.isSuccessful = function () {
+  return this.status === "SUCCEEDED";
 };
 
-// Instance method to get payment gateway name
-paymentSchema.methods.getGatewayName = function() {
-  const gatewayNames = {
-    "STRIPE": "Stripe",
-    "REMITA": "Remita",
-    "PAYSTACK": "Paystack",
-    "MANUAL": "Manual"
-  };
-  return gatewayNames[this.provider] || this.provider;
-};
-
-// Instance method to get readable status
-paymentSchema.methods.getReadableStatus = function() {
-  const statusMap = {
-    "CREATED": "Created",
-    "PENDING": "Pending",
-    "PROCESSING": "Processing",
-    "SUCCEEDED": "Successful",
-    "FAILED": "Failed",
-    "REFUNDED": "Refunded",
-    "EXPIRED": "Expired",
-    "REQUIRES_ACTION": "Requires Action"
-  };
-  return statusMap[this.status] || this.status;
-};
-
-
-// Static method to generate transaction reference
-paymentSchema.statics.generateTransactionRef = function(prefix = "AFUED") {
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substr(2, 9).toUpperCase();
-  return `${prefix}-${timestamp}-${random}`;
-};
-
-export default mongoose.models.Payment || mongoose.model("Payment", paymentSchema);
+export default mongoose.models.Payment ||
+  mongoose.model("Payment", paymentSchema);
