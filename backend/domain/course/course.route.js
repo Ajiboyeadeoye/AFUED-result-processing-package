@@ -21,6 +21,11 @@ import {
 import authenticate from "../../middlewares/authenticate.js";
 import fetchDataHelper from "../../utils/fetchDataHelper.js";
 import Result from "../result/result.model.js";
+import {
+  requireSchoolFeesForCourses,
+  checkCourseEligibility,
+  getPaymentSummary
+} from '../../middlewares/paymentRestriction.js';
 
 const router = Router();
 
@@ -31,16 +36,26 @@ router.get("/stats", authenticate(["hod", "admin"]), getCourseRegistrationReport
 router.get("/lecturer", authenticate(['hod', 'admin', "lecturer"]), getLecturerCourses);
 
 // Get students that registered for a course in the current semester or previous if the previous semester id is provided
+router.get("/:courseId/students", authenticate(['hod', 'admin', "lecturer"]), getStudentsForCourse);
 
-router.get("/:courseId/students", authenticate(['hod', 'admin', "lecturer", "student"]), getStudentsForCourse);
+/** Register courses - WITH PAYMENT RESTRICTION */
+router.post(
+  "/register",
+  authenticate(["student"]), // Only students should register courses
+  requireSchoolFeesForCourses(), // NEW: Payment restriction middleware
+  checkCourseEligibility, // NEW: Course eligibility check
+  registerCourses
+);
 
-/** Register courses */
-router.post("/register", authenticate(["hod", "admin", "student"]), registerCourses);
+/** Get available courses for student registration - WITH PAYMENT SUMMARY */
+router.get(
+  "/available",
+  authenticate(['student']),
+  getPaymentSummary, // NEW: Attach payment summary to request
+  getRegisterableCourses
+);
 
-/** Get available courses for student registration */
-router.get("/available", authenticate(['student']), getRegisterableCourses);
 router.get("/borrowed", authenticate(["hod"]), getBorrowedCoursesFromMyDept);
-
 
 /** ✅ Get registered courses (Student + HOD) */
 router.get(
@@ -53,7 +68,6 @@ router.get(
   authenticate(['student', 'hod']),
   getStudentRegistrations
 );
-
 
 /** 📚 Get all courses */
 router.get("/", authenticate(["hod", "admin"]), getAllCourses);
@@ -83,10 +97,9 @@ router.get(
         score: "this.score",
         grade: "this.grade",
         remark: "this.remark",
-
       },
       populate: [
-       "studentId", "courseId"
+        "studentId", "courseId"
       ]
     });
   }
@@ -96,6 +109,50 @@ router.get(
 router.patch("/:id", authenticate(["hod", "admin"]), updateCourse);
 
 /** 🗑️ Delete a course */
-router.delete("/:id", authenticate(["hod", "admin"]), deleteCourse); 
+router.delete("/:id", authenticate(["hod", "admin"]), deleteCourse);
+
+/** NEW ROUTES FOR PAYMENT-RELATED FUNCTIONALITY */
+
+// Check if student is eligible to register for specific courses
+router.post(
+  "/check-eligibility",
+  authenticate(['student']),
+  async (req, res) => {
+    try {
+      const { courseIds = [] } = req.body;
+      
+      if (!Array.isArray(courseIds) || courseIds.length === 0) {
+        return buildResponse.error(res, "Please provide course IDs to check", 400);
+      }
+
+      // Import dynamically to avoid circular dependencies
+      const { checkCourseEligibility } = await import('../../domain/payment/payment.controller.js');
+      
+      // Forward the request to payment controller
+      return checkCourseEligibility(req, res);
+    } catch (error) {
+      console.error('Check eligibility route error:', error);
+      return buildResponse.error(res, 'Failed to check eligibility', 500, error);
+    }
+  }
+);
+
+// Get student's payment status for course registration
+router.get(
+  "/payment-status",
+  authenticate(['student']),
+  async (req, res) => {
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { getStudentPaymentSummary } = await import('../../domain/payment/payment.controller.js');
+      
+      // Forward the request to payment controller
+      return getStudentPaymentSummary(req, res);
+    } catch (error) {
+      console.error('Payment status route error:', error);
+      return buildResponse.error(res, 'Failed to get payment status', 500, error);
+    }
+  }
+);
 
 export default router;

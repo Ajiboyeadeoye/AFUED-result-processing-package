@@ -1,22 +1,43 @@
-// backend/controllers/paymentController.js
+// domain/payment/payment.controller.js
 import stripe from "../../utils/paystackClient.js";
 import Payment from "./payment.model.js";
 import buildResponse from "../../utils/responseBuilder.js";
 import RemitaService from "./remita.service.js";
+import { CourseRestrictionService } from "./courseRestriction.service.js";
 
 /**
- * 🎯 Create a payment intent
+ * 🎯 Create a payment intent with course restrictions
  */
 export const createPaymentIntent = async (req, res) => {
-  const { amount, feeType, description, provider = "STRIPE" } = req.body;
+  const { amount, feeType, description, provider = "STRIPE", courseId } = req.body;
 
   try {
     if (!amount || amount <= 0)
-      return buildResponse(res, 400, "Invalid amount", null, true);
+      return buildResponse.error(res, "Invalid amount", 400);
 
     const studentId = req.user?._id;
     if (!studentId)
-      return buildResponse(res, 401, "Unauthorized: Student not found", null, true);
+      return buildResponse.error(res, "Unauthorized: Student not found", 401);
+
+    // ✅ Check course restrictions before payment
+    if (courseId) {
+      const restrictionService = new CourseRestrictionService();
+      const canAccess = await restrictionService.checkPermission(studentId, feeType, null);
+      
+      if (!canAccess.allowed && canAccess.restrictionLevel === 'STRICT') {
+        return buildResponse.error(
+          res, 
+          canAccess.message, 
+          403, 
+          {
+            restrictionType: canAccess.type,
+            requiredPayments: canAccess.requiredPayments || [],
+            currentStatus: "PAYMENT_REQUIRED",
+            missingPayments: canAccess.requiredPayments || []
+          }
+        );
+      }
+    }
 
     // Get student info
     const studentInfo = {
@@ -47,7 +68,9 @@ export const createPaymentIntent = async (req, res) => {
       metadata: {
         initiatedBy: studentId,
         userAgent: req.headers["user-agent"],
-        ipAddress: req.ip
+        ipAddress: req.ip,
+        courseId: courseId || null,
+        restrictionChecks: {}
       }
     };
 
@@ -59,12 +82,12 @@ export const createPaymentIntent = async (req, res) => {
     } else if (provider.toUpperCase() === "REMITA") {
       return await processRemitaPayment(payment, req, res);
     } else {
-      return buildResponse(res, 400, "Unsupported payment provider", null, true);
+      return buildResponse.error(res, "Unsupported payment provider", 400);
     }
 
   } catch (error) {
     console.error("Create payment intent error:", error);
-    return buildResponse(res, 500, "Payment creation failed", null, true);
+    return buildResponse.error(res, "Payment creation failed", 500, error);
   }
 };
 
@@ -97,22 +120,26 @@ async function processStripePayment(payment, req, res) {
     
     await payment.save();
 
-    return buildResponse(res, 200, "Stripe payment initialized", {
-      clientSecret: paymentIntent.client_secret,
-      paymentId: payment._id,
-      amount: payment.amount,
-      currency: payment.currency,
-      transactionRef: payment.transactionRef,
-      provider: "STRIPE",
-      requiresAction: paymentIntent.status === "requires_action"
-    });
+    return buildResponse.success(
+      res,
+      "Stripe payment initialized",
+      {
+        clientSecret: paymentIntent.client_secret,
+        paymentId: payment._id,
+        amount: payment.amount,
+        currency: payment.currency,
+        transactionRef: payment.transactionRef,
+        provider: "STRIPE",
+        requiresAction: paymentIntent.status === "requires_action"
+      }
+    );
 
   } catch (error) {
     console.error("Stripe payment error:", error);
     payment.status = "FAILED";
     await payment.save();
     
-    return buildResponse(res, 500, "Stripe payment failed: " + error.message, null, true);
+    return buildResponse.error(res, "Stripe payment failed: " + error.message, 500, error);
   }
 }
 
@@ -127,27 +154,32 @@ async function processRemitaPayment(payment, req, res) {
     // Initialize Remita payment
     const remitaResult = await remitaService.initializePayment(payment._id, studentData);
 
-    return buildResponse(res, 200, "Remita payment initialized", {
-      paymentId: payment._id,
-      amount: payment.amount,
-      currency: payment.currency,
-      transactionRef: payment.transactionRef,
-      provider: "REMITA",
-      paymentUrl: remitaResult.paymentUrl,
-      environment: remitaResult.environment,
-      instructions: {
-        web: "You will be redirected to Remita payment page",
-        ussd: "Dial *737# for USSD payment",
-        bank: "Make transfer to Remita collection account"
+    return buildResponse.success(
+      res,
+      "Remita payment initialized",
+      {
+        paymentId: payment._id,
+        amount: payment.amount,
+        currency: payment.currency,
+        transactionRef: payment.transactionRef,
+        provider: "REMITA",
+        paymentUrl: remitaResult.paymentUrl,
+        environment: remitaResult.environment,
+        instructions: {
+          web: "You will be redirected to Remita payment page",
+          ussd: "Dial *737# for USSD payment",
+          bank: "Make transfer to Remita collection account"
+        },
+        rrr: remitaResult.rrr || null
       }
-    });
+    );
 
   } catch (error) {
     console.error("Remita payment error:", error);
     payment.status = "FAILED";
     await payment.save();
     
-    return buildResponse(res, 500, "Remita payment failed: " + error.message, null, true);
+    return buildResponse.error(res, "Remita payment failed: " + error.message, 500, error);
   }
 }
 
@@ -159,15 +191,19 @@ export const getAFUEDServices = async (req, res) => {
     const remitaService = new RemitaService();
     const services = remitaService.getAFUEDServices();
 
-    return buildResponse(res, 200, "AFUED payment services retrieved", {
-      university: "Adeyemi Federal University of Education",
-      services: Object.values(services),
-      timestamp: new Date().toISOString()
-    });
+    return buildResponse.success(
+      res,
+      "AFUED payment services retrieved",
+      {
+        university: "Adeyemi Federal University of Education",
+        services: Object.values(services),
+        timestamp: new Date().toISOString()
+      }
+    );
 
   } catch (error) {
     console.error("Get AFUED services error:", error);
-    return buildResponse(res, 500, "Failed to retrieve services", null, true);
+    return buildResponse.error(res, "Failed to retrieve services", 500, error);
   }
 };
 
@@ -179,17 +215,17 @@ export const verifyRemitaPayment = async (req, res) => {
     const { transactionRef } = req.params;
 
     if (!transactionRef) {
-      return buildResponse(res, 400, "Transaction reference is required", null, true);
+      return buildResponse.error(res, "Transaction reference is required", 400);
     }
 
     const remitaService = new RemitaService();
     const verification = await remitaService.verifyPayment(transactionRef);
 
-    return buildResponse(res, 200, "Payment verification completed", verification);
+    return buildResponse.success(res, "Payment verification completed", verification);
 
   } catch (error) {
     console.error("Verify Remita payment error:", error);
-    return buildResponse(res, 500, "Payment verification failed: " + error.message, null, true);
+    return buildResponse.error(res, "Payment verification failed: " + error.message, 500, error);
   }
 };
 
@@ -210,7 +246,8 @@ export const remitaWebhook = async (req, res) => {
     const remitaService = new RemitaService();
     const result = await remitaService.handleWebhook(webhookData);
 
-    res.json({
+    // Webhooks should return raw responses, not buildResponse format
+    res.status(200).json({
       success: true,
       message: "Webhook processed successfully",
       data: result
@@ -233,23 +270,26 @@ export const getPaymentById = async (req, res) => {
     const { paymentId } = req.params;
     const studentId = req.user?._id;
 
-    const payment = await Payment.findById(paymentId).populate("payer", "firstName lastName email matricNumber");
+    const payment = await Payment.findById(paymentId)
+      .populate("payer", "firstName lastName email matricNumber department level");
+    
     if (!payment) {
-      return buildResponse(res, 404, "Payment not found", null, true);
+      return buildResponse.error(res, "Payment not found", 404);
     }
 
     // Check authorization
     if (payment.payer._id.toString() !== studentId.toString() && 
         !req.user.roles?.includes("admin") && 
-        !req.user.roles?.includes("superuser")) {
-      return buildResponse(res, 403, "Unauthorized to view this payment", null, true);
+        !req.user.roles?.includes("superuser") &&
+        !req.user.roles?.includes("finance")) {
+      return buildResponse.error(res, "Unauthorized to view this payment", 403);
     }
 
-    return buildResponse(res, 200, "Payment retrieved", payment);
+    return buildResponse.success(res, "Payment retrieved", payment);
 
   } catch (error) {
     console.error("Get payment by ID error:", error);
-    return buildResponse(res, 500, "Failed to retrieve payment", null, true);
+    return buildResponse.error(res, "Failed to retrieve payment", 500, error);
   }
 };
 
@@ -258,35 +298,54 @@ export const getPaymentById = async (req, res) => {
  */
 export const getAllPayments = async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, feeType, provider } = req.query;
+    const { page = 1, limit = 20, status, feeType, provider, startDate, endDate } = req.query;
     const skip = (page - 1) * limit;
 
     const filter = {};
     if (status) filter.status = status;
     if (feeType) filter.feeType = feeType;
     if (provider) filter.provider = provider;
+    
+    // Date filtering
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) filter.createdAt.$lte = new Date(endDate);
+    }
 
     const payments = await Payment.find(filter)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate("payer", "firstName lastName email matricNumber");
+      .populate("payer", "firstName lastName email matricNumber department");
 
     const total = await Payment.countDocuments(filter);
 
-    return buildResponse(res, 200, "Payments retrieved", {
-      payments,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+    return buildResponse.success(
+      res,
+      "Payments retrieved successfully",
+      {
+        payments,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+          hasNext: page * limit < total,
+          hasPrev: page > 1
+        },
+        filters: {
+          status,
+          feeType,
+          provider,
+          dateRange: { startDate, endDate }
+        }
       }
-    });
+    );
 
   } catch (error) {
     console.error("Get all payments error:", error);
-    return buildResponse(res, 500, "Failed to retrieve payments", null, true);
+    return buildResponse.error(res, "Failed to retrieve payments", 500, error);
   }
 };
 
@@ -296,11 +355,12 @@ export const getAllPayments = async (req, res) => {
 export const getMyPayments = async (req, res) => {
   try {
     const studentId = req.user?._id;
-    const { page = 1, limit = 10, status } = req.query;
+    const { page = 1, limit = 10, status, feeType } = req.query;
     const skip = (page - 1) * limit;
 
     const filter = { payer: studentId };
     if (status) filter.status = status;
+    if (feeType) filter.feeType = feeType;
 
     const payments = await Payment.find(filter)
       .sort({ createdAt: -1 })
@@ -309,19 +369,25 @@ export const getMyPayments = async (req, res) => {
 
     const total = await Payment.countDocuments(filter);
 
-    return buildResponse(res, 200, "Your payments retrieved", {
-      payments,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / limit)
+    return buildResponse.success(
+      res,
+      "Your payments retrieved successfully",
+      {
+        payments,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+          hasNext: page * limit < total,
+          hasPrev: page > 1
+        }
       }
-    });
+    );
 
   } catch (error) {
     console.error("Get my payments error:", error);
-    return buildResponse(res, 500, "Failed to retrieve your payments", null, true);
+    return buildResponse.error(res, "Failed to retrieve your payments", 500, error);
   }
 };
 
@@ -341,7 +407,10 @@ export const stripeWebhook = async (req, res) => {
       );
     } catch (err) {
       console.error("Webhook signature verification failed:", err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+      return res.status(400).json({ 
+        success: false, 
+        error: `Webhook Error: ${err.message}` 
+      });
     }
 
     // Handle the event
@@ -358,13 +427,14 @@ export const stripeWebhook = async (req, res) => {
         console.log(`Unhandled event type ${event.type}`);
     }
 
-    res.json({ received: true });
+    res.status(200).json({ success: true, received: true });
   } catch (error) {
     console.error("Stripe webhook error:", error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 };
 
+// Helper functions for webhook handling
 async function handlePaymentIntentSucceeded(paymentIntent) {
   try {
     const payment = await Payment.findOne({
@@ -377,7 +447,19 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       payment.stripe.chargeId = paymentIntent.charges?.data[0]?.id;
       payment.stripe.receiptUrl = paymentIntent.charges?.data[0]?.receipt_url;
       await payment.save();
+      
       console.log(`Payment ${payment._id} marked as succeeded`);
+      
+      // Trigger post-payment actions if course is involved
+      if (payment.metadata?.courseId) {
+        const restrictionService = new CourseRestrictionService();
+        await restrictionService.updateCourseAccess(
+          payment.payer,
+          payment.metadata.courseId,
+          payment.feeType,
+          payment._id
+        );
+      }
     }
   } catch (error) {
     console.error("Error handling payment success:", error);
@@ -392,6 +474,7 @@ async function handlePaymentIntentFailed(paymentIntent) {
 
     if (payment) {
       payment.status = "FAILED";
+      payment.failureReason = paymentIntent.last_payment_error?.message || "Payment failed";
       await payment.save();
       console.log(`Payment ${payment._id} marked as failed`);
     }
@@ -399,3 +482,211 @@ async function handlePaymentIntentFailed(paymentIntent) {
     console.error("Error handling payment failure:", error);
   }
 }
+
+/**
+ * Get student payment summary
+ */
+export const getStudentPaymentSummary = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    const { session } = req.query;
+    
+    const summary = await restrictionService.getPaymentSummary(studentId, session);
+    
+    return buildResponse.success(
+      res,
+      'Payment summary retrieved successfully',
+      summary
+    );
+  } catch (error) {
+    console.error('Get payment summary error:', error);
+    return buildResponse.error(res, 'Failed to get payment summary', 500, error);
+  }
+};
+
+/**
+ * Check course registration eligibility
+ */
+export const checkCourseEligibility = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const { courseIds, session } = req.body;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    
+    const eligibility = await restrictionService.checkCourseRegistrationEligibility(
+      studentId,
+      Array.isArray(courseIds) ? courseIds : [],
+      session
+    );
+    
+    return buildResponse.success(
+      res,
+      eligibility.eligible ? 'Eligible for course registration' : 'Not eligible for course registration',
+      eligibility
+    );
+  } catch (error) {
+    console.error('Check course eligibility error:', error);
+    return buildResponse.error(res, 'Failed to check eligibility', 500, error);
+  }
+};
+
+/**
+ * Batch check permissions
+ */
+export const batchCheckPermissions = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const { activities, session } = req.body;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    if (!Array.isArray(activities) || activities.length === 0) {
+      return buildResponse.error(res, 'Please specify activities to check', 400);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    const permissions = await restrictionService.batchCheckPermissions(
+      studentId,
+      activities,
+      session
+    );
+    
+    // Check if any permissions are denied
+    const deniedPermissions = Object.entries(permissions)
+      .filter(([_, perm]) => !perm.allowed && perm.restrictionLevel === 'STRICT')
+      .map(([activity, perm]) => ({ activity, reason: perm.message }));
+    
+    return buildResponse.success(
+      res,
+      'Permissions checked successfully',
+      { 
+        permissions,
+        summary: {
+          total: Object.keys(permissions).length,
+          allowed: Object.values(permissions).filter(p => p.allowed).length,
+          denied: Object.values(permissions).filter(p => !p.allowed).length,
+          deniedPermissions
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Batch check permissions error:', error);
+    return buildResponse.error(res, 'Failed to check permissions', 500, error);
+  }
+};
+
+/**
+ * Check if student can register for exams
+ */
+export const checkExamEligibility = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const { session } = req.body;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    const permission = await restrictionService.checkPermission(
+      studentId,
+      'EXAM_REGISTRATION',
+      session
+    );
+    
+    return buildResponse.success(
+      res,
+      permission.allowed ? 'Eligible for exam registration' : 'Not eligible for exam registration',
+      permission
+    );
+  } catch (error) {
+    console.error('Check exam eligibility error:', error);
+    return buildResponse.error(res, 'Failed to check exam eligibility', 500, error);
+  }
+};
+
+/**
+ * Get payment restrictions for student
+ */
+export const getPaymentRestrictions = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const { session } = req.query;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    const summary = await restrictionService.getPaymentSummary(studentId, session);
+    
+    // Extract only restrictions
+    const restrictions = {
+      student: summary.student,
+      session: summary.session,
+      restrictions: summary.restrictions,
+      permissions: summary.permissions,
+      totals: summary.totals
+    };
+    
+    return buildResponse.success(
+      res,
+      'Payment restrictions retrieved successfully',
+      restrictions
+    );
+  } catch (error) {
+    console.error('Get payment restrictions error:', error);
+    return buildResponse.error(res, 'Failed to get payment restrictions', 500, error);
+  }
+};
+
+/**
+ * Check specific fee payment status
+ */
+export const checkFeePayment = async (req, res) => {
+  try {
+    const studentId = req.user?._id;
+    const { feeType, session } = req.body;
+    
+    if (!studentId) {
+      return buildResponse.error(res, 'Student not found', 401);
+    }
+
+    if (!feeType) {
+      return buildResponse.error(res, 'Fee type is required', 400);
+    }
+
+    const restrictionService = new CourseRestrictionService();
+    const currentSession = session || await restrictionService.getCurrentAcademicSession();
+    
+    const hasPaid = await restrictionService.hasPaidFee(studentId, feeType, currentSession);
+    
+    return buildResponse.success(
+      res,
+      hasPaid ? 'Fee has been paid' : 'Fee has not been paid',
+      {
+        feeType,
+        paid: hasPaid,
+        session: currentSession,
+        studentId,
+        checkedAt: new Date()
+      }
+    );
+  } catch (error) {
+    console.error('Check fee payment error:', error);
+    return buildResponse.error(res, 'Failed to check fee payment', 500, error);
+  }
+};

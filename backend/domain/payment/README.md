@@ -1,177 +1,105 @@
-🎓 Post-JAMB Payment Module (Node.js + Express + Paystack)
+AFUED Payment System with Course Restrictions
+📋 Quick Overview
+Payment processing system with integrated course access restrictions for Adeyemi Federal University of Education.
 
-This module provides a production-ready payment system for Post-UTME (Post-JAMB) application fees within the AFUED result processing package.
+🚀 Key Features
+Multi-provider support: Stripe & Remita
 
-It integrates Paystack for secure online payments and aligns with the project’s existing architecture — using:
+Course restrictions: Block course registration without school fees
 
-✅ authenticate middleware for access control
+Reusable middleware: Easy payment requirement checks
 
-✅ auditLogger for request logging
+Financial verification: School financial system integration
 
-✅ buildResponse for uniform API responses
+📁 Project Structure
+text
+backend/domain/payment/
+├── payment.controller.js      # Main payment logic
+├── payment.model.js          # Payment schema
+├── courseRestriction.service.js  # Payment requirement checks
+├── remita.service.js         # Remita integration
+└── payment.routes.js         # Payment API endpoints
+🔧 Installation
+bash
+cd backend
+npm install
+cp .env.example .env
+# Add your Stripe, Remita, and DB credentials to .env
+npm run dev
+🛠️ Quick Setup
+1. Add Course Restriction Service
+Create domain/payment/courseRestriction.service.js with the provided code.
 
-✅ mongoose models for persistence
+2. Update Course Controller
+Add the payment check section at the start of your registerCourses function.
 
-📁 Folder Structure
-/modules/payment/
-│
-├── payment.model.js              # Payment records (applicant & student)
-├── paymentSetting.model.js       # Admin-defined Post-JAMB fee config
-├── payment.controller.js         # Payment logic & Paystack integration
-└── payment.routes.js             # Express routes for admin & applicant
+3. Add Payment Restriction Middleware
+Create middlewares/paymentRestriction.js with the provided middleware functions.
 
-⚙️ Setup
-1️⃣ Install Dependencies
+4. Update Course Routes
+Apply requireSchoolFeesForCourses() middleware to course registration routes.
 
-Make sure these packages exist in your project:
+🔒 How It Works
+For Course Registration:
+javascript
+// Routes automatically check payment
+router.post("/register", 
+  authenticate("student"),
+  requireSchoolFeesForCourses(),  // ← Blocks if no school fees
+  registerCourses
+);
+Manual Checks:
+javascript
+import { CourseRestrictionService } from './courseRestriction.service.js';
 
-npm install axios mongoose express dotenv
+const restrictionService = new CourseRestrictionService();
+const canRegister = await restrictionService.checkPermission(
+  studentId, 
+  'COURSE_REGISTRATION'
+);
+📚 API Endpoints
+Payment Operations
+POST /api/payments/create-intent - Create payment (Stripe/Remita)
 
+POST /api/payments/check-course-eligibility - Check if student can register courses
 
-If you already use them globally, you can skip this step.
+GET /api/payments/summary - Get student payment status
 
-2️⃣ Environment Variables
+Course Registration with Restrictions
+POST /api/courses/register - Register courses (requires school fees)
 
-Add the following keys to your .env file:
+GET /api/courses/available - View available courses (shows payment status)
 
-PAYSTACK_SECRET_KEY=sk_test_your_secret_key_here
-APP_URL=https://yourdomain.com
+💡 Example Usage
+Frontend Flow:
+Student tries to register courses
 
-Variable	Description
-PAYSTACK_SECRET_KEY	Your Paystack secret key from dashboard.paystack.com
+System checks: "Has school fees been paid?"
 
-APP_URL	Your base domain or local dev URL (e.g., http://localhost:4000)
-🧱 Mongoose Models
-1️⃣ PaymentSetting
+If NO → Returns 403 error with payment instructions
 
-Defines and stores the current Post-UTME/Post-JAMB fee configured by an admin.
+If YES → Allows course registration
 
-Field	Type	Description
-type	String	"postjamb"
-amount	Number	Fee amount (₦)
-updatedBy	ObjectId	Admin user ID who made the change
-updatedAt	Date	Last update timestamp
-2️⃣ Payment
+Admin View:
+Finance staff can verify payments and generate reports through the payment portal.
 
-Represents a single applicant or student payment record.
+🧪 Testing
+bash
+npm test
+# Test payment restrictions
+curl -X POST http://localhost:3000/api/payments/check-course-eligibility \
+  -H "Authorization: Bearer <student_token>" \
+  -d '{"courseIds": ["course1", "course2"]}'
+⚙️ Environment Variables
+env
+STRIPE_SECRET_KEY=sk_test_...
+REMITA_MERCHANT_ID=27768931
+MONGODB_URI=mongodb://localhost:27017/afued
+🚨 Important Notes
+School fees payment is required for course registration
 
-Field	Type	Description
-payer	ObjectId	Linked to User (applicant or student)
-type	String	"postjamb", "acceptance", "school_fees", etc.
-amount	Number	Fee paid (₦)
-status	Enum	"pending", "successful", "failed"
-reference	String	Unique Paystack transaction reference
-paidAt	Date	When payment was confirmed
-🔌 Integration
+Payment status is automatically checked via middleware
 
-In your main Express app (app.js or server.js):
+Students see clear error messages if payment is missing
 
-import paymentRoutes from "./modules/payment/payment.routes.js";
-app.use("/api/payment", paymentRoutes);
-
-
-💡 Ensure you have the middlewares authenticate, auditLogger, and your MongoDB connection configured globally.
-
-🧭 API Endpoints
-Endpoint	Method	Access	Description
-/api/payment/postjamb/fee	PATCH	Admin	Create or update Post-JAMB fee
-/api/payment/postjamb/initiate	POST	Applicant	Initialize Paystack payment
-/api/payment/verify	GET	Public	Verify payment after transaction
-/api/payment/webhook/paystack	POST	System	Handle Paystack webhook events (optional)
-💰 Payment Flow
-1️⃣ Admin sets Post-JAMB fee
-PATCH /api/payment/postjamb/fee
-Headers: Authorization: Bearer <admin_token>
-Body: { "amount": 2500 }
-
-
-✅ Response:
-
-{
-  "status": "success",
-  "message": "Post-JAMB fee updated successfully",
-  "data": { "amount": 2500 }
-}
-
-2️⃣ Applicant initiates payment
-POST /api/payment/postjamb/initiate
-Headers: Authorization: Bearer <applicant_token>
-
-
-✅ Response:
-
-{
-  "status": "success",
-  "message": "Payment initialized",
-  "data": {
-    "authorization_url": "https://checkout.paystack.com/...",
-    "reference": "PJ-1698234432",
-    "amount": 2500
-  }
-}
-
-
-Redirect the user to the returned authorization_url for payment.
-
-3️⃣ Verify payment
-
-After Paystack redirects the applicant back to your callback URL:
-
-GET /api/payment/verify?reference=PJ-1698234432
-
-
-✅ On success:
-
-Payment record marked as successful
-
-Applicant’s record updated with hasPaidPostJamb: true
-
-Example response:
-
-{
-  "status": "success",
-  "message": "Payment verified successfully",
-  "data": {
-    "reference": "PJ-1698234432",
-    "status": "successful",
-    "amount": 2500
-  }
-}
-
-🧩 Optional: Webhook Integration
-
-You can enable asynchronous verification using Paystack’s webhook system.
-
-In payment.routes.js:
-
-router.post("/webhook/paystack", handlePaystackWebhook);
-
-
-Follow the official Paystack webhook setup guide:
-👉 https://paystack.com/docs/payments/webhooks
-
-This ensures your database updates automatically even if the callback redirect is missed.
-
-🧠 Notes & Best Practices
-
-Always store amounts in kobo (multiply ₦ by 100) to avoid float rounding issues.
-
-Verify all transactions server-side using Paystack’s /transaction/verify/:reference endpoint.
-
-Protect admin routes with:
-
-authenticate(['admin', 'superuser'])
-
-
-All responses and errors use your centralized buildResponse() util for consistency.
-
-Each transaction is logged automatically using auditLogger("Payment action").
-
-✅ Summary
-Feature	Status
-Admin fee setup	✅ Implemented
-Applicant Paystack payment	✅ Implemented
-Server-side verification	✅ Implemented
-Webhook support	⚙️ Optional
-Role-based access	✅ Integrated with authenticate
-Centralized responses/logs	✅ Uses buildResponse + auditLogger
+Finance department can verify all payments
