@@ -5,6 +5,12 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+    "test:payment": "NODE_OPTIONS=--experimental-vm-modules jest test/domain/payment/",
+    "test:unit": "NODE_OPTIONS=--experimental-vm-modules jest test/domain/",
+    "test:integration": "NODE_OPTIONS=--experimental-vm-modules jest test/controllers/",
+    "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
+    "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "dev": "nodemon index.js --ignore auth_info_baileys --ignore logs",
     "create-admin": "node scripts/devTool.js create-admin"
   },
@@ -25,6 +31,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
+    "crypto-js": "^4.1.1",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
@@ -35,24 +42,28 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^6.13.8",
     "multer": "^2.0.2",
-    "node-notifier": "^10.0.1",
     "node-cache": "^5.1.2",
+    "node-notifier": "^10.0.1",
     "nodemailer": "^7.0.6",
     "nodemon": "^3.1.10",
     "pdfkit": "^0.17.2",
     "pino": "^10.1.0",
     "stripe": "^19.1.0",
-    "winston": "^3.19.0",
-
-
-    "xlsx": "^0.18.5",
     "uuid": "^9.0.1",
-    "crypto-js": "^4.1.1"
+    "winston": "^3.19.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@types/jest": "^30.0.0",
+    "@types/supertest": "^6.0.3",
     "@typescript-eslint/eslint-plugin": "^8.49.0",
     "@typescript-eslint/parser": "^8.49.0",
     "eslint": "^9.39.1",
-    "eslint-plugin-import": "^2.32.0"
+    "eslint-plugin-import": "^2.32.0",
+    "jest": "^30.2.0",
+    "mongodb-memory-server": "^11.0.1",
+    "supertest": "^7.1.4"
   }
 }
